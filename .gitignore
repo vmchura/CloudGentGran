@@ -143,16 +143,10 @@ jspm_packages/
 # =============================================================================
 # AWS CDK
 # =============================================================================
-*.js
-*.d.ts
-node_modules
-cdk.out/
-cdk.context.json
-.cdk.staging/
-
-# CDK asset staging directory
-.cdk.staging
+# Note: CDK-specific ignores are handled by infrastructure/.gitignore
+# Only global CDK artifacts that might appear at root level
 cdk.out
+.cdk.staging
 
 # =============================================================================
 # DBT
@@ -379,4 +373,6 @@ test_data/
 
 # Documentation artifacts
 *.pdf
+*.docx
 !docs/**/*.pdf
+!docs/**/*.docx
