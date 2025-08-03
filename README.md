@@ -41,20 +41,18 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 git clone https://github.com/vmchura/CloudGentGran.git
 cd CloudGentGran
 
-# Set up Python virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up pre-commit hooks
-pre-commit install
-
-# Bootstrap AWS CDK (run once per AWS account/region)
+# Install CDK dependencies and bootstrap AWS
 cd infrastructure
 npm install
 npx cdk bootstrap
+
+# Install Lambda dependencies (when developing Lambda functions)
+cd ../lambda
+pip install -r requirements.txt -t .
+
+# Install DBT dependencies (when working with DBT models)
+cd ../dbt
+pip install dbt-core dbt-athena-community
 ```
 
 ### Environment Configuration
