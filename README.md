@@ -44,7 +44,7 @@ cd CloudGentGran
 # Install CDK dependencies and bootstrap AWS
 cd infrastructure
 npm install
-npx cdk bootstrap
+npx cdk init app --language typescript
 
 # Install Lambda dependencies (when developing Lambda functions)
 cd ../lambda
