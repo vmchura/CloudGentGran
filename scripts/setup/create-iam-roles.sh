@@ -130,7 +130,56 @@ else
         --no-cli-pager
 fi
 
+# --- Function to create human user role ---
+create_human_role() {
+    local role_name=$1
+
+    echo "⏳ Handling human role: $role_name"
+
+    cat > /tmp/trust-policy-${role_name}.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::${ACCOUNT_ID}:root"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "Bool": {
+          "aws:MultiFactorAuthPresent": "true"
+        }
+      }
+    }
+  ]
+}
+EOF
+
+    if aws iam get-role --role-name "$role_name" --no-cli-pager > /dev/null 2>&1; then
+        echo "🔁 Role $role_name already exists. Updating trust policy..."
+        aws iam update-assume-role-policy \
+            --role-name "$role_name" \
+            --policy-document file:///tmp/trust-policy-${role_name}.json \
+            --no-cli-pager
+    else
+        echo "🆕 Creating role: $role_name"
+        aws iam create-role \
+            --role-name "$role_name" \
+            --assume-role-policy-document file:///tmp/trust-policy-${role_name}.json \
+            --description "Catalunya Data Pipeline - Human $role_name" \
+            --tags Key=Project,Value=CatalunyaDataPipeline Key=RoleType,Value=Human \
+            --no-cli-pager
+    fi
+
+    CREATED_ROLES+=("$role_name")
+}
+
 # --- Role Creation ---
+
+echo ""
+echo "👤 Creating human roles..."
+create_human_role "catalunya-data-engineer-role"
 
 echo ""
 echo "📦 Creating Lambda service roles..."

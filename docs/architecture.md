@@ -207,41 +207,93 @@ s3://catalunya-data-dev/marts/
 
 **IAM Structure**:
 
-**Human Role**: DataEngineer (vmchura) - Full administrative access
+### Human Roles
 
-**Service Account Roles**:
-```
-CatalunyaDataPipeline/
-├── Lambda Extractor/
-│   ├── catalunya-lambda-extractor-role-{dev|prod}
-├── Lambda Transformer/
-│   ├── catalunya-lambda-transformer-role-{dev|prod}
-├── GitHub Actions DBT/
-│   ├── catalunya-github-dbt-role-dev (OIDC: develop branch)
-│   └── catalunya-github-dbt-role-prod (OIDC: main branch)
-├── Production Deployment/
-│   └── catalunya-deployment-role-prod (OIDC: main branch)
-└── Monitoring/
-    ├── catalunya-monitoring-role-{dev|prod}
-```
+#### **Catalunya Data Engineer Role** (`catalunya-data-engineer-role`)
+**Purpose**: Primary development and management role for the data pipeline project.
+
+**Intended Users**: Project maintainers and core developers who need comprehensive access to develop, deploy, and manage the Catalunya data pipeline infrastructure.
+
+**Access Pattern**: Assumed by IAM users with MFA authentication required for security compliance.
+
+### Service Account Roles
+
+#### **Lambda Extractor Roles**
+- `catalunya-lambda-extractor-role-dev`
+- `catalunya-lambda-extractor-role-prod`
+
+**Purpose**: Execute data extraction operations from Catalunya government APIs to the landing layer.
+
+**Runtime Context**: AWS Lambda functions triggered by EventBridge schedulers on defined intervals (daily/weekly).
+
+**Data Flow Position**: External APIs → Lambda Extractor → S3 Landing Layer
+
+**Security Boundaries**: 
+- Can only write to S3 landing layer (`s3://catalunya-data-{env}/landing/*`)
+- Internet access for external API calls
+
+#### **Lambda Transformer Roles**
+- `catalunya-lambda-transformer-role-dev`
+- `catalunya-lambda-transformer-role-prod`
+
+**Purpose**: Process and clean raw data from landing layer into validated, analytics-ready format in staging layer.
+
+**Runtime Context**: AWS Lambda functions triggered by S3 events when new files arrive in landing layer.
+
+**Data Flow Position**: S3 Landing Layer → Lambda Transformer → S3 Staging Layer
 
 **Security Boundaries**:
-- Environment isolation (dev/prod)
-- Service isolation (extractor/transformer/dbt/deployment/monitoring)
-- OIDC branch-based authentication for GitHub Actions
+- Read access to S3 landing layer only
+- Write access to S3 staging layer only
 
-### Data Encryption
+#### **GitHub Actions DBT Roles**
+- `catalunya-github-dbt-role-dev` (OIDC: develop branch)
+- `catalunya-github-dbt-role-prod` (OIDC: main branch)
 
-**At Rest**:
+**Purpose**: Execute DBT transformations to create business-ready analytics models from staging data.
 
-- S3: AES-256 encryption with S3-managed keys
-- Lambda: Environment variables encrypted with KMS
-- Athena: Query results encrypted
+**Runtime Context**: GitHub Actions workflows triggered by code pushes to specific branches or scheduled executions.
 
-**In Transit**:
+**Data Flow Position**: S3 Staging Layer → DBT Core → S3 Marts Layer
 
-- All API calls use HTTPS/TLS 1.2+
-- Lambda inter-service communication encrypted
+**Security Boundaries**:
+- OIDC authentication tied to specific Git branches (develop/main)
+- Read access to S3 staging layer only
+- Write access to S3 marts layer only
+- 
+**Design Rationale**: Separates business logic transformations from data ingestion, enables SQL-based analytics development, and provides git-based version control for transformation logic with proper environment isolation.
+
+#### **Production Deployment Role**
+- `catalunya-deployment-role-prod` (OIDC: main branch only)
+
+**Purpose**: Automated infrastructure deployment to production environment through CDK.
+
+**Runtime Context**: GitHub Actions workflow triggered only by pushes to main branch after successful testing.
+
+**Data Flow Position**: Infrastructure as Code → AWS CloudFormation → Production Resources
+
+**Security Boundaries**:
+- OIDC authentication restricted to main branch only
+- Full CloudFormation permissions for production environment only
+**Design Rationale**: Ensures production deployments are automated, auditable, and can only be triggered through controlled release processes, reducing human error and maintaining deployment consistency.
+
+#### **Monitoring Roles**
+- `catalunya-monitoring-role-dev`
+- `catalunya-monitoring-role-prod`
+
+**Purpose**: Operational observability, alerting, and cost optimization across the data pipeline.
+
+**Runtime Context**: Lambda functions triggered by CloudWatch Events for periodic monitoring tasks.
+
+**Data Flow Position**: Cross-cutting across all pipeline components for observability.
+
+**Security Boundaries**:
+- Read-only access to all data layers for monitoring purposes
+- Cannot modify pipeline data or trigger processing operations
+- CloudWatch and SNS permissions for alerting
+- Cost Explorer access for usage analysis
+
+**Design Rationale**: Independent monitoring ensures observability remains available during pipeline failures, enables proactive issue detection, and provides centralized operational intelligence without interfering with data processing operations.
 
 ### Network Security
 
