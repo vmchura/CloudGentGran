@@ -55,27 +55,9 @@ cd ../dbt
 pip install dbt-core dbt-athena-community
 ```
 
-### Environment Configuration
-
-1. Copy environment template:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Configure your environment variables:
-   ```bash
-   # AWS Configuration
-   AWS_PROFILE=your-profile
-   AWS_REGION=eu-west-1
-   
-   # Project Configuration
-   PROJECT_NAME=catalunya-data-pipeline
-   ENVIRONMENT=development
-   ```
-
 ### 🔐 AWS IAM Roles Setup
 
-It is required these roles before deploying the infrastructure.
+You need to create these roles before deploying the infrastructure.
 
 
 #### Manual Setup Options
