@@ -207,17 +207,28 @@ s3://catalunya-data-dev/marts/
 
 **IAM Structure**:
 
+**Human Role**: DataEngineer (vmchura) - Full administrative access
+
+**Service Account Roles**:
 ```
-├── Roles/
-│   ├── LambdaExtractorRole (S3 write to landing/, CloudWatch logs)
-│   ├── LambdaTransformerRole (S3 read landing/, write staging/)
-│   ├── DBTExecutionRole (Athena query, S3 read/write marts/)
-│   └── GitHubActionsRole (Deploy permissions via OIDC)
-├── Policies/
-│   ├── S3DataLakePolicy (Layer-specific access)
-│   ├── AthenaQueryPolicy (Query execution permissions)
-│   └── CloudWatchLogsPolicy (Logging permissions)
+CatalunyaDataPipeline/
+├── Lambda Extractor/
+│   ├── catalunya-lambda-extractor-role-{dev|prod}
+├── Lambda Transformer/
+│   ├── catalunya-lambda-transformer-role-{dev|prod}
+├── GitHub Actions DBT/
+│   ├── catalunya-github-dbt-role-dev (OIDC: develop branch)
+│   └── catalunya-github-dbt-role-prod (OIDC: main branch)
+├── Production Deployment/
+│   └── catalunya-deployment-role-prod (OIDC: main branch)
+└── Monitoring/
+    ├── catalunya-monitoring-role-{dev|prod}
 ```
+
+**Security Boundaries**:
+- Environment isolation (dev/prod)
+- Service isolation (extractor/transformer/dbt/deployment/monitoring)
+- OIDC branch-based authentication for GitHub Actions
 
 ### Data Encryption
 
