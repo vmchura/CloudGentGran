@@ -73,6 +73,35 @@ pip install dbt-core dbt-athena-community
    ENVIRONMENT=development
    ```
 
+### 🔐 AWS Credentials Setup
+
+Configure GitHub repository secrets for AWS deployment:
+
+#### Quick Setup
+```bash
+./scripts/setup/configure-aws-secrets.sh
+```
+
+#### Manual Setup
+```bash
+# Development Environment
+gh secret set AWS_ACCESS_KEY_ID_DEV --body "your_dev_access_key_id"
+gh secret set AWS_SECRET_ACCESS_KEY_DEV --body "your_dev_secret_access_key"
+gh secret set AWS_REGION_DEV --body "eu-west-1"
+
+# Production Environment
+gh secret set AWS_ACCESS_KEY_ID_PROD --body "your_prod_access_key_id"
+gh secret set AWS_SECRET_ACCESS_KEY_PROD --body "your_prod_secret_access_key"
+gh secret set AWS_REGION_PROD --body "eu-west-1"
+```
+
+**Required Secrets:**
+- `AWS_ACCESS_KEY_ID_DEV` / `AWS_ACCESS_KEY_ID_PROD` - AWS Access Key IDs
+- `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD` - AWS Secret Access Keys  
+- `AWS_REGION_DEV` / `AWS_REGION_PROD` - AWS regions (e.g., `eu-west-1`)
+
+📖 **Detailed Instructions**: [docs/aws-secrets-setup.md](docs/aws-secrets-setup.md)
+
 ## 📁 Project Structure
 
 ```
