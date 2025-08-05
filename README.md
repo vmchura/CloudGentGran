@@ -73,14 +73,40 @@ pip install dbt-core dbt-athena-community
    ENVIRONMENT=development
    ```
 
-### 🔐 AWS Credentials Setup
+### 🔐 AWS IAM Roles Setup
+
+It is required these roles before deploying the infrastructure.
+
+
+#### Manual Setup Options
+
+**Option 1: AWS CloudShell (Browser-based)**
+1. Open AWS Console → Click CloudShell icon in top bar
+2. Upload the script: `Actions` → `Upload file` → select `scripts/setup/create-iam-roles.sh`
+3. Run the script:
+   ```bash
+   chmod +x create-iam-roles.sh
+   ./create-iam-roles.sh
+   ```
+
+
+#### Created Roles Overview
+
+**Human Role** (1):
+- `catalunya-data-engineer-role` - Full pipeline management with MFA requirement
+
+**Service Account Roles** (10):
+- **Lambda Extractor**: `catalunya-lambda-extractor-role-{dev,prod}`
+- **Lambda Transformer**: `catalunya-lambda-transformer-role-{dev,prod}`
+- **GitHub Actions DBT**: `catalunya-github-dbt-role-{dev,prod}` (OIDC)
+- **Production Deployment**: `catalunya-deployment-role-prod` (OIDC)
+- **Monitoring**: `catalunya-monitoring-role-{dev,prod}`
+
+📖 **Detailed Role Descriptions**: See [docs/architecture.md](docs/architecture.md#security-architecture)
+
+### 🔑 GitHub Actions Secrets Setup
 
 Configure GitHub repository secrets for AWS deployment:
-
-#### Quick Setup
-```bash
-./scripts/setup/configure-aws-secrets.sh
-```
 
 #### Manual Setup
 ```bash
