@@ -1,15 +1,23 @@
 #!/bin/bash
 
-# Catalunya Data Pipeline - IAM Roles Creation Script
-# This script creates all service account roles for the data pipeline
-# Permissions will be attached separately
+# Catalunya Data Pipeline - IAM Roles Creation Script (Updated)
+# This script creates or updates IAM roles for the Catalunya data pipeline.
 
-set -e
+set -euo pipefail
 
-# Configuration
+# --- Configuration ---
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 GITHUB_REPO="vmchura/CloudGentGran"
 REGION="eu-west-1"
+THUMBPRINT="6938fd4d98bab03faadb97b34396831e3780aea1"
+
+declare -a CREATED_ROLES=()
+
+# Cleanup temp files
+cleanup() {
+  rm -f /tmp/trust-policy-*.json
+}
+trap cleanup EXIT
 
 echo "🚀 Creating IAM roles for Catalunya Data Pipeline"
 echo "Account ID: $ACCOUNT_ID"
@@ -17,31 +25,36 @@ echo "GitHub Repo: $GITHUB_REPO"
 echo "Region: $REGION"
 echo ""
 
-# Function to create basic service role
+# --- Function to create or update a basic service role ---
 create_service_role() {
     local role_name=$1
     local service=$2
-    
-    echo "Creating role: $role_name"
-    
+
+    echo "⏳ Handling role: $role_name"
+
     cat > /tmp/trust-policy-${role_name}.json << EOF
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "${service}.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "${service}.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
 }
 EOF
 
-    if aws iam get-role --role-name "$role_name" --no-cli-pager 2>/dev/null; then
-      echo "Role $role_name already exists. Skipping creation."
+    if aws iam get-role --role-name "$role_name" --no-cli-pager > /dev/null 2>&1; then
+        echo "🔁 Role $role_name already exists. Updating trust policy..."
+        aws iam update-assume-role-policy \
+            --role-name "$role_name" \
+            --policy-document file:///tmp/trust-policy-${role_name}.json \
+            --no-cli-pager
     else
+        echo "🆕 Creating role: $role_name"
         aws iam create-role \
             --role-name "$role_name" \
             --assume-role-policy-document file:///tmp/trust-policy-${role_name}.json \
@@ -50,105 +63,98 @@ EOF
             --no-cli-pager
     fi
 
-
-    rm /tmp/trust-policy-${role_name}.json
+    CREATED_ROLES+=("$role_name")
 }
 
-# Function to create GitHub Actions OIDC role
+# --- Function to create or update a GitHub OIDC role ---
 create_github_role() {
     local role_name=$1
     local branch=$2
-    
-    echo "Creating GitHub Actions role: $role_name"
-    
+
+    echo "⏳ Handling GitHub OIDC role: $role_name for branch: $branch"
+
     cat > /tmp/trust-policy-${role_name}.json << EOF
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Principal": {
-                "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
-            },
-            "Action": "sts:AssumeRole",
-            "Condition": {
-                "StringEquals": {
-                    "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:ref:refs/heads/${branch}",
-                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-                }
-            }
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:ref:refs/heads/${branch}",
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         }
-    ]
+      }
+    }
+  ]
 }
 EOF
 
-    aws iam create-role \
-        --role-name "$role_name" \
-        --assume-role-policy-document file:///tmp/trust-policy-${role_name}.json \
-        --description "Catalunya Data Pipeline - GitHub Actions $role_name" \
-        --tags Key=Project,Value=CatalunyaDataPipeline Key=Environment,Value=${role_name##*-} Key=Service,Value=GitHubActions \
-        --no-cli-pager || echo "Role $role_name already exists"
-    
-    rm /tmp/trust-policy-${role_name}.json
+    if aws iam get-role --role-name "$role_name" --no-cli-pager > /dev/null 2>&1; then
+        echo "🔁 Role $role_name already exists. Updating trust policy..."
+        aws iam update-assume-role-policy \
+            --role-name "$role_name" \
+            --policy-document file:///tmp/trust-policy-${role_name}.json \
+            --no-cli-pager
+    else
+        echo "🆕 Creating role: $role_name"
+        aws iam create-role \
+            --role-name "$role_name" \
+            --assume-role-policy-document file:///tmp/trust-policy-${role_name}.json \
+            --description "Catalunya Data Pipeline - GitHub Actions $role_name" \
+            --tags Key=Project,Value=CatalunyaDataPipeline Key=Environment,Value=${role_name##*-} Key=Service,Value=GitHubActions \
+            --no-cli-pager
+    fi
+
+    CREATED_ROLES+=("$role_name")
 }
 
-# Check if GitHub OIDC provider exists, create if not
+# --- Ensure GitHub OIDC Provider exists ---
 echo "🔐 Checking GitHub OIDC provider..."
-aws iam get-open-id-connect-provider \
-    --open-id-connect-provider-arn "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com" \
-    --no-cli-pager 2>/dev/null || {
-    echo "Creating GitHub OIDC provider..."
+
+OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+
+if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" --no-cli-pager > /dev/null 2>&1; then
+    echo "✅ GitHub OIDC provider already exists"
+else
+    echo "➕ Creating GitHub OIDC provider..."
     aws iam create-open-id-connect-provider \
         --url "https://token.actions.githubusercontent.com" \
-        --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1" \
+        --thumbprint-list "$THUMBPRINT" \
         --client-id-list "sts.amazonaws.com" \
         --tags Key=Project,Value=CatalunyaDataPipeline \
         --no-cli-pager
-}
+fi
+
+# --- Role Creation ---
 
 echo ""
 echo "📦 Creating Lambda service roles..."
-
-# Lambda Extractor Roles
 create_service_role "catalunya-lambda-extractor-role-dev" "lambda"
 create_service_role "catalunya-lambda-extractor-role-prod" "lambda"
-
-# Lambda Transformer Roles  
 create_service_role "catalunya-lambda-transformer-role-dev" "lambda"
 create_service_role "catalunya-lambda-transformer-role-prod" "lambda"
 
 echo ""
 echo "🔄 Creating GitHub Actions roles..."
-
-# GitHub Actions DBT Roles
 create_github_role "catalunya-github-dbt-role-dev" "develop"
 create_github_role "catalunya-github-dbt-role-prod" "main"
-
-echo ""
-echo "🚀 Creating deployment role..."
-
-# Production Deployment Role (only prod)
 create_github_role "catalunya-deployment-role-prod" "main"
 
 echo ""
 echo "📊 Creating monitoring roles..."
-
-# Monitoring Roles
 create_service_role "catalunya-monitoring-role-dev" "lambda"
 create_service_role "catalunya-monitoring-role-prod" "lambda"
 
+# --- Summary ---
 echo ""
-echo "✅ All IAM roles created successfully!"
+echo "✅ All IAM roles handled successfully!"
 echo ""
-echo "📋 Created roles:"
-echo "  Lambda Extractor: catalunya-lambda-extractor-role-{dev,prod}"
-echo "  Lambda Transformer: catalunya-lambda-transformer-role-{dev,prod}"
-echo "  GitHub Actions DBT: catalunya-github-dbt-role-{dev,prod}"
-echo "  Production Deployment: catalunya-deployment-role-prod"
-echo "  Monitoring: catalunya-monitoring-role-{dev,prod}"
-echo ""
-echo "🔧 Next steps:"
-echo "  1. Attach appropriate policies to each role"
-echo "  2. Test OIDC authentication with GitHub Actions"
-echo "  3. Update CDK code to use these roles"
-echo ""
+echo "📋 Created or Updated roles:"
+for r in "${CREATED_ROLES[@]}"; do
+    echo "  - $r"
+done
