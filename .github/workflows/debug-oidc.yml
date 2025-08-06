@@ -4,7 +4,7 @@ on:
   workflow_dispatch:  # Manual trigger for testing
   push:
     branches: [ develop ]
-    paths: [ '.github/workflows/debug-oidc.yml' ]  # Only run when this file changes
+    paths: [ 'debug-oidc.yml' ]  # Only run when this file changes
 
 # REQUIRED for OIDC authentication with AWS
 permissions:
