@@ -5,82 +5,64 @@
 
 set -euo pipefail
 
-echo "🔐 Attaching minimal IAM permissions for S3 infrastructure testing..."
+echo "🔐 Attaching minimal IAM permissions for infrastructure testing..."
 
 # --- Configuration ---
-POLICY_NAME="CatalunyaS3DeploymentPolicy"
+POLICY_NAME="CatalunyaDeploymentPolicy"
+TMP_POLICY_FILE="/tmp/minimal-catalunyaeployment-policy.json"
+
+# --- Cleanup on exit ---
+trap "rm -f $TMP_POLICY_FILE" EXIT
 
 # --- Create the minimal policy document ---
-cat > /tmp/minimal-s3-policy.json << 'EOF'
+cat > "$TMP_POLICY_FILE" << 'EOF'
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "CloudFormationOperations",
+      "Sid": "CloudFormationOps",
       "Effect": "Allow",
       "Action": [
         "cloudformation:CreateStack",
         "cloudformation:UpdateStack",
         "cloudformation:DeleteStack",
         "cloudformation:DescribeStacks",
-        "cloudformation:DescribeStackEvents",
-        "cloudformation:DescribeStackResources",
-        "cloudformation:GetTemplate",
-        "cloudformation:ListStackResources",
-        "cloudformation:ValidateTemplate"
+        "cloudformation:GetTemplate"
       ],
       "Resource": "*"
     },
     {
-      "Sid": "S3BucketOperations",
+      "Sid": "S3Buckets",
       "Effect": "Allow",
       "Action": [
         "s3:CreateBucket",
         "s3:DeleteBucket",
-        "s3:GetBucketLocation",
-        "s3:GetBucketPolicy",
-        "s3:PutBucketPolicy",
-        "s3:DeleteBucketPolicy",
-        "s3:GetBucketTagging",
-        "s3:PutBucketTagging",
-        "s3:GetLifecycleConfiguration",
-        "s3:PutLifecycleConfiguration",
-        "s3:GetBucketCors",
-        "s3:PutBucketCors",
-        "s3:GetBucketVersioning",
-        "s3:PutBucketVersioning",
-        "s3:GetBucketPublicAccessBlock",
-        "s3:PutBucketPublicAccessBlock"
+        "s3:GetBucket*",
+        "s3:PutBucket*",
+        "s3:ListBucket"
       ],
       "Resource": [
         "arn:aws:s3:::catalunya-data-*"
       ]
     },
     {
-      "Sid": "S3ObjectOperations",
+      "Sid": "S3Objects",
       "Effect": "Allow",
       "Action": [
         "s3:GetObject",
         "s3:PutObject",
-        "s3:DeleteObject",
-        "s3:ListBucket"
+        "s3:DeleteObject"
       ],
       "Resource": [
-        "arn:aws:s3:::catalunya-data-*",
         "arn:aws:s3:::catalunya-data-*/*"
       ]
     },
     {
-      "Sid": "IAMOperations",
+      "Sid": "IAMPassRoles",
       "Effect": "Allow",
       "Action": [
         "iam:GetRole",
-        "iam:PassRole",
-        "iam:CreateRole",
-        "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy",
-        "iam:DeleteRole",
-        "iam:UpdateAssumeRolePolicy"
+        "iam:PassRole"
       ],
       "Resource": [
         "arn:aws:iam::*:role/cdk-*",
@@ -88,14 +70,14 @@ cat > /tmp/minimal-s3-policy.json << 'EOF'
       ]
     },
     {
-      "Sid": "LambdaOperations", 
+      "Sid": "LambdaS3Cleanup",
       "Effect": "Allow",
       "Action": [
         "lambda:CreateFunction",
         "lambda:DeleteFunction",
+        "lambda:GetFunction",
         "lambda:UpdateFunctionCode",
         "lambda:UpdateFunctionConfiguration",
-        "lambda:GetFunction",
         "lambda:InvokeFunction"
       ],
       "Resource": [
@@ -103,56 +85,55 @@ cat > /tmp/minimal-s3-policy.json << 'EOF'
       ]
     },
     {
-      "Sid": "CDKBootstrapOperations",
+      "Sid": "CDKBootstrapSSM",
       "Effect": "Allow",
       "Action": [
         "ssm:GetParameter",
         "ssm:PutParameter"
       ],
-      "Resource": [
-        "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
-      ]
+      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
     }
   ]
 }
 EOF
 
-# --- Function to create policy ---
-create_policy() {
+# --- Create or update the IAM policy ---
+create_or_update_policy() {
     echo "📋 Creating/updating policy: $POLICY_NAME"
-    
-    local account_id=$(aws sts get-caller-identity --query Account --output text)
+
+    local account_id
+    account_id=$(aws sts get-caller-identity --query Account --output text)
     local policy_arn="arn:aws:iam::${account_id}:policy/${POLICY_NAME}"
-    
+
     if aws iam get-policy --policy-arn "$policy_arn" --no-cli-pager > /dev/null 2>&1; then
         echo "🔄 Policy exists, creating new version..."
         aws iam create-policy-version \
             --policy-arn "$policy_arn" \
-            --policy-document file:///tmp/minimal-s3-policy.json \
+            --policy-document "file://$TMP_POLICY_FILE" \
             --set-as-default \
             --no-cli-pager
     else
         echo "🆕 Creating new policy..."
         aws iam create-policy \
             --policy-name "$POLICY_NAME" \
-            --policy-document file:///tmp/minimal-s3-policy.json \
+            --policy-document "file://$TMP_POLICY_FILE" \
             --description "Minimal permissions for Catalunya S3 infrastructure deployment" \
             --tags Key=Project,Value=CatalunyaDataPipeline \
             --no-cli-pager
     fi
-    
+
     echo "✅ Policy $POLICY_NAME ready"
-    return 0
 }
 
-# --- Function to attach policy to role ---
+# --- Attach policy to a given role ---
 attach_policy_to_role() {
-    local role_name=$1
-    local account_id=$(aws sts get-caller-identity --query Account --output text)
+    local role_name="$1"
+    local account_id
+    account_id=$(aws sts get-caller-identity --query Account --output text)
     local policy_arn="arn:aws:iam::${account_id}:policy/${POLICY_NAME}"
-    
+
     echo "🔗 Attaching policy to role: $role_name"
-    
+
     if aws iam get-role --role-name "$role_name" --no-cli-pager > /dev/null 2>&1; then
         aws iam attach-role-policy \
             --role-name "$role_name" \
@@ -165,16 +146,15 @@ attach_policy_to_role() {
 }
 
 # --- Main execution ---
-echo "Starting minimal permissions setup..."
+echo "🚀 Starting minimal permissions setup..."
+
+# Step 1: Create or update the policy
+create_or_update_policy
+
+# Step 2: Attach to roles
+
 echo ""
-
-# Create the policy
-create_policy
-
-echo ""
-echo "🔗 Attaching policy to GitHub roles..."
-
-# Attach to GitHub roles
+echo "🔗 Attaching policy to GitHub deployment roles..."
 attach_policy_to_role "catalunya-github-dbt-role-dev"
 
 echo ""
@@ -182,11 +162,3 @@ echo "✅ Minimal permissions setup complete!"
 echo ""
 echo "📋 Roles with attached policy:"
 echo "  - catalunya-github-dbt-role-dev (for develop branch deployments)"
-echo "  - catalunya-deployment-role-prod (for main branch deployments)"
-echo ""
-echo "🚀 You can now test deployments:"
-echo "  - Push to develop branch → deploys to development" 
-echo "  - Push to main branch → deploys to production"
-
-# Cleanup
-rm -f /tmp/minimal-s3-policy.json
