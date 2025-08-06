@@ -1,12 +1,11 @@
 name: Debug OIDC Token
 
 on:
-  workflow_dispatch:  # Manual trigger for testing
+  workflow_dispatch:
   push:
     branches: [ develop ]
     paths: [ 'debug-oidc.yml' ]  # Only run when this file changes
 
-# REQUIRED for OIDC authentication with AWS
 permissions:
   id-token: write
   contents: read
