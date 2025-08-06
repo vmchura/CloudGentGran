@@ -224,7 +224,6 @@ $RECYCLE.BIN/
 # =============================================================================
 # Data files (avoid committing large datasets)
 *.csv
-*.json
 *.parquet
 *.avro
 *.orc
