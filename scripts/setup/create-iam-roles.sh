@@ -82,7 +82,7 @@ create_github_role() {
       "Principal": {
         "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
       },
-      "Action": "sts:AssumeRole",
+      "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:ref:refs/heads/${branch}",
