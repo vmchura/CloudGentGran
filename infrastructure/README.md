@@ -235,14 +235,4 @@ Each stack exports the following values for use by other stacks:
    ```
    **Solution**: Configure AWS CLI with `aws configure` or set environment variables.
 
-## 📚 Resources
-
-- [AWS CDK TypeScript Reference](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib-readme.html)
-- [CDK Best Practices](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html)
-- [S3 Security Best Practices](https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html)
-- [Catalunya Open Data Portal](https://analisi.transparenciacatalunya.cat/)
-
 ---
-
-**Status**: ✅ Phase 2.1 (CDK Project Structure) - COMPLETED  
-**Next**: Phase 2.2 (S3 Infrastructure)
