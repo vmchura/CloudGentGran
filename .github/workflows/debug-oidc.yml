@@ -6,6 +6,7 @@ on:
     branches: [ develop ]
     paths: [ 'debug-oidc.yml' ]  # Only run when this file changes
 
+# REQUIRED for OIDC authentication with AWS
 permissions:
   id-token: write
   contents: read
