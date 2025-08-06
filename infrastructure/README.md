@@ -189,7 +189,6 @@ Each stack exports the following values for use by other stacks:
 
 ### Planned (Phase 2.2-2.5)
 
-- 🔄 S3 server-side encryption
 - 🔄 IAM roles with minimal permissions
 - 🔄 VPC endpoints for security
 - 🔄 Cost optimization policies
@@ -200,7 +199,6 @@ Each stack exports the following values for use by other stacks:
 1. **S3 Infrastructure** (Phase 2.2)
     - Create medallion architecture buckets
     - Configure lifecycle policies
-    - Set up encryption and access controls
 
 2. **Lambda Infrastructure** (Phase 2.3)
     - Data extraction Lambda functions

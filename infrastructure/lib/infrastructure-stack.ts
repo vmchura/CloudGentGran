@@ -131,8 +131,7 @@ export class CatalunyaDataStack extends cdk.Stack {
     // Create the main data bucket
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
       bucketName: this.bucketName,
-      // Security settings
-      encryption: s3.BucketEncryption.S3_MANAGED,
+
       publicReadAccess: false,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       
@@ -171,6 +170,7 @@ export class CatalunyaDataStack extends cdk.Stack {
     // Additional S3 bucket tags
     cdk.Tags.of(dataBucket).add('Purpose', 'DataLake');
     cdk.Tags.of(dataBucket).add('Layer', 'Storage');
+    cdk.Tags.of(dataBucket).add('DataClassification', 'OpenData');
 
     // Output bucket information
     new cdk.CfnOutput(this, 'S3BucketArn', {
