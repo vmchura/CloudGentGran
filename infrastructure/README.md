@@ -67,20 +67,10 @@ Environment-specific configuration is managed in `cdk.json` under the `Catalunya
   "context": {
     "Catalunya-Data-Pipeline": {
       "dev": {
-        "region": "eu-west-1",
-        "bucketName": "catalunya-data-dev",
-        "lambdaMemory": 512,
-        "lambdaTimeout": 300,
-        "retentionPeriod": 30,
-        "scheduleCron": "cron(0 6 * * ? *)"
+        "...": ""
       },
       "prod": {
-        "region": "eu-west-1",
-        "bucketName": "catalunya-data-prod", 
-        "lambdaMemory": 1024,
-        "lambdaTimeout": 900,
-        "retentionPeriod": 90,
-        "scheduleCron": "cron(0 5 * * ? *)"
+        "...": ""
       }
     }
   }
@@ -89,24 +79,28 @@ Environment-specific configuration is managed in `cdk.json` under the `Catalunya
 
 ### Configuration Parameters
 
-| Parameter | Description | Dev Value | Prod Value |
-|-----------|-------------|-----------|------------|
-| `region` | AWS region for deployment | `eu-west-1` | `eu-west-1` |
-| `bucketName` | S3 bucket name | `catalunya-data-dev` | `catalunya-data-prod` |
-| `lambdaMemory` | Lambda memory allocation (MB) | `512` | `1024` |
-| `lambdaTimeout` | Lambda timeout (seconds) | `300` | `900` |
-| `retentionPeriod` | Data retention period (days) | `30` | `90` |
-| `scheduleCron` | Execution schedule (cron) | `6 AM daily` | `5 AM daily` |
+| Parameter         | Description                           | Dev Value            | Prod Value            |
+|-------------------|---------------------------------------|----------------------|-----------------------|
+| `region`          | AWS region for deployment             | `eu-west-1`          | `eu-west-1`           |
+| `bucketName`      | S3 bucket name                        | `catalunya-data-dev` | `catalunya-data-prod` |
+| `lambdaMemory`    | Lambda memory allocation (MB)         | `512`                | `1024`                |
+| `lambdaTimeout`   | Lambda timeout (seconds)              | `300`                | `900`                 |
+| `retentionPeriod` | Data retention period (days)[landing] | `7` or `ephemeral`   | `7` or `ephemeral`    |
+| `retentionPeriod` | Data retention period (days)[staging] | `60`                 | `60`                  |
+| `retentionPeriod` | Data retention period (days)[marts]   | `60`                 | `60`                  |
+| `scheduleCron`    | Execution schedule (cron)             | `End of each friday` | `End of each friday`  |
 
 ## 📦 Stack Resources
 
 The `CatalunyaDataStack` creates the following resources:
 
 ### Current Resources (Phase 2.1)
+
 - **CloudFormation Outputs**: Environment, bucket name, Athena workgroup, database, Lambda prefix, region
 - **Tags**: Automatic tagging with project, environment, owner, and management info
 
 ### Planned Resources (Phase 2.2-2.5)
+
 - **S3 Buckets**: Data storage with medallion architecture (landing/staging/marts)
 - **Lambda Functions**: Data extraction and transformation
 - **EventBridge Rules**: Scheduled pipeline execution
@@ -116,12 +110,14 @@ The `CatalunyaDataStack` creates the following resources:
 ## 🌍 Environments
 
 ### Development (`dev`)
+
 - **Stack Name**: `CatalunyaDataStack-dev`
 - **Resource Prefix**: `catalunya-dev`
 - **Purpose**: Testing and development
 - **Scaling**: Minimal resources, shorter retention
 
 ### Production (`prod`)
+
 - **Stack Name**: `CatalunyaDataStack-prod`
 - **Resource Prefix**: `catalunya-prod`
 - **Purpose**: Live data processing
@@ -162,6 +158,7 @@ npm run test -- --coverage
 ```
 
 ### Test Coverage
+
 - ✅ Stack synthesis validation
 - ✅ Environment-specific configuration
 - ✅ Output validation
@@ -171,18 +168,19 @@ npm run test -- --coverage
 
 Each stack exports the following values for use by other stacks:
 
-| Output | Description | Export Name Format |
-|--------|-------------|-------------------|
-| `Environment` | Environment name (dev/prod) | `{projectName}-Environment` |
-| `BucketName` | S3 bucket name | `{projectName}-BucketName` |
-| `AthenaWorkgroup` | Athena workgroup name | `{projectName}-AthenaWorkgroup` |
-| `AthenaDatabase` | Athena database name | `{projectName}-AthenaDatabase` |
-| `LambdaPrefix` | Lambda function prefix | `{projectName}-LambdaPrefix` |
-| `Region` | Deployment region | `{projectName}-Region` |
+| Output            | Description                 | Export Name Format              |
+|-------------------|-----------------------------|---------------------------------|
+| `Environment`     | Environment name (dev/prod) | `{projectName}-Environment`     |
+| `BucketName`      | S3 bucket name              | `{projectName}-BucketName`      |
+| `AthenaWorkgroup` | Athena workgroup name       | `{projectName}-AthenaWorkgroup` |
+| `AthenaDatabase`  | Athena database name        | `{projectName}-AthenaDatabase`  |
+| `LambdaPrefix`    | Lambda function prefix      | `{projectName}-LambdaPrefix`    |
+| `Region`          | Deployment region           | `{projectName}-Region`          |
 
 ## 🔐 Security & Best Practices
 
 ### Implemented
+
 - ✅ Environment isolation
 - ✅ Least privilege IAM design (planned)
 - ✅ Resource naming consistency
@@ -190,6 +188,7 @@ Each stack exports the following values for use by other stacks:
 - ✅ Stack tagging
 
 ### Planned (Phase 2.2-2.5)
+
 - 🔄 S3 server-side encryption
 - 🔄 IAM roles with minimal permissions
 - 🔄 VPC endpoints for security
@@ -199,22 +198,22 @@ Each stack exports the following values for use by other stacks:
 ## 📈 Next Steps (Phase 2.2-2.5)
 
 1. **S3 Infrastructure** (Phase 2.2)
-   - Create medallion architecture buckets
-   - Configure lifecycle policies
-   - Set up encryption and access controls
+    - Create medallion architecture buckets
+    - Configure lifecycle policies
+    - Set up encryption and access controls
 
 2. **Lambda Infrastructure** (Phase 2.3)
-   - Data extraction Lambda functions
-   - Execution roles and permissions
-   - CloudWatch logging configuration
+    - Data extraction Lambda functions
+    - Execution roles and permissions
+    - CloudWatch logging configuration
 
 3. **EventBridge & Scheduling** (Phase 2.4)
-   - Daily pipeline execution rules
-   - Lambda triggers and permissions
+    - Daily pipeline execution rules
+    - Lambda triggers and permissions
 
 4. **Athena Configuration** (Phase 2.5)
-   - Workgroups and databases
-   - Cost controls and query limits
+    - Workgroups and databases
+    - Cost controls and query limits
 
 ## 🚨 Troubleshooting
 
