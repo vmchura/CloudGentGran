@@ -7,6 +7,7 @@ on:
       - 'infrastructure/**'
       - '.github/workflows/**'
 
+# Required for OIDC authentication with AWS
 permissions:
   id-token: write
   contents: read
