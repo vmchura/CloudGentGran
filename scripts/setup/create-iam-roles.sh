@@ -84,8 +84,10 @@ create_github_role() {
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
+        "StringLike": {
+            "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:*"
+          },
         "StringEquals": {
-          "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:ref:refs/heads/${branch}",
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         }
       }
