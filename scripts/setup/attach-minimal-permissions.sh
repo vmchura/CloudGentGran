@@ -9,7 +9,7 @@ echo "🔐 Attaching minimal IAM permissions for infrastructure testing..."
 
 # --- Configuration ---
 POLICY_NAME="CatalunyaDeploymentPolicy"
-TMP_POLICY_FILE="/tmp/minimal-catalunyaeployment-policy.json"
+TMP_POLICY_FILE="/tmp/minimal-catalunyadeployment-policy.json"
 
 # --- Cleanup on exit ---
 trap "rm -f $TMP_POLICY_FILE" EXIT
@@ -93,7 +93,70 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
       "Effect": "Allow",
       "Action": [
         "ssm:GetParameter",
-        "ssm:PutParameter"
+        "ssm:GetParameters",
+        "ssm:PutParameter",
+        "ssm:DeleteParameter"
+      ],
+      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap*"
+    },
+    {
+      "Sid": "IAMCleanup",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "sts:AssumeRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/cdk-*"
+    },
+    {
+      "Sid": "ECRRepositoryManagement",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DeleteRepository",
+        "ecr:CreateRepository",
+        "ecr:DescribeRepositories",
+        "ecr:PutLifecyclePolicy",
+        "ecr:SetRepositoryPolicy",
+        "ecr:TagResource"
+      ],
+      "Resource": "arn:aws:ecr:*:*:repository/cdk*"
+    },
+    {
+      "Sid": "AllowCDKCreateTaggedRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:TagRole",
+        "iam:PutRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/cdk-hnb659fds-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": "arn:aws:s3:::cdk-hnb659fds-*"
+    },
+    {
+      "Sid": "AllowTagging",
+      "Effect": "Allow",
+      "Action": [
+        "tag:GetResources",
+        "tag:TagResources",
+        "tag:UntagResources"
       ],
       "Resource": "*"
     }
