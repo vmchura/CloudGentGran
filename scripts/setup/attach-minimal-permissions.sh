@@ -34,7 +34,7 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "cloudformation:DescribeStackEvents",
         "cloudformation:GetTemplateSummary",
         "cloudformation:DescribeStackResources",
-        "cloudformation:ListStacks",
+        "cloudformation:ListStacks"
       ],
       "Resource": "*"
     },
