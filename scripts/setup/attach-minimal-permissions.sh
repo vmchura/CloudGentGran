@@ -27,7 +27,12 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "cloudformation:UpdateStack",
         "cloudformation:DeleteStack",
         "cloudformation:DescribeStacks",
-        "cloudformation:GetTemplate"
+        "cloudformation:GetTemplate",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:GetTemplateSummary"
       ],
       "Resource": "*"
     },
