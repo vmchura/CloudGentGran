@@ -32,7 +32,9 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "cloudformation:ExecuteChangeSet",
         "cloudformation:DescribeChangeSet",
         "cloudformation:DescribeStackEvents",
-        "cloudformation:GetTemplateSummary"
+        "cloudformation:GetTemplateSummary",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:ListStacks",
       ],
       "Resource": "*"
     },
@@ -46,9 +48,7 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "s3:PutBucket*",
         "s3:ListBucket"
       ],
-      "Resource": [
-        "arn:aws:s3:::catalunya-data-*"
-      ]
+      "Resource": "*"
     },
     {
       "Sid": "S3Objects",
@@ -58,9 +58,7 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "s3:PutObject",
         "s3:DeleteObject"
       ],
-      "Resource": [
-        "arn:aws:s3:::catalunya-data-*/*"
-      ]
+      "Resource": "*"
     },
     {
       "Sid": "IAMPassRoles",
@@ -71,7 +69,8 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
       ],
       "Resource": [
         "arn:aws:iam::*:role/cdk-*",
-        "arn:aws:iam::*:role/*S3AutoDeleteObjectsCustomResourceProviderRole*"
+        "arn:aws:iam::*:role/*S3AutoDeleteObjectsCustomResourceProviderRole*",
+        "arn:aws:iam::*:role/data-and-analytics-deployment-*"
       ]
     },
     {
@@ -96,7 +95,7 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "ssm:GetParameter",
         "ssm:PutParameter"
       ],
-      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
+      "Resource": "*"
     }
   ]
 }
