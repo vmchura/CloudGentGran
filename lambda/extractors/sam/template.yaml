@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CloudGentGran Lambda Functions
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Runtime: python3.13
+    Architectures:
+      - x86_64
+
+Parameters:
+  Environment:
+    Type: String
+    Default: local
+    AllowedValues:
+      - local
+      - dev
+      - prod
+    Description: Environment name (local = LocalStack)
+
+Resources:
+  ApiExtractorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ..
+      Handler: api_extractor.lambda_handler
+      Description: Extracts data from public APIs and stores in S3
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub "cloudgentgran-landing-${Environment}"
+          API_URL: "https://jsonplaceholder.typicode.com/posts"
+          API_NAME: "jsonplaceholder"
+          ENVIRONMENT: !Ref Environment
+      Events:
+        ScheduleEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Description: "Trigger API extraction every hour"
+            Input: !Sub |
+              {
+                "environment": "${Environment}",
+                "scheduled": true
+              }
+
+  ApiExtractorTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ..
+      Handler: api_extractor_test.lambda_handler
+      Description: Test version of API extractor with mocked AWS services
+      Environment:
+        Variables:
+          BUCKET_NAME: "test-bucket-local"
+          API_URL: "https://jsonplaceholder.typicode.com/posts"
+          API_NAME: "jsonplaceholder"
+          ENVIRONMENT: !Ref Environment
+
+  # Placeholder for future transformer functions
+  # TransformerFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: lambda/transformers/
+  #     Handler: transformer.lambda_handler
+  #     Description: Transforms raw data from landing to processed
+  #     Environment:
+  #       Variables:
+  #         BUCKET_NAME: !Sub "cloudgentgran-processed-${Environment}"
+  #         ENVIRONMENT: !Ref Environment
+
+  # Placeholder for future utility functions
+  # UtilsFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: lambda/utils/
+  #     Handler: utils.lambda_handler
+  #     Description: Utility functions for data processing
+  #     Environment:
+  #       Variables:
+  #         ENVIRONMENT: !Ref Environment
+
+Outputs:
+  ApiExtractorFunctionArn:
+    Description: "API Extractor Lambda Function ARN"
+    Value: !GetAtt ApiExtractorFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiExtractorFunctionArn"
+
+  ApiExtractorFunctionName:
+    Description: "API Extractor Lambda Function Name"
+    Value: !Ref ApiExtractorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiExtractorFunctionName"

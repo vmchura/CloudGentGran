@@ -336,3 +336,5 @@ test_data/
 *.docx
 !docs/**/*.pdf
 !docs/**/*.docx
+
+.aws-sam/

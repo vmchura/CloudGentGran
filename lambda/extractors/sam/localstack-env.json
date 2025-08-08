@@ -1,0 +1,28 @@
+{
+  "Parameters": {
+    "AWS_ENDPOINT_URL": "http://host.docker.internal:4566",
+    "AWS_ACCESS_KEY_ID": "test",
+    "AWS_SECRET_ACCESS_KEY": "test",
+    "AWS_DEFAULT_REGION": "us-east-1"
+  },
+  "ApiExtractorFunction": {
+    "AWS_ENDPOINT_URL": "http://host.docker.internal:4566",
+    "AWS_ACCESS_KEY_ID": "test",
+    "AWS_SECRET_ACCESS_KEY": "test",
+    "AWS_DEFAULT_REGION": "us-east-1",
+    "BUCKET_NAME": "cloudgentgran-landing-local",
+    "API_URL": "https://jsonplaceholder.typicode.com/posts",
+    "API_NAME": "jsonplaceholder",
+    "ENVIRONMENT": "local"
+  },
+  "ApiExtractorTestFunction": {
+    "AWS_ENDPOINT_URL": "http://host.docker.internal:4566",
+    "AWS_ACCESS_KEY_ID": "test",
+    "AWS_SECRET_ACCESS_KEY": "test",
+    "AWS_DEFAULT_REGION": "us-east-1",
+    "BUCKET_NAME": "test-bucket-local",
+    "API_URL": "https://jsonplaceholder.typicode.com/posts",
+    "API_NAME": "jsonplaceholder",
+    "ENVIRONMENT": "local"
+  }
+}

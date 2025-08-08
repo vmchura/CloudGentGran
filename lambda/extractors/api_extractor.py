@@ -16,7 +16,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
-s3_client = boto3.client('s3')
+endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+if endpoint_url:
+    s3_client = boto3.client('s3', endpoint_url=endpoint_url)
+else:
+    s3_client = boto3.client('s3')
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
