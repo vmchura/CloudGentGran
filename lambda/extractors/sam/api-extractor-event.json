@@ -1,8 +1,0 @@
-{
-  "environment": "dev",
-  "scheduled": false,
-  "test": true,
-  "source": "local-testing",
-  "timestamp": "2025-01-01T00:00:00Z",
-  "Records": []
-}

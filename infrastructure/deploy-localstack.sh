@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploy CDK Stack to LocalStack
+# Deploy CDK Stack to LocalStack using cdklocal
 set -e
 
 # Colors
@@ -11,7 +11,7 @@ NC='\033[0m'
 
 LOCALSTACK_ENDPOINT="http://localhost:4566"
 
-echo -e "${BLUE}🚀 Deploying CDK Stack to LocalStack${NC}"
+echo -e "${BLUE}🚀 Deploying CDK Stack to LocalStack using cdklocal${NC}"
 
 # Check if LocalStack is running
 check_localstack() {
@@ -29,27 +29,17 @@ if ! check_localstack; then
     exit 1
 fi
 
-# Set AWS environment for LocalStack
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=eu-west-1
-export AWS_ENDPOINT_URL=$LOCALSTACK_ENDPOINT
-
-# CDK environment
-export CDK_DEFAULT_ACCOUNT=000000000000
-export CDK_DEFAULT_REGION=eu-west-1
-
 echo -e "${YELLOW}📦 Installing dependencies...${NC}"
 npm install
 
 echo -e "${YELLOW}🔨 Building CDK app...${NC}"
 npm run build
 
-echo -e "${YELLOW}📋 Bootstrapping CDK (if needed)...${NC}"
-npx cdk bootstrap --app "node bin/infrastructure.js" || true
+echo -e "${YELLOW}📋 Bootstrapping CDK with cdklocal (if needed)...${NC}"
+npx cdklocal bootstrap --app "node bin/infrastructure.js" || true
 
-echo -e "${YELLOW}🚀 Deploying stack to LocalStack...${NC}"
-npx cdk deploy CatalunyaDataStack-dev \
+echo -e "${YELLOW}🚀 Deploying stack to LocalStack with cdklocal...${NC}"
+npx cdklocal deploy CatalunyaDataStack-dev \
     --app "node bin/infrastructure.js" \
     --require-approval never \
     --outputs-file cdk-outputs.json
@@ -58,6 +48,10 @@ echo -e "${GREEN}✅ Deployment complete!${NC}"
 
 echo -e "${BLUE}📊 Stack outputs:${NC}"
 cat cdk-outputs.json | jq '.'
+
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
 
 echo -e "${BLUE}📋 LocalStack Resources:${NC}"
 echo "S3 Buckets:"
