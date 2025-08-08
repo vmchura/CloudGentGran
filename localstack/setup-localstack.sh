@@ -125,7 +125,7 @@ deploy_lambda() {
     sam deploy \
         --stack-name cloudgentgran-local \
         --s3-bucket cloudgentgran-landing-dev \
-        --region us-east-1 \
+        --region eu-west-1 \
         --no-confirm-changeset \
         --no-fail-on-empty-changeset \
         --parameter-overrides Environment=dev \
@@ -171,7 +171,7 @@ main() {
 # Set AWS credentials for LocalStack
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_DEFAULT_REGION=eu-west-1
 
 case "${1:-setup}" in
     "setup")

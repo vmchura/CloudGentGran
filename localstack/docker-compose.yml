@@ -9,7 +9,7 @@ services:
     environment:
       # Core LocalStack configuration
       - DEBUG=1
-      - SERVICES=s3,lambda,cloudformation,iam,logs,sts
+      - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm
       - DOCKER_HOST=unix:///var/run/docker.sock
       - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
       
@@ -22,7 +22,7 @@ services:
       - DATA_DIR=/tmp/localstack/data
       
       # AWS configuration
-      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=eu-west-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       
