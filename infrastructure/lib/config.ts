@@ -29,7 +29,7 @@ export class ConfigHelper {
       lambdaMemory: config.lambdaMemory || 512,
       lambdaTimeout: config.lambdaTimeout || 300,
       retentionPeriod: config.retentionPeriod || 30,
-      scheduleCron: config.scheduleCron || 'cron(@weekly)',
+      scheduleCron: config.scheduleCron || 'cron(0 23 ? * fri *)',
     };
   }
 
