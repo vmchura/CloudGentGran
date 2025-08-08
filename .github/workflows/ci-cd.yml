@@ -83,12 +83,20 @@ jobs:
         working-directory: ./infrastructure
         run: npm ci
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials for Development
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-github-dbt-role-dev
-          role-session-name: GitHubActions-Development-Deployment
+          role-session-name: GitHubActions-Development-${{ github.run_id }}
           aws-region: eu-west-1
+          role-duration-seconds: 3600  # 1 hour max session
+          mask-aws-account-id: true
+
+      - name: Verify AWS identity
+        run: |
+          echo "🔐 Verifying AWS identity..."
+          aws sts get-caller-identity
+          echo "🌍 Current region: $(aws configure get region)"
 
       - name: Install CDK CLI
         run: npm install -g aws-cdk
@@ -106,12 +114,24 @@ jobs:
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-dev.json
+        env:
+          # Add deployment metadata
+          CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEPLOY_REGION: eu-west-1
 
       - name: Upload deployment outputs
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-outputs-development
+          name: cdk-outputs-development-${{ github.run_id }}
           path: infrastructure/cdk-outputs-dev.json
+          retention-days: 30
+
+      - name: Security - Clear AWS credentials
+        if: always()
+        run: |
+          unset AWS_ACCESS_KEY_ID
+          unset AWS_SECRET_ACCESS_KEY
+          unset AWS_SESSION_TOKEN
 
   # ==========================================
   # DEPLOY TO PRODUCTION  
@@ -140,12 +160,20 @@ jobs:
         working-directory: ./infrastructure
         run: npm ci
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials for Production
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-prod
-          role-session-name: GitHubActions-Production-Deployment
+          role-session-name: GitHubActions-Production-${{ github.run_id }}
           aws-region: eu-west-1
+          role-duration-seconds: 3600  # 1 hour max session
+          mask-aws-account-id: true
+
+      - name: Verify AWS identity
+        run: |
+          echo "🔐 Verifying AWS identity..."
+          aws sts get-caller-identity
+          echo "🌍 Current region: $(aws configure get region)"
 
       - name: Install CDK CLI
         run: npm install -g aws-cdk
@@ -163,12 +191,24 @@ jobs:
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-prod.json
+        env:
+          # Add deployment metadata
+          CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEPLOY_REGION: eu-west-1
 
       - name: Upload deployment outputs
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-outputs-production
+          name: cdk-outputs-production-${{ github.run_id }}
           path: infrastructure/cdk-outputs-prod.json
+          retention-days: 90
+
+      - name: Security - Clear AWS credentials
+        if: always()
+        run: |
+          unset AWS_ACCESS_KEY_ID
+          unset AWS_SECRET_ACCESS_KEY
+          unset AWS_SESSION_TOKEN
 
   # ==========================================
   # SECURITY AND COMPLIANCE
@@ -209,3 +249,14 @@ jobs:
         env:
           CDK_DEFAULT_REGION: eu-west-1
           CDK_DEFAULT_ACCOUNT: '123456789012'
+
+      - name: Check for sensitive data in code
+        run: |
+          echo "🔍 Scanning for potential secrets..."
+          # Check for AWS keys, passwords, etc.
+          if grep -r -i -E "(aws_access_key|aws_secret|password|secret)" --exclude-dir=node_modules --exclude-dir=.git .; then
+            echo "⚠️ Potential sensitive data found in code"
+            exit 1
+          else
+            echo "✅ No obvious sensitive data found"
+          fi
