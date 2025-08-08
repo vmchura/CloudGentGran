@@ -15,12 +15,15 @@ import os
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize AWS clients
-endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
-if endpoint_url:
-    s3_client = boto3.client('s3', endpoint_url=endpoint_url)
-else:
-    s3_client = boto3.client('s3')
+def get_s3_client():
+    """Get S3 client with optional endpoint URL for LocalStack"""
+    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+    if endpoint_url:
+        logger.info(f"Using S3 endpoint: {endpoint_url}")
+        return boto3.client('s3', endpoint_url=endpoint_url)
+    else:
+        logger.info("Using default S3 endpoint")
+        return boto3.client('s3')
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -112,6 +115,9 @@ def upload_to_s3(bucket_name: str, data: List[Dict[str, Any]], api_name: str) ->
         S3 key of the uploaded file
     """
     try:
+        # Get S3 client (reads environment variables at runtime)
+        s3_client = get_s3_client()
+        
         # Generate S3 key with timestamp
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         s3_key = f"landing/{api_name}/year={datetime.utcnow().year}/month={datetime.utcnow().month:02d}/day={datetime.utcnow().day:02d}/{api_name}_{timestamp}.json"
