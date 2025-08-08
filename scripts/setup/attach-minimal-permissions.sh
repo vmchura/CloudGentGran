@@ -121,11 +121,33 @@ cat > "$TMP_POLICY_FILE" << EOF
         "lambda:UpdateFunctionConfiguration",
         "lambda:InvokeFunction",
         "lambda:TagResource",
-        "lambda:UntagResource"
+        "lambda:UntagResource",
+        "lambda:ListTags",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:GetPolicy"
       ],
       "Resource": [
         "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:*S3AutoDeleteObjectsCustomResourceProvider*",
-        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-*"
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-*",
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:catalunya-*"
+      ]
+    },
+    {
+      "Sid": "EventBridgeRules",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule",
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:ListTargetsByRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/catalunya-*"
       ]
     },
     {

@@ -1,5 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Construct } from 'constructs';
 import { ConfigHelper, EnvironmentConfig } from './config';
 
@@ -20,6 +24,9 @@ export class CatalunyaDataStack extends cdk.Stack {
   
   // S3 Resources
   public readonly dataBucket: s3.Bucket;
+  
+  // Lambda Resources
+  public apiExtractorLambda: lambda.Function;
   
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -45,6 +52,11 @@ export class CatalunyaDataStack extends cdk.Stack {
     // S3 Infrastructure
     // ========================================
     this.createS3Infrastructure();
+
+    // ========================================
+    // Lambda Infrastructure
+    // ========================================
+    this.createLambdaInfrastructure();
 
     new cdk.CfnOutput(this, 'Environment', {
       value: this.environmentName,
@@ -183,6 +195,108 @@ export class CatalunyaDataStack extends cdk.Stack {
       value: dataBucket.bucketDomainName,
       description: 'Domain name of the main data S3 bucket',
       exportName: `${this.projectName}-S3BucketDomainName`,
+    });
+  }
+
+  /**
+   * Creates Lambda infrastructure including the API extractor function with proper IAM roles and EventBridge scheduling
+   */
+  private createLambdaInfrastructure(): void {
+    // ========================================
+    // IAM Role for Lambda
+    // ========================================
+    
+    // Use existing IAM role or create inline permissions
+    const lambdaRole = iam.Role.fromRoleArn(
+      this,
+      'ApiExtractorRole',
+      `arn:aws:iam::${this.account}:role/catalunya-lambda-extractor-role-${this.environmentName}`
+    );
+
+    // ========================================
+    // Lambda Function
+    // ========================================
+    
+    this.apiExtractorLambda = new lambda.Function(this, 'ApiExtractorLambda', {
+      functionName: `${this.lambdaPrefix}-api-extractor`,
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'api-extractor.lambda_handler',
+      code: lambda.Code.fromAsset('../lambda/extractors', {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          command: [
+            'bash', '-c', [
+              'pip install -r requirements.txt -t /asset-output',
+              'cp -au . /asset-output'
+            ].join(' && ')
+          ],
+        },
+      }),
+      timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
+      memorySize: this.config.lambdaMemory,
+      role: lambdaRole,
+      environment: {
+        BUCKET_NAME: this.bucketName,
+        API_URL: 'https://jsonplaceholder.typicode.com/posts',
+        API_NAME: 'jsonplaceholder',
+        ENVIRONMENT: this.environmentName,
+        REGION: this.region
+      },
+      description: `API Extractor Lambda for ${this.environmentName} environment`,
+    });
+
+    // ========================================
+    // EventBridge Rule for Scheduling
+    // ========================================
+    
+    const extractorScheduleRule = new events.Rule(this, 'ApiExtractorSchedule', {
+      ruleName: `${this.lambdaPrefix}-api-extractor-schedule`,
+      description: `Scheduled trigger for API extractor Lambda in ${this.environmentName}`,
+      schedule: events.Schedule.expression(this.config.scheduleCron),
+      enabled: true,
+    });
+
+    // Add Lambda as target
+    extractorScheduleRule.addTarget(new targets.LambdaFunction(this.apiExtractorLambda, {
+      event: events.RuleTargetInput.fromObject({
+        source: 'eventbridge.schedule',
+        environment: this.environmentName,
+        trigger_time: events.EventField.fromPath('$.time')
+      })
+    }));
+
+    // ========================================
+    // Tags and Outputs
+    // ========================================
+    
+    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.apiExtractorLambda).add(key, value);
+      cdk.Tags.of(extractorScheduleRule).add(key, value);
+    });
+
+    // Additional Lambda tags
+    cdk.Tags.of(this.apiExtractorLambda).add('Purpose', 'DataExtraction');
+    cdk.Tags.of(this.apiExtractorLambda).add('Layer', 'Ingestion');
+    cdk.Tags.of(this.apiExtractorLambda).add('DataSource', 'PublicAPI');
+
+    // Lambda outputs
+    new cdk.CfnOutput(this, 'ApiExtractorLambdaArn', {
+      value: this.apiExtractorLambda.functionArn,
+      description: 'ARN of the API Extractor Lambda function',
+      exportName: `${this.projectName}-ApiExtractorLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiExtractorLambdaName', {
+      value: this.apiExtractorLambda.functionName,
+      description: 'Name of the API Extractor Lambda function',
+      exportName: `${this.projectName}-ApiExtractorLambdaName`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiExtractorScheduleArn', {
+      value: extractorScheduleRule.ruleArn,
+      description: 'ARN of the API Extractor EventBridge schedule rule',
+      exportName: `${this.projectName}-ApiExtractorScheduleArn`,
     });
   }
 }
