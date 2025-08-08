@@ -11,16 +11,20 @@ echo "🔐 Attaching minimal IAM permissions for infrastructure testing..."
 POLICY_NAME="CatalunyaDeploymentPolicy"
 TMP_POLICY_FILE="/tmp/minimal-catalunyadeployment-policy.json"
 
+# Get account ID for resource ARNs
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION="eu-west-1"
+
 # --- Cleanup on exit ---
 trap "rm -f $TMP_POLICY_FILE" EXIT
 
 # --- Create the minimal policy document ---
-cat > "$TMP_POLICY_FILE" << 'EOF'
+cat > "$TMP_POLICY_FILE" << EOF
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "CloudFormationOps",
+      "Sid": "CloudFormationStackOps",
       "Effect": "Allow",
       "Action": [
         "cloudformation:CreateStack",
@@ -33,32 +37,65 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "cloudformation:DescribeChangeSet",
         "cloudformation:DescribeStackEvents",
         "cloudformation:GetTemplateSummary",
-        "cloudformation:DescribeStackResources",
-        "cloudformation:ListStacks"
+        "cloudformation:DescribeStackResources"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-dev/*",
+        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-prod/*",
+        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CDKToolkit/*"
+      ]
     },
     {
-      "Sid": "S3Buckets",
+      "Sid": "CloudFormationList",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:ListStacks"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "${REGION}"
+        }
+      }
+    },
+    {
+      "Sid": "S3ProjectBuckets",
       "Effect": "Allow",
       "Action": [
         "s3:CreateBucket",
         "s3:DeleteBucket",
-        "s3:GetBucket*",
-        "s3:PutBucket*",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketEncryption",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketNotification",
+        "s3:GetBucketTagging",
+        "s3:PutBucketVersioning",
+        "s3:PutBucketEncryption",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketNotification",
+        "s3:PutBucketTagging",
         "s3:ListBucket"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:s3:::catalunya-data-*",
+        "arn:aws:s3:::cdk-hnb659fds-*"
+      ]
     },
     {
-      "Sid": "S3Objects",
+      "Sid": "S3ProjectObjects",
       "Effect": "Allow",
       "Action": [
         "s3:GetObject",
         "s3:PutObject",
-        "s3:DeleteObject"
+        "s3:DeleteObject",
+        "s3:GetObjectVersion",
+        "s3:DeleteObjectVersion"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:s3:::catalunya-data-*/*",
+        "arn:aws:s3:::cdk-hnb659fds-*/*"
+      ]
     },
     {
       "Sid": "IAMPassRoles",
@@ -68,13 +105,13 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "iam:PassRole"
       ],
       "Resource": [
-        "arn:aws:iam::*:role/cdk-*",
-        "arn:aws:iam::*:role/*S3AutoDeleteObjectsCustomResourceProviderRole*",
-        "arn:aws:iam::*:role/data-and-analytics-deployment-*"
+        "arn:aws:iam::${ACCOUNT_ID}:role/cdk-*",
+        "arn:aws:iam::${ACCOUNT_ID}:role/*S3AutoDeleteObjectsCustomResourceProviderRole*",
+        "arn:aws:iam::${ACCOUNT_ID}:role/catalunya-*"
       ]
     },
     {
-      "Sid": "LambdaS3Cleanup",
+      "Sid": "LambdaProjectFunctions",
       "Effect": "Allow",
       "Action": [
         "lambda:CreateFunction",
@@ -82,10 +119,13 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "lambda:GetFunction",
         "lambda:UpdateFunctionCode",
         "lambda:UpdateFunctionConfiguration",
-        "lambda:InvokeFunction"
+        "lambda:InvokeFunction",
+        "lambda:TagResource",
+        "lambda:UntagResource"
       ],
       "Resource": [
-        "arn:aws:lambda:*:*:function:*S3AutoDeleteObjectsCustomResourceProvider*"
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:*S3AutoDeleteObjectsCustomResourceProvider*",
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-*"
       ]
     },
     {
@@ -97,13 +137,12 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "ssm:PutParameter",
         "ssm:DeleteParameter"
       ],
-      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap*"
+      "Resource": "arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/cdk-bootstrap*"
     },
     {
-      "Sid": "IAMCleanup",
+      "Sid": "IAMCDKRoleManagement",
       "Effect": "Allow",
       "Action": [
-        "iam:PassRole",
         "iam:CreateRole",
         "iam:DeleteRole",
         "iam:PutRolePolicy",
@@ -113,10 +152,17 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "iam:AttachRolePolicy",
         "iam:DetachRolePolicy",
         "iam:TagRole",
-        "iam:UntagRole",
+        "iam:UntagRole"
+      ],
+      "Resource": "arn:aws:iam::${ACCOUNT_ID}:role/cdk-*"
+    },
+    {
+      "Sid": "STSAssumeRole",
+      "Effect": "Allow",
+      "Action": [
         "sts:AssumeRole"
       ],
-      "Resource": "arn:aws:iam::*:role/cdk-*"
+      "Resource": "arn:aws:iam::${ACCOUNT_ID}:role/cdk-*"
     },
     {
       "Sid": "ECRRepositoryManagement",
@@ -129,36 +175,44 @@ cat > "$TMP_POLICY_FILE" << 'EOF'
         "ecr:SetRepositoryPolicy",
         "ecr:TagResource"
       ],
-      "Resource": "arn:aws:ecr:*:*:repository/cdk*"
+      "Resource": "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/cdk*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "${REGION}"
+        }
+      }
     },
     {
-      "Sid": "AllowCDKCreateTaggedRoles",
+      "Sid": "AllowCDKBootstrapBucket",
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole",
-        "iam:TagRole",
-        "iam:PutRolePolicy",
-        "iam:AttachRolePolicy",
-        "iam:PassRole"
-      ],
-      "Resource": "arn:aws:iam::*:role/cdk-hnb659fds-*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:*"
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning",
+        "s3:GetBucketEncryption",
+        "s3:PutBucketEncryption",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock"
       ],
       "Resource": "arn:aws:s3:::cdk-hnb659fds-*"
     },
     {
-      "Sid": "AllowTagging",
+      "Sid": "AllowProjectTagging",
       "Effect": "Allow",
       "Action": [
         "tag:GetResources",
         "tag:TagResources",
         "tag:UntagResources"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "${REGION}"
+        },
+        "StringLike": {
+          "aws:ResourceTag:Project": "CatalunyaDataPipeline"
+        }
+      }
     }
   ]
 }
@@ -219,13 +273,14 @@ echo "🚀 Starting minimal permissions setup..."
 create_or_update_policy
 
 # Step 2: Attach to roles
-
 echo ""
 echo "🔗 Attaching policy to GitHub deployment roles..."
 attach_policy_to_role "catalunya-github-dbt-role-dev"
+attach_policy_to_role "catalunya-deployment-role-prod"
 
 echo ""
 echo "✅ Minimal permissions setup complete!"
 echo ""
 echo "📋 Roles with attached policy:"
 echo "  - catalunya-github-dbt-role-dev (for develop branch deployments)"
+echo "  - catalunya-deployment-role-prod (for production deployments)"
