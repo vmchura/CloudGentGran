@@ -220,7 +220,7 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.apiExtractorLambda = new lambda.Function(this, 'ApiExtractorLambda', {
       functionName: `${this.lambdaPrefix}-api-extractor`,
       runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'api-extractor.lambda_handler',
+      handler: 'api_extractor.lambda_handler',
       code: lambda.Code.fromAsset('../lambda/extractors', {
         bundling: {
           image: lambda.Runtime.PYTHON_3_9.bundlingImage,
