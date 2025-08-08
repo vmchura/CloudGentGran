@@ -82,10 +82,12 @@ create_github_role() {
       "Principal": {
         "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
       },
-      "Action": "sts:AssumeRole",
+      "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
+        "StringLike": {
+            "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:*"
+          },
         "StringEquals": {
-          "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:ref:refs/heads/${branch}",
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         }
       }
@@ -149,6 +151,9 @@ create_human_role() {
       "Condition": {
         "Bool": {
           "aws:MultiFactorAuthPresent": "true"
+        },
+        "StringEquals": {
+          "aws:RequestedRegion": "eu-west-1"
         }
       }
     }
@@ -178,7 +183,7 @@ EOF
 # --- Role Creation ---
 
 echo ""
-echo "👤 Creating human roles..."
+echo "👤 Creating human roles with enhanced security..."
 create_human_role "catalunya-data-engineer-role"
 
 echo ""
@@ -189,9 +194,8 @@ create_service_role "catalunya-lambda-transformer-role-dev" "lambda"
 create_service_role "catalunya-lambda-transformer-role-prod" "lambda"
 
 echo ""
-echo "🔄 Creating GitHub Actions roles..."
+echo "🔄 Creating GitHub Actions roles with branch restrictions..."
 create_github_role "catalunya-github-dbt-role-dev" "develop"
-create_github_role "catalunya-github-dbt-role-prod" "main"
 create_github_role "catalunya-deployment-role-prod" "main"
 
 echo ""
