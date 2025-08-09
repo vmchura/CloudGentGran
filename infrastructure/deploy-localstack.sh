@@ -58,4 +58,4 @@ echo "S3 Buckets:"
 aws --endpoint-url=$LOCALSTACK_ENDPOINT s3 ls
 
 echo "Lambda Functions:"
-aws --endpoint-url=$LOCALSTACK_ENDPOINT lambda list-functions --query 'Functions[].FunctionName' --output table
+aws lambda list-functions --profile localstack --endpoint-url=http://localhost:4566 --query 'Functions[].FunctionName' --output table

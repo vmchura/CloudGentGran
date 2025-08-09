@@ -334,7 +334,7 @@ export class CatalunyaDataStack extends cdk.Stack {
           image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
           command: [
             'bash', '-c', [
-                'cargo lambda build --release --arm64',
+                'cargo lambda build --release --target x86_64-unknown-linux-gnu',
                 'cp ./target/lambda/bootstrap/bootstrap /asset-output/'
               ].join(' && ')
           ],

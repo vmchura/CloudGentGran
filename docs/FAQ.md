@@ -1,4 +1,13 @@
-1. Remove a policy:
+1. set local stack profil
+```bash
+$ aws configure --profile localstack
+AWS Access Key ID [None]: test
+AWS Secret Access Key [None]: test
+Default region name [None]: us-east-1
+Default output format [None]: json
+
+```
+2. Remove a policy:
 ```bash
 aws iam list-policy-versions --policy-arn arn:aws:iam::<<ACCOUNT_ID>>:policy/CatalunyaDeploymentPolicy
 aws iam delete-policy-version --policy-arn arn:aws:iam::<<ACCOUNT_ID>>:policy/CatalunyaDeploymentPolicy --version-id v5
@@ -63,6 +72,7 @@ export AWS_DEFAULT_REGION=us-east-1
 
 # Get function name (replace with your actual function name)
 export FUNCTION_NAME="catalunya-dev-social_services"
+export FUNCTION_NAME="catalunya-dev-social-services-transformer"
 
 # Test the function
 echo "Testing Lambda function: $FUNCTION_NAME"
@@ -78,3 +88,21 @@ aws s3 ls s3://catalunya-data-dev --endpoint-url=http://localhost:4566 --recursi
 # Clean up
 rm response.json
 ```
+
+# invoke transformation
+
+AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws lambda invoke \
+  --function-name catalunya-dev-social-services-transformer \
+  --endpoint-url=http://localhost:4566 \
+  --payload file://event-eventbridge.json \
+  --region=us-east-1 \
+  --cli-binary-format raw-in-base64-out \
+  response.json
+
+aws lambda invoke \
+  --profile localstack \
+  --endpoint-url=http://localhost:4566 \
+  --function-name catalunya-dev-social-services-transformer \
+  --payload file://event-eventbridge.json \
+  --cli-binary-format raw-in-base64-out \
+  response.json
