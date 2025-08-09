@@ -322,22 +322,23 @@ export class CatalunyaDataStack extends cdk.Stack {
     );
 
     // ========================================
-    // Social Services Transformer Lambda
+    // Social Services Transformer Lambda (Rust)
     // ========================================
     
     this.socialServicesTransformerLambda = new lambda.Function(this, 'SocialServicesTransformerLambda', {
       functionName: `${this.lambdaPrefix}-social-services-transformer`,
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'transform_handler.lambda_handler',
+      runtime: lambda.Runtime.PROVIDED_AL2023,
+      handler: 'bootstrap',
       code: lambda.Code.fromAsset('../lambda/transformers/social_services', {
         bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
           command: [
             'bash', '-c', [
-              'pip install -r requirements.txt -t /asset-output',
-              'cp -au . /asset-output'
-            ].join(' && ')
+                'cargo lambda build --release --arm64',
+                'cp ./target/lambda/social_services/bootstrap /asset-output/'
+              ].join(' && ')
           ],
+          user: 'root',
         },
       }),
       timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
@@ -349,7 +350,7 @@ export class CatalunyaDataStack extends cdk.Stack {
         ENVIRONMENT: this.environmentName,
         REGION: this.region
       },
-      description: `Social Services Transformer Lambda for ${this.environmentName} environment`,
+      description: `Social Services Transformer Lambda (Rust) for ${this.environmentName} environment`,
     });
 
     // ========================================
