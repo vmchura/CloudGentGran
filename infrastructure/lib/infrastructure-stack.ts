@@ -217,11 +217,11 @@ export class CatalunyaDataStack extends cdk.Stack {
     // Lambda Function
     // ========================================
     
-    this.apiExtractorLambda = new lambda.Function(this, 'ApiExtractorLambda', {
+    this.apiExtractorLambda = new lambda.Function(this, 'social_services_ApiExtractorLambda', {
       functionName: `${this.lambdaPrefix}-api-extractor`,
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'api_extractor.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/extractors', {
+      code: lambda.Code.fromAsset('../lambda/extractors/social_services', {
         bundling: {
           image: lambda.Runtime.PYTHON_3_9.bundlingImage,
           command: [
@@ -237,8 +237,8 @@ export class CatalunyaDataStack extends cdk.Stack {
       role: lambdaRole,
       environment: {
         BUCKET_NAME: this.bucketName,
-        API_URL: 'https://jsonplaceholder.typicode.com/posts',
-        API_NAME: 'jsonplaceholder',
+        SEMANTIC_IDENTIFIER: 'social_services',
+        DATASET_IDENTIFIER: 'ivft-vegh',
         ENVIRONMENT: this.environmentName,
         REGION: this.region
       },
