@@ -86,7 +86,7 @@ jobs:
       - name: Configure AWS credentials for Development
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-github-dbt-role-dev
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-dev
           role-session-name: GitHubActions-Development-${{ github.run_id }}
           aws-region: eu-west-1
           role-duration-seconds: 3600  # 1 hour max session

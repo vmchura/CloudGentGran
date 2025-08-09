@@ -195,7 +195,7 @@ create_service_role "catalunya-lambda-transformer-role-prod" "lambda"
 
 echo ""
 echo "🔄 Creating GitHub Actions roles with branch restrictions..."
-create_github_role "catalunya-github-dbt-role-dev" "develop"
+create_github_role "catalunya-deployment-role-dev" "develop"
 create_github_role "catalunya-deployment-role-prod" "main"
 
 echo ""

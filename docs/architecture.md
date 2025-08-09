@@ -246,9 +246,9 @@ s3://catalunya-data-dev/marts/
 - Read access to S3 landing layer only
 - Write access to S3 staging layer only
 
-#### **GitHub Actions DBT Roles**
-- `catalunya-github-dbt-role-dev` (OIDC: develop branch)
-- `catalunya-github-dbt-role-prod` (OIDC: main branch)
+#### **GitHub Actions Deployment Roles**
+- `catalunya-deployment-role-dev` (OIDC: develop branch)
+- `catalunya-deployment-role-prod` (OIDC: main branch)
 
 **Purpose**: Execute DBT transformations to create business-ready analytics models from staging data.
 

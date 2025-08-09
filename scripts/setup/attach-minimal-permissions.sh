@@ -297,12 +297,12 @@ create_or_update_policy
 # Step 2: Attach to roles
 echo ""
 echo "🔗 Attaching policy to GitHub deployment roles..."
-attach_policy_to_role "catalunya-github-dbt-role-dev"
+attach_policy_to_role "catalunya-deployment-role-dev"
 attach_policy_to_role "catalunya-deployment-role-prod"
 
 echo ""
 echo "✅ Minimal permissions setup complete!"
 echo ""
 echo "📋 Roles with attached policy:"
-echo "  - catalunya-github-dbt-role-dev (for develop branch deployments)"
+echo "  - catalunya-deployment-role-dev (for develop branch deployments)"
 echo "  - catalunya-deployment-role-prod (for production deployments)"
