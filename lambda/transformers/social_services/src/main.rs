@@ -1,22 +1,21 @@
-use aws_sdk_s3::{Client, types::ByteStream};
+use aws_sdk_s3::{Client, primitives::ByteStream};
 use aws_config::meta::region::RegionProviderChain;
 use chrono::Utc;
 use polars::prelude::*;
 use regex::Regex;
-use serde_json::{Value, json};
 use std::env;
 use std::io::Cursor;
 use anyhow::{Result, anyhow};
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct LambdaInput {
     detail: Option<EventDetail>,
     downloaded_date: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct EventDetail {
     downloaded_date: String,
     bucket_name: Option<String>,
@@ -56,7 +55,10 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
 
     // Load AWS config
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
-    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
     let s3_client = Client::new(&shared_config);
 
     // Parse event to get downloaded_date and other parameters
@@ -121,7 +123,7 @@ async fn process_files_for_date(
         .send()
         .await?;
 
-    let contents = resp.contents().unwrap_or_default();
+    let contents = resp.contents();
     if contents.is_empty() {
         println!("No files found in s3://{}/{}", bucket, source_prefix);
         return Ok(ProcessingResult {
@@ -186,7 +188,15 @@ async fn process_files_for_date(
 
     // Combine all dataframes
     println!("Concatenating {} dataframes", dfs.len());
-    let mut combined_df = concat(dfs.as_slice(), UnionArgs::default())?;
+    let mut combined_df = if dfs.len() == 1 {
+        dfs.into_iter().next().unwrap()
+    } else {
+        let mut result = dfs[0].clone();
+        for df in dfs.iter().skip(1) {
+            result = result.vstack(df)?;
+        }
+        result
+    };
 
     // Transform
     combined_df = transform_social_services_data(combined_df)?;
@@ -237,35 +247,31 @@ fn transform_social_services_data(mut df: DataFrame) -> Result<DataFrame> {
         .get_columns()
         .iter()
         .map(|s| s.is_not_null())
-        .reduce(|acc, b| Ok(&acc | &b))
-        .unwrap()?;
+        .reduce(|acc, b| &acc | &b)
+        .unwrap();
 
     df = df.filter(&mask)?;
 
-    // Add metadata columns
-    let processed_timestamp = Series::new("processed_timestamp", vec![Utc::now().to_rfc3339(); df.height()]);
-    let processor = Series::new("processor", vec!["social-services-transformer"; df.height()]);
-    let environment = Series::new("environment", vec![env::var("ENVIRONMENT").unwrap_or_else(|_| "unknown".to_string()); df.height()]);
-
-    df = df
-        .lazy()
-        .with_columns([
-            lit(Utc::now().to_rfc3339()).alias("processed_timestamp"),
-            lit("social-services-transformer").alias("processor"),
-            lit(env::var("ENVIRONMENT").unwrap_or_else(|_| "unknown".to_string())).alias("environment"),
-        ])
-        .collect()?;
+    // Add metadata columns using direct Series addition
+    let height = df.height();
+    let processed_timestamp = Series::new("processed_timestamp", vec![Utc::now().to_rfc3339(); height]);
+    let processor = Series::new("processor", vec!["social-services-transformer"; height]);
+    let environment = Series::new("environment", vec![env::var("ENVIRONMENT").unwrap_or_else(|_| "unknown".to_string()); height]);
+    
+    df.with_column(processed_timestamp)?;
+    df.with_column(processor)?;
+    df.with_column(environment)?;
 
     // Deduplicate based on data columns (excluding metadata)
     let metadata_cols = vec!["processed_timestamp", "processor", "environment"];
     let data_cols: Vec<String> = df.get_column_names()
         .iter()
-        .filter(|col| !metadata_cols.contains(&col.as_str()))
+        .filter(|col| !metadata_cols.contains(col))
         .map(|col| col.to_string())
         .collect();
 
     if !data_cols.is_empty() {
-        df = df.unique(Some(&data_cols), UniqueKeepStrategy::First)?;
+        df = df.unique(Some(&data_cols), UniqueKeepStrategy::First, None)?;
     }
 
     println!("Final DataFrame shape: {:?}", df.shape());
@@ -278,7 +284,7 @@ async fn upload_parquet_to_s3(s3_client: &Client, df: &DataFrame, bucket: &str, 
     let mut buf = Vec::new();
     ParquetWriter::new(&mut buf)
         .with_compression(ParquetCompression::Snappy)
-        .finish(df)?;
+        .finish(&mut df.clone())?;
 
     s3_client
         .put_object()
