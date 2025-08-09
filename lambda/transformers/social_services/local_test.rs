@@ -13,7 +13,7 @@ use anyhow::{Result, anyhow};
 #[tokio::main]
 async fn main() -> Result<()> {
     // Set up environment variables for testing
-    env::set_var("BUCKET_NAME", "your-test-bucket"); // Replace with your actual bucket
+    env::set_var("BUCKET_NAME", "cloudgentgran-test-bucket"); // Replace with your actual bucket
     env::set_var("SEMANTIC_IDENTIFIER", "social_services");
     env::set_var("ENVIRONMENT", "dev");
 

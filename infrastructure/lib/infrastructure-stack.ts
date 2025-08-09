@@ -335,7 +335,7 @@ export class CatalunyaDataStack extends cdk.Stack {
           command: [
             'bash', '-c', [
                 'cargo lambda build --release --arm64',
-                'cp ./target/lambda/social_services/bootstrap /asset-output/'
+                'cp ./target/lambda/bootstrap/bootstrap /asset-output/'
               ].join(' && ')
           ],
           user: 'root',
