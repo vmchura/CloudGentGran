@@ -3,6 +3,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
+import * as s3notifications from 'aws-cdk-lib/aws-s3-notifications';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Construct } from 'constructs';
 import { ConfigHelper, EnvironmentConfig } from './config';
@@ -27,6 +28,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   
   // Lambda Resources
   public apiExtractorLambda: lambda.Function;
+  public socialServicesTransformerLambda: lambda.Function;
   
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -57,6 +59,11 @@ export class CatalunyaDataStack extends cdk.Stack {
     // Lambda Infrastructure
     // ========================================
     this.createLambdaInfrastructure();
+
+    // ========================================
+    // Transformer Infrastructure
+    // ========================================
+    this.createTransformerInfrastructure();
 
     new cdk.CfnOutput(this, 'Environment', {
       value: this.environmentName,
@@ -297,6 +304,94 @@ export class CatalunyaDataStack extends cdk.Stack {
       value: extractorScheduleRule.ruleArn,
       description: 'ARN of the API Extractor EventBridge schedule rule',
       exportName: `${this.projectName}-ApiExtractorScheduleArn`,
+    });
+  }
+
+  /**
+   * Creates Transformer Lambda infrastructure including the social services transformer function 
+   * with S3 event triggers and proper IAM roles
+   */
+  private createTransformerInfrastructure(): void {
+    // ========================================
+    // IAM Role for Transformer Lambda
+    // ========================================
+    
+    const transformerRole = iam.Role.fromRoleArn(
+      this,
+      'TransformerRole',
+      `arn:aws:iam::${this.account}:role/catalunya-lambda-transformer-role-${this.environmentName}`
+    );
+
+    // ========================================
+    // Social Services Transformer Lambda
+    // ========================================
+    
+    this.socialServicesTransformerLambda = new lambda.Function(this, 'SocialServicesTransformerLambda', {
+      functionName: `${this.lambdaPrefix}-social-services-transformer`,
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'transform_handler.lambda_handler',
+      code: lambda.Code.fromAsset('../lambda/transformers/social_services', {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          command: [
+            'bash', '-c', [
+              'pip install -r requirements.txt -t /asset-output',
+              'cp -au . /asset-output'
+            ].join(' && ')
+          ],
+        },
+      }),
+      timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
+      memorySize: this.config.lambdaMemory,
+      role: transformerRole,
+      environment: {
+        BUCKET_NAME: this.bucketName,
+        SEMANTIC_IDENTIFIER: 'social_services',
+        ENVIRONMENT: this.environmentName,
+        REGION: this.region
+      },
+      description: `Social Services Transformer Lambda for ${this.environmentName} environment`,
+    });
+
+    // ========================================
+    // S3 Event Notification for Landing Bucket
+    // ========================================
+    
+    // Add S3 event notification to trigger transformer when new files arrive in landing
+    this.dataBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3notifications.LambdaDestination(this.socialServicesTransformerLambda),
+      {
+        prefix: 'landing/social_services/',
+        suffix: '.json'
+      }
+    );
+
+    // ========================================
+    // Tags and Outputs
+    // ========================================
+    
+    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.socialServicesTransformerLambda).add(key, value);
+    });
+
+    // Additional transformer tags
+    cdk.Tags.of(this.socialServicesTransformerLambda).add('Purpose', 'DataTransformation');
+    cdk.Tags.of(this.socialServicesTransformerLambda).add('Layer', 'Processing');
+    cdk.Tags.of(this.socialServicesTransformerLambda).add('DataFlow', 'LandingToStaging');
+
+    // Transformer outputs
+    new cdk.CfnOutput(this, 'SocialServicesTransformerLambdaArn', {
+      value: this.socialServicesTransformerLambda.functionArn,
+      description: 'ARN of the Social Services Transformer Lambda function',
+      exportName: `${this.projectName}-SocialServicesTransformerLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SocialServicesTransformerLambdaName', {
+      value: this.socialServicesTransformerLambda.functionName,
+      description: 'Name of the Social Services Transformer Lambda function',
+      exportName: `${this.projectName}-SocialServicesTransformerLambdaName`,
     });
   }
 }

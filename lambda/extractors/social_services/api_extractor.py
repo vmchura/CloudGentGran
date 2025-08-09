@@ -94,7 +94,7 @@ def upload_to_s3(bucket_name: str, json_data: List[Dict[str, Any]], dataset_iden
         # Generate S3 key with timestamp
         timestamp = process_initiated_at.strftime('%Y%m%d_%H%M%S')
         semantic_identifier = os.environ.get('SEMANTIC_IDENTIFIER')
-        s3_key = f"landing/{semantic_identifier}/downloaded_at={process_initiated_at.strftime('%Y%m%d')}/{offset:08d}.json"
+        s3_key = f"landing/{semantic_identifier}/downloaded_date={process_initiated_at.strftime('%Y%m%d')}/{offset:08d}.json"
         # Upload to S3
         s3_client.put_object(
             Bucket=bucket_name,
