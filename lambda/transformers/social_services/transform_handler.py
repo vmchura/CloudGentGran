@@ -14,20 +14,19 @@ Processing includes:
 import json
 import boto3
 import polars as pl
-import pyarrow as pa
-import pyarrow.parquet as pq
 import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import os
-import urllib.parse
+import re
+import io
 from io import BytesIO
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-def get_s3_client() -> boto3.client.S3:
+def get_s3_client() -> boto3.client:
     """Get S3 client with optional endpoint URL for LocalStack"""
     endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
     if endpoint_url:
@@ -40,10 +39,10 @@ def get_s3_client() -> boto3.client.S3:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Main Lambda handler function triggered by S3 events
+    Main Lambda handler function triggered by EventBridge events
     
     Args:
-        event: Lambda event data containing S3 event information
+        event: Lambda event data containing downloaded_date information
         context: Lambda context
         
     Returns:
@@ -53,114 +52,174 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Starting transformation process at {datetime.utcnow()}")
         logger.info(f"Received event: {json.dumps(event, default=str)}")
         
-        # Parse S3 event
-
-        if 'downloaded_date' in event:
+        # Parse EventBridge event
+        if 'detail' in event and 'downloaded_date' in event['detail']:
+            # EventBridge custom event from API extractor
+            downloaded_date = event['detail']['downloaded_date']
+            bucket_name = event['detail'].get('bucket_name') or os.environ['BUCKET_NAME']
+            semantic_identifier = event['detail'].get('semantic_identifier') or os.environ['SEMANTIC_IDENTIFIER']
+        elif 'downloaded_date' in event:
+            # Direct invocation with downloaded_date
             downloaded_date = event['downloaded_date']
             bucket_name = os.environ['BUCKET_NAME']
             semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
-
-            logger.info(f"Processing files: s3://{bucket_name}/{semantic_identifier}/downloaded_date={downloaded_date}")
-            source_key = f"landing/{semantic_identifier}/downloaded_date={downloaded_date}"
-            target_key = f"staging/{semantic_identifier}/transformed_date={downloaded_date}"
-            result_dictionary = process_file(bucket_name, source_key, target_key)
-
-
-            # Complete success
-            return create_response(True, f"Successfully processed {len(processed_files)} files", result_dictionary)
         else:
             logger.error("No downloaded_date found in event")
             return create_response(False, "No downloaded_date found in event")
+
+        logger.info(f"Processing files: s3://{bucket_name}/landing/{semantic_identifier}/downloaded_date={downloaded_date}")
+        
+        source_prefix = f"landing/{semantic_identifier}/downloaded_date={downloaded_date}/"
+        target_key = f"staging/{semantic_identifier}/transformed_date={downloaded_date}/social_services_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.parquet"
+        
+        result = process_files_for_date(bucket_name, source_prefix, target_key)
+
+        # Complete success
+        return create_response(True, f"Successfully processed files for date {downloaded_date}", result)
             
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}")
         return create_response(False, f"Handler error: {str(e)}")
 
 
-def process_file(bucket: str, source_key: str, target_key: str) -> Dict[str, Any]:
+def process_files_for_date(bucket: str, source_prefix: str, target_key: str) -> Dict[str, Any]:
     """
-    Process a single file from landing to staging
-
+    Process all JSON files with a specific downloaded_date from landing to staging
+    
+    Args:
+        bucket: S3 bucket name
+        source_prefix: S3 prefix to search for JSON files (e.g., "landing/social_services/downloaded_date=20250809/")
+        target_key: Target S3 key for the consolidated parquet file
         
     Returns:
         Dict with processing results
-        :param source_key:
-        :param bucket:
-        :param target_key:
     """
     s3_client = get_s3_client()
-
     
     try:
-        response = s3_client.list_objects_v2(Bucket=bucket, Prefix=source_key)
-
-        keys = [
+        # List all JSON files in the source prefix
+        response = s3_client.list_objects_v2(Bucket=bucket, Prefix=source_prefix)
+        
+        if 'Contents' not in response:
+            logger.warning(f"No files found in s3://{bucket}/{source_prefix}")
+            return {
+                'source_prefix': source_prefix,
+                'target_key': target_key,
+                'status': 'success',
+                'files_processed': 0,
+                'raw_records': 0,
+                'clean_records': 0,
+                'message': 'No files to process'
+            }
+        
+        # Filter for JSON files with pattern XXXXXXXX.json (8 digits)
+        json_keys = [
             obj["Key"]
             for obj in response.get("Contents", [])
-            if re.fullmatch(rf"{re.escape(prefix)}\d{{8}}\.json", obj["Key"])
+            if obj["Key"].endswith('.json') and re.search(r'/\d{8}\.json$', obj["Key"])
         ]
-        dfs = []
-        for key in keys:
-            obj = s3.get_object(Bucket=bucket, Key=key)
-            data_bytes = obj["Body"].read()
-            df = pl.read_json(io.BytesIO(data_bytes))
-            dfs.append(df)
-
-        if dfs:
-            df = pl.concat(dfs, how="vertical")
-        else:
-            logger.error(f"Error processing file {source_key}: maybe no data found?")
-            raise
-
-
-        # Convert to Parquet and upload
-        upload_parquet_to_s3(df, target_bucket, target_key)
         
-        logger.info(f"Successfully processed {source_key} -> {target_key}")
-        logger.info(f"Transformed {len(df)} raw records to {len(df)} clean records")
+        if not json_keys:
+            logger.warning(f"No matching JSON files found in s3://{bucket}/{source_prefix}")
+            return {
+                'source_prefix': source_prefix,
+                'target_key': target_key,
+                'status': 'success',
+                'files_processed': 0,
+                'raw_records': 0,
+                'clean_records': 0,
+                'message': 'No matching JSON files found'
+            }
+        
+        logger.info(f"Found {len(json_keys)} JSON files to process")
+        
+        # Read and combine all JSON files
+        dataframes = []
+        total_raw_records = 0
+        
+        for key in json_keys:
+            try:
+                logger.info(f"Processing file: {key}")
+                obj = s3_client.get_object(Bucket=bucket, Key=key)
+                data_bytes = obj["Body"].read()
+                
+                # Read JSON with polars
+                df = pl.read_json(io.BytesIO(data_bytes))
+                dataframes.append(df)
+                total_raw_records += len(df)
+                logger.info(f"Read {len(df)} records from {key}")
+                
+            except Exception as e:
+                logger.error(f"Error processing file {key}: {str(e)}")
+                # Continue processing other files
+                continue
+        
+        if not dataframes:
+            logger.error("No dataframes created from JSON files")
+            raise Exception("Failed to process any JSON files")
+        
+        # Concatenate all dataframes
+        logger.info(f"Concatenating {len(dataframes)} dataframes")
+        combined_df = pl.concat(dataframes, how="vertical")
+        
+        # Apply transformations
+        transformed_df = transform_social_services_data(combined_df)
+        
+        # Upload consolidated parquet file
+        upload_parquet_to_s3(transformed_df, bucket, target_key)
+        
+        logger.info(f"Successfully processed {len(json_keys)} files -> {target_key}")
+        logger.info(f"Transformed {total_raw_records} raw records to {len(transformed_df)} clean records")
         
         return {
-            'source_key': source_key,
+            'source_prefix': source_prefix,
             'target_key': target_key,
             'status': 'success',
-            'raw_records': len(df),
-            'clean_records': len(df),
-            'target_location': f's3://{target_bucket}/{target_key}'
+            'files_processed': len(json_keys),
+            'raw_records': total_raw_records,
+            'clean_records': len(transformed_df),
+            'target_location': f's3://{bucket}/{target_key}'
         }
         
     except Exception as e:
-        logger.error(f"Error processing file {source_key}: {str(e)}")
+        logger.error(f"Error processing files for prefix {source_prefix}: {str(e)}")
         raise
 
 
-def transform_social_services_data(raw_data: List[Dict[str, Any]]) -> pd.DataFrame:
+def transform_social_services_data(df: pl.DataFrame) -> pl.DataFrame:
     """
     Transform raw social services data according to staging schema
     
     Args:
-        raw_data: List of raw JSON records from the API
+        df: Raw polars DataFrame from the API
         
     Returns:
-        Cleaned and transformed pandas DataFrame
+        Cleaned and transformed polars DataFrame
     """
-    if not raw_data:
-        return pd.DataFrame()
-    
     try:
-        # Convert to DataFrame
-        df = pd.DataFrame(raw_data)
-        
         logger.info(f"Original DataFrame shape: {df.shape}")
-        logger.info(f"Original columns: {list(df.columns)}")
+        logger.info(f"Original columns: {df.columns}")
         
-        # Apply transformations
-        df = clean_and_standardize_columns(df)
-        df = validate_and_clean_data(df)
-        df = deduplicate_records(df)
-        df = add_metadata_columns(df)
+        # Basic cleaning and transformations
+        # Remove any completely empty rows
+        df = df.filter(pl.any_horizontal(pl.col("*").is_not_null()))
+        
+        # Add metadata columns
+        df = df.with_columns([
+            pl.lit(datetime.utcnow().isoformat()).alias('processed_timestamp'),
+            pl.lit('social-services-transformer').alias('processor'),
+            pl.lit(os.environ.get('ENVIRONMENT', 'unknown')).alias('environment')
+        ])
+        
+        # Remove duplicates if any (based on all columns except metadata)
+        metadata_cols = ['processed_timestamp', 'processor', 'environment']
+        data_cols = [col for col in df.columns if col not in metadata_cols]
+        
+        if data_cols:
+            df = df.unique(subset=data_cols)
         
         logger.info(f"Final DataFrame shape: {df.shape}")
-        logger.info(f"Final columns: {list(df.columns)}")
+        logger.info(f"Final columns: {df.columns}")
         
         return df
         
@@ -168,65 +227,22 @@ def transform_social_services_data(raw_data: List[Dict[str, Any]]) -> pd.DataFra
         logger.error(f"Error transforming data: {str(e)}")
         raise
 
-def generate_staging_key(source_key: str, df: pd.DataFrame) -> str:
-    """
-    Generate S3 key for staging bucket with appropriate partitioning
-    
-    Args:
-        source_key: Original S3 key from landing
-        df: Transformed DataFrame
-        
-    Returns:
-        S3 key for staging bucket
-    """
-    # Extract date from source key or use current date
-    import re
-    date_match = re.search(r'downloaded_at=(\d{8})', source_key)
-    if date_match:
-        partition_date = date_match.group(1)
-    else:
-        partition_date = datetime.utcnow().strftime('%Y%m%d')
-    
-    # Determine partition value (could be based on data content)
-    # For now, we'll use the date as partition
-    partition_value = partition_date
-    
-    # Generate unique filename
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    record_count = len(df)
-    
-    staging_key = f"staging/social_services/processed_date={partition_value}/social_services_{timestamp}_{record_count}records.parquet"
-    
-    return staging_key
-
 
 def upload_parquet_to_s3(df: pl.DataFrame, bucket_name: str, s3_key: str) -> None:
     """
     Convert DataFrame to Parquet and upload to S3
     
     Args:
-        df: DataFrame to convert and upload
+        df: Polars DataFrame to convert and upload
         bucket_name: Target S3 bucket
         s3_key: Target S3 key
     """
     try:
         s3_client = get_s3_client()
         
-        # Convert DataFrame to Parquet in memory
+        # Convert to Parquet in memory using polars
         parquet_buffer = BytesIO()
-        
-        # Define Parquet schema for better compression and query performance
-        table = pa.Table.from_pandas(df)
-        
-        # Write to Parquet with optimizations
-        pq.write_table(
-            table,
-            parquet_buffer,
-            compression='snappy',  # Good balance of compression and speed
-            use_dictionary=True,   # Better compression for categorical data
-            row_group_size=10000,  # Optimize for typical query patterns
-        )
-        
+        df.write_parquet(parquet_buffer, compression='snappy')
         parquet_buffer.seek(0)
         
         # Upload to S3
@@ -240,7 +256,7 @@ def upload_parquet_to_s3(df: pl.DataFrame, bucket_name: str, s3_key: str) -> Non
                 'format': 'parquet',
                 'record_count': str(len(df)),
                 'processed_timestamp': datetime.utcnow().isoformat(),
-                'columns': ','.join(df.columns.tolist())
+                'columns': ','.join(df.columns)
             }
         )
         
