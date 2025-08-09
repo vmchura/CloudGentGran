@@ -73,14 +73,6 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
                 .ok_or_else(|| anyhow!("SEMANTIC_IDENTIFIER not found"))?;
             (detail.downloaded_date.clone(), bucket, semantic)
         }
-        LambdaInput { downloaded_date: Some(date), .. } => {
-            // Direct invocation with downloaded_date
-            let bucket = env::var("BUCKET_NAME")
-                .map_err(|_| anyhow!("BUCKET_NAME environment variable not set"))?;
-            let semantic = env::var("SEMANTIC_IDENTIFIER")
-                .map_err(|_| anyhow!("SEMANTIC_IDENTIFIER environment variable not set"))?;
-            (date.clone(), bucket, semantic)
-        }
         _ => {
             let msg = "No downloaded_date found in event";
             return Ok(create_error_response(msg));
@@ -176,8 +168,7 @@ async fn process_files_for_date(
             }
             Err(e) => {
                 eprintln!("Error processing file {}: {}", key, e);
-                // Continue processing other files
-                continue;
+                return Err(anyhow!("Error processing file {}: {}", key, e));
             }
         }
     }
@@ -225,10 +216,7 @@ async fn process_files_for_date(
     };
 
 
-    // Transform
     combined_df = transform_social_services_data(combined_df)?;
-
-    // Upload parquet
     upload_parquet_to_s3(s3_client, &combined_df, bucket, target_key).await?;
 
     println!("Successfully processed {} files -> {}", json_keys.len(), target_key);
@@ -265,41 +253,9 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
     Ok((df, record_count))
 }
 
-fn transform_social_services_data(mut df: DataFrame) -> Result<DataFrame> {
+fn transform_social_services_data(df: DataFrame) -> Result<DataFrame> {
     println!("Original DataFrame shape: {:?}", df.shape());
     println!("Original columns: {:?}", df.get_column_names());
-
-    // Remove empty rows: filter where any column is not null
-    let mask = df
-        .get_columns()
-        .iter()
-        .map(|s| s.is_not_null())
-        .reduce(|acc, b| &acc | &b)
-        .unwrap();
-
-    df = df.filter(&mask)?;
-
-    // Add metadata columns using direct Series addition
-    let height = df.height();
-    let processed_timestamp = Series::new("processed_timestamp", vec![Utc::now().to_rfc3339(); height]);
-    let processor = Series::new("processor", vec!["social-services-transformer"; height]);
-    let environment = Series::new("environment", vec![env::var("ENVIRONMENT").unwrap_or_else(|_| "unknown".to_string()); height]);
-    
-    df.with_column(processed_timestamp)?;
-    df.with_column(processor)?;
-    df.with_column(environment)?;
-
-    // Deduplicate based on data columns (excluding metadata)
-    let metadata_cols = vec!["processed_timestamp", "processor", "environment"];
-    let data_cols: Vec<String> = df.get_column_names()
-        .iter()
-        .filter(|col| !metadata_cols.contains(col))
-        .map(|col| col.to_string())
-        .collect();
-
-    if !data_cols.is_empty() {
-        df = df.unique(Some(&data_cols), UniqueKeepStrategy::First, None)?;
-    }
 
     println!("Final DataFrame shape: {:?}", df.shape());
     println!("Final columns: {:?}", df.get_column_names());
