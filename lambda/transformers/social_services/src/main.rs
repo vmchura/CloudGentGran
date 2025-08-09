@@ -186,17 +186,44 @@ async fn process_files_for_date(
         return Err(anyhow!("No DataFrames created from JSON files"));
     }
 
-    // Combine all dataframes
+    // Combine all dataframes "softly" like pandas (fill missing columns with nulls)
     println!("Concatenating {} dataframes", dfs.len());
+
     let mut combined_df = if dfs.len() == 1 {
         dfs.into_iter().next().unwrap()
     } else {
-        let mut result = dfs[0].clone();
-        for df in dfs.iter().skip(1) {
-            result = result.vstack(df)?;
+        // Step 1: collect all unique columns across all dfs
+        let mut all_columns: Vec<String> = dfs
+            .iter()
+            .flat_map(|df| df.get_column_names().into_iter().map(|s| s.to_string()))
+            .collect();
+        all_columns.sort();
+        all_columns.dedup();
+
+        // Step 2: align each df to have all columns
+        let aligned_dfs: Vec<DataFrame> = dfs
+            .iter()
+            .map(|df| {
+                let mut df = df.clone();
+                for col in &all_columns {
+                    if !df.get_column_names().contains(&col.as_str()) {
+                        // Use String type for missing columns
+                        let null_series = Series::full_null(col, df.height(), &DataType::String);
+                        df.with_column(null_series)?;
+                    }
+                }
+                df.select(&all_columns)
+            })
+            .collect::<PolarsResult<Vec<_>>>()?;
+
+        // Step 3: concatenate aligned dfs
+        let mut result_df = aligned_dfs[0].clone();
+        for df in aligned_dfs.iter().skip(1) {
+            result_df.vstack_mut(df)?;
         }
-        result
+        result_df
     };
+
 
     // Transform
     combined_df = transform_social_services_data(combined_df)?;

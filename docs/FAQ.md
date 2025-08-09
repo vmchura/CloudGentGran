@@ -49,7 +49,7 @@ Json payload
 7. Check Lambda logs:`aws logs describe-log-groups --endpoint-url=http://localhost:4566`
 
 # List log streams for a function
-`aws logs describe-log-streams --log-group-name "/aws/lambda/FUNCTION_NAME" --endpoint-url=http://localhost:4566`
+`aws logs describe-log-streams --profile localstack --log-group-name "/aws/lambda/FUNCTION_NAME" --endpoint-url=http://localhost:4566`
 
 # Get recent log events
 `aws logs get-log-events --log-group-name "/aws/lambda/FUNCTION_NAME" --log-stream-name "LOG_STREAM_NAME" --endpoint-url=http://localhost:4566`
@@ -83,7 +83,7 @@ cat response.json | jq .
 
 # Check S3 if your function writes to S3
 echo "Checking S3 contents:"
-aws s3 ls s3://catalunya-data-dev --endpoint-url=http://localhost:4566 --recursive
+aws s3 ls --profile localstack s3://catalunya-data-dev --endpoint-url=http://localhost:4566 --recursive
 
 # Clean up
 rm response.json
@@ -106,3 +106,19 @@ aws lambda invoke \
   --payload file://event-eventbridge.json \
   --cli-binary-format raw-in-base64-out \
   response.json
+
+# invoke extractor
+aws lambda invoke \
+  --profile localstack \
+  --endpoint-url=http://localhost:4566 \
+  --function-name catalunya-dev-social_services \
+  --payload '{}' \
+  --cli-binary-format raw-in-base64-out \
+  response.json
+
+
+aws logs describe-log-streams --profile localstack --log-group-name "/aws/lambda/catalunya-dev-social_services" --endpoint-url=http://localhost:4566
+aws logs describe-log-streams --profile localstack --log-group-name "/aws/lambda/catalunya-dev-social-services-transformer" --endpoint-url=http://localhost:4566
+
+aws logs tail --profile localstack /aws/lambda/catalunya-dev-social_services --follow --endpoint-url=http://localhost:4566
+aws logs tail --profile localstack /aws/lambda/catalunya-dev-social-services-transformer --follow --endpoint-url=http://localhost:4566
