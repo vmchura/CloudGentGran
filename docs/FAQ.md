@@ -62,19 +62,13 @@ export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 
 # Get function name (replace with your actual function name)
-FUNCTION_NAME="catalunya-dev-api-extractor"
+export FUNCTION_NAME="catalunya-dev-social_services"
 
 # Test the function
 echo "Testing Lambda function: $FUNCTION_NAME"
-aws lambda invoke \
-  --function-name $FUNCTION_NAME \
-  --endpoint-url=http://localhost:4566 \
-  --payload '{}' \
-  --cli-binary-format raw-in-base64-out \
-  response.json
+aws lambda invoke --function-name $FUNCTION_NAME --endpoint-url=http://localhost:4566 --payload '{}' --cli-binary-format raw-in-base64-out response.json
 
-# Show response
-echo "Response:"
+echo "Response"
 cat response.json | jq .
 
 # Check S3 if your function writes to S3
