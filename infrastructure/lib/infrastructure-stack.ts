@@ -104,6 +104,37 @@ export class CatalunyaDataStack extends cdk.Stack {
   }
 
   /**
+   * Gets the appropriate Lambda code based on environment (local vs CI/CD)
+   */
+  private getLambdaCode(): lambda.Code {
+    // Check if we're in local development mode
+    const isLocalDev = process.env.CDK_LOCAL === 'true' || 
+                       process.env.NODE_ENV === 'development' ||
+                       process.env.AWS_EXECUTION_ENV === undefined; // Not in Lambda/CDK context
+    
+    if (isLocalDev) {
+      console.log('🏗️ Using Docker bundling for local development');
+      // Use bundling for local development
+      return lambda.Code.fromAsset('../lambda/transformers/social_services', {
+        bundling: {
+          image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
+          command: [
+            'bash', '-c', [
+              'cargo lambda build --release --target x86_64-unknown-linux-gnu',
+              'cp ./target/lambda/bootstrap/bootstrap /asset-output/'
+            ].join(' && ')
+          ],
+          user: 'root',
+        },
+      });
+    } else {
+      console.log('🚀 Using pre-built artifact for CI/CD');
+      // Use pre-built artifact for CI/CD
+      return lambda.Code.fromAsset('../rust-lambda-build');
+    }
+  }
+
+  /**
    * Creates S3 infrastructure including main data bucket with folder structure,
    * lifecycle policies, encryption, and CORS configuration
    */
@@ -329,8 +360,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       functionName: `${this.lambdaPrefix}-social-services-transformer`,
       runtime: lambda.Runtime.PROVIDED_AL2023,
       handler: 'bootstrap',
-      // Use pre-built artifact instead of Docker bundling to avoid recompilation
-      code: lambda.Code.fromAsset('../rust-lambda-build'),
+      code: this.getLambdaCode(),
       timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
       memorySize: this.config.lambdaMemory,
       role: transformerRole,
