@@ -80,8 +80,7 @@ You need to create these roles before deploying the infrastructure.
 **Service Account Roles** (10):
 - **Lambda Extractor**: `catalunya-lambda-extractor-role-{dev,prod}`
 - **Lambda Transformer**: `catalunya-lambda-transformer-role-{dev,prod}`
-- **GitHub Actions DBT**: `catalunya-github-dbt-role-{dev,prod}` (OIDC)
-- **Production Deployment**: `catalunya-deployment-role-prod` (OIDC)
+- **GitHub Actions - Deployment**: `catalunya-deployment-role-{dev,prod}` (OIDC)
 - **Monitoring**: `catalunya-monitoring-role-{dev,prod}`
 
 📖 **Detailed Role Descriptions**: See [docs/architecture.md](docs/architecture.md#security-architecture)
@@ -102,7 +101,7 @@ gh secret set AWS_ACCOUNT_ID --body "123456789012"
 **OIDC IAM Roles Required:**
 The CI/CD pipeline uses OpenID Connect (OIDC) to authenticate with AWS using IAM roles instead of long-term access keys. The following roles must be created with OIDC trust relationships:
 
-- `catalunya-github-dbt-role-dev` - For development deployments (branch: develop)
+- `catalunya-deployment-role-dev` - For development deployments (branch: develop)
 - `catalunya-deployment-role-prod` - For production deployments (branch: main)
 
 

@@ -336,3 +336,9 @@ test_data/
 *.docx
 !docs/**/*.pdf
 !docs/**/*.docx
+
+.aws-sam/
+
+# Localstack
+localstack/volume/
+infrastructure/cdk-outputs.json

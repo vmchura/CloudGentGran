@@ -3,7 +3,7 @@
 The following IAM roles must exist in your AWS account with OIDC trust relationships configured for GitHub Actions:
 
 ## Development Environment Role
-- **Role Name**: `catalunya-github-dbt-role-dev`
+- **Role Name**: `catalunya-deployment-role-dev`
 - **Purpose**: Deploy and manage development environment resources
 - **Trusted Entity**: GitHub Actions from `develop` branch
 - **Trust Policy**: OIDC provider for `token.actions.githubusercontent.com`

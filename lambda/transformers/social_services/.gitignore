@@ -1,0 +1,17 @@
+# Rust
+/target/
+Cargo.lock
+
+# Python (keeping for compatibility)
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# AWS
+.aws-sam/

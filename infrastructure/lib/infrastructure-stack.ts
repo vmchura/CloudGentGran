@@ -27,6 +27,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   
   // Lambda Resources
   public apiExtractorLambda: lambda.Function;
+  public socialServicesTransformerLambda: lambda.Function;
   
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -57,6 +58,11 @@ export class CatalunyaDataStack extends cdk.Stack {
     // Lambda Infrastructure
     // ========================================
     this.createLambdaInfrastructure();
+
+    // ========================================
+    // Transformer Infrastructure
+    // ========================================
+    this.createTransformerInfrastructure();
 
     new cdk.CfnOutput(this, 'Environment', {
       value: this.environmentName,
@@ -217,11 +223,11 @@ export class CatalunyaDataStack extends cdk.Stack {
     // Lambda Function
     // ========================================
     
-    this.apiExtractorLambda = new lambda.Function(this, 'ApiExtractorLambda', {
-      functionName: `${this.lambdaPrefix}-api-extractor`,
+    this.apiExtractorLambda = new lambda.Function(this, 'social_services_ApiExtractorLambda', {
+      functionName: `${this.lambdaPrefix}-social_services`,
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'api_extractor.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/extractors', {
+      code: lambda.Code.fromAsset('../lambda/extractors/social_services', {
         bundling: {
           image: lambda.Runtime.PYTHON_3_9.bundlingImage,
           command: [
@@ -237,8 +243,8 @@ export class CatalunyaDataStack extends cdk.Stack {
       role: lambdaRole,
       environment: {
         BUCKET_NAME: this.bucketName,
-        API_URL: 'https://jsonplaceholder.typicode.com/posts',
-        API_NAME: 'jsonplaceholder',
+        SEMANTIC_IDENTIFIER: 'social_services',
+        DATASET_IDENTIFIER: 'ivft-vegh',
         ENVIRONMENT: this.environmentName,
         REGION: this.region
       },
@@ -297,6 +303,115 @@ export class CatalunyaDataStack extends cdk.Stack {
       value: extractorScheduleRule.ruleArn,
       description: 'ARN of the API Extractor EventBridge schedule rule',
       exportName: `${this.projectName}-ApiExtractorScheduleArn`,
+    });
+  }
+
+  /**
+   * Creates Transformer Lambda infrastructure including the social services transformer function 
+   * with EventBridge event triggers and proper IAM roles
+   */
+  private createTransformerInfrastructure(): void {
+    // ========================================
+    // IAM Role for Transformer Lambda
+    // ========================================
+    
+    const transformerRole = iam.Role.fromRoleArn(
+      this,
+      'TransformerRole',
+      `arn:aws:iam::${this.account}:role/catalunya-lambda-transformer-role-${this.environmentName}`
+    );
+
+    // ========================================
+    // Social Services Transformer Lambda (Rust)
+    // ========================================
+    
+    this.socialServicesTransformerLambda = new lambda.Function(this, 'SocialServicesTransformerLambda', {
+      functionName: `${this.lambdaPrefix}-social-services-transformer`,
+      runtime: lambda.Runtime.PROVIDED_AL2023,
+      handler: 'bootstrap',
+      code: lambda.Code.fromAsset('../lambda/transformers/social_services', {
+        bundling: {
+          image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
+          command: [
+            'bash', '-c', [
+                'cargo lambda build --release --target x86_64-unknown-linux-gnu',
+                'cp ./target/lambda/bootstrap/bootstrap /asset-output/'
+              ].join(' && ')
+          ],
+          user: 'root',
+        },
+      }),
+      timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
+      memorySize: this.config.lambdaMemory,
+      role: transformerRole,
+      environment: {
+        BUCKET_NAME: this.bucketName,
+        SEMANTIC_IDENTIFIER: 'social_services',
+        ENVIRONMENT: this.environmentName,
+        REGION: this.region
+      },
+      description: `Social Services Transformer Lambda (Rust) for ${this.environmentName} environment`,
+    });
+
+    // ========================================
+    // EventBridge Rule for Data Download Complete Events
+    // ========================================
+    
+    const transformerEventRule = new events.Rule(this, 'TransformerEventRule', {
+      ruleName: `${this.lambdaPrefix}-transformer-trigger`,
+      description: `EventBridge rule to trigger transformer when API extraction completes`,
+      eventPattern: {
+        source: ['social-services-api-extractor'],
+        detailType: ['Data Download Complete'],
+        detail: {
+          semantic_identifier: ['social_services']
+        }
+      },
+      enabled: true,
+    });
+
+    // Add Transformer Lambda as target
+    transformerEventRule.addTarget(new targets.LambdaFunction(this.socialServicesTransformerLambda, {
+      event: events.RuleTargetInput.fromObject({
+        source: 'eventbridge.data-download-complete',
+        detail: events.EventField.fromPath('$.detail'),
+        environment: this.environmentName,
+        trigger_time: events.EventField.fromPath('$.time')
+      })
+    }));
+
+    // ========================================
+    // Tags and Outputs
+    // ========================================
+    
+    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.socialServicesTransformerLambda).add(key, value);
+      cdk.Tags.of(transformerEventRule).add(key, value);
+    });
+
+    // Additional transformer tags
+    cdk.Tags.of(this.socialServicesTransformerLambda).add('Purpose', 'DataTransformation');
+    cdk.Tags.of(this.socialServicesTransformerLambda).add('Layer', 'Processing');
+    cdk.Tags.of(this.socialServicesTransformerLambda).add('DataFlow', 'LandingToStaging');
+
+    // Transformer outputs
+    new cdk.CfnOutput(this, 'SocialServicesTransformerLambdaArn', {
+      value: this.socialServicesTransformerLambda.functionArn,
+      description: 'ARN of the Social Services Transformer Lambda function',
+      exportName: `${this.projectName}-SocialServicesTransformerLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SocialServicesTransformerLambdaName', {
+      value: this.socialServicesTransformerLambda.functionName,
+      description: 'Name of the Social Services Transformer Lambda function',
+      exportName: `${this.projectName}-SocialServicesTransformerLambdaName`,
+    });
+
+    new cdk.CfnOutput(this, 'TransformerEventRuleArn', {
+      value: transformerEventRule.ruleArn,
+      description: 'ARN of the EventBridge rule that triggers the transformer',
+      exportName: `${this.projectName}-TransformerEventRuleArn`,
     });
   }
 }

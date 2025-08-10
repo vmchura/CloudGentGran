@@ -103,7 +103,7 @@
         "lambdaMemory": 512,
         "lambdaTimeout": 300,
         "retentionPeriod": 30,
-        "scheduleCron": "cron(0 23 ? * mon *)"
+        "scheduleCron": "cron(0 23 ? * MON *)"
       },
       "prod": {
         "region": "eu-west-1", 
@@ -111,7 +111,7 @@
         "lambdaMemory": 1024,
         "lambdaTimeout": 900,
         "retentionPeriod": 90,
-        "scheduleCron": "cron(0 23 ? * fri *)"
+        "scheduleCron": "cron(0 23 ? * FRI *)"
       }
     }
   }
