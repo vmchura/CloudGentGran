@@ -342,3 +342,4 @@ test_data/
 # Localstack
 localstack/volume/
 infrastructure/cdk-outputs.json
+downloads/
