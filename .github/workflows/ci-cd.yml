@@ -40,8 +40,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             lambda/transformers/social_services/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('lambda/transformers/social_services/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
             ${{ runner.os }}-cargo-
 
       - name: Install cargo-lambda
@@ -56,7 +57,9 @@ jobs:
       - name: Build Rust Lambda (no prompt)
         working-directory: lambda/transformers/social_services
         run: |
+          echo "🚀 Building Rust lambda with caching..."
           cargo lambda build --release --target x86_64-unknown-linux-gnu
+          echo "✅ Build complete - this will be cached for future runs!"
 
       - name: Create deployment package
         working-directory: lambda/transformers/social_services
@@ -149,6 +152,14 @@ jobs:
           name: rust-lambda-${{ github.sha }}
           path: ./rust-lambda-build
 
+      # Extract the ZIP so CDK can find the bootstrap file
+      - name: Extract Rust Lambda
+        run: |
+          cd rust-lambda-build
+          unzip -o social-services-transformer.zip
+          ls -la
+          echo "✅ Extracted Rust lambda artifact - no compilation needed!"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -187,10 +198,12 @@ jobs:
       - name: CDK Deploy Development
         working-directory: ./infrastructure
         run: |
+          echo "🚀 Deploying with pre-built Rust lambda (no compilation)..."
           npx cdk deploy CatalunyaDataStack-dev \
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-dev.json
+          echo "✅ Deployment complete - used cached Rust binary!"
         env:
           # Add deployment metadata
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -232,6 +245,14 @@ jobs:
           name: rust-lambda-${{ github.sha }}
           path: ./rust-lambda-build
 
+      # Extract the ZIP so CDK can find the bootstrap file
+      - name: Extract Rust Lambda
+        run: |
+          cd rust-lambda-build
+          unzip -o social-services-transformer.zip
+          ls -la
+          echo "✅ Extracted Rust lambda artifact - no compilation needed!"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -270,10 +291,12 @@ jobs:
       - name: CDK Deploy Production
         working-directory: ./infrastructure
         run: |
+          echo "🚀 Deploying with pre-built Rust lambda (no compilation)..."
           npx cdk deploy CatalunyaDataStack-prod \
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-prod.json
+          echo "✅ Deployment complete - used cached Rust binary!"
         env:
           # Add deployment metadata
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}

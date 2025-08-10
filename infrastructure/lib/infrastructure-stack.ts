@@ -329,18 +329,8 @@ export class CatalunyaDataStack extends cdk.Stack {
       functionName: `${this.lambdaPrefix}-social-services-transformer`,
       runtime: lambda.Runtime.PROVIDED_AL2023,
       handler: 'bootstrap',
-      code: lambda.Code.fromAsset('../lambda/transformers/social_services', {
-        bundling: {
-          image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
-          command: [
-            'bash', '-c', [
-                'cargo lambda build --release --target x86_64-unknown-linux-gnu',
-                'cp ./target/lambda/bootstrap/bootstrap /asset-output/'
-              ].join(' && ')
-          ],
-          user: 'root',
-        },
-      }),
+      // Use pre-built artifact instead of Docker bundling to avoid recompilation
+      code: lambda.Code.fromAsset('../rust-lambda-build'),
       timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
       memorySize: this.config.lambdaMemory,
       role: transformerRole,
