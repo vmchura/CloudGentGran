@@ -1,9 +1,8 @@
-version: '3.8'
-
 services:
   localstack:
     container_name: cloudgentgran-localstack
     image: localstack/localstack:latest
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     ports:
       - "4566:4566"            # LocalStack Gateway
     environment:
