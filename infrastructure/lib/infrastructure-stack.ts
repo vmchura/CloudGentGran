@@ -107,32 +107,32 @@ export class CatalunyaDataStack extends cdk.Stack {
    * Gets the appropriate Lambda code based on environment (local vs CI/CD)
    */
   private getLambdaCode(): lambda.Code {
-    // Check if we're in local development mode
-    const isLocalDev = process.env.CDK_LOCAL === 'true' || 
-                       process.env.NODE_ENV === 'development' ||
-                       process.env.AWS_EXECUTION_ENV === undefined; // Not in Lambda/CDK context
-    
-    if (isLocalDev) {
-      console.log('🏗️ Using Docker bundling for local development');
-      // Use bundling for local development
-      return lambda.Code.fromAsset('../lambda/transformers/social_services', {
-        bundling: {
-          image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
-          command: [
-            'bash', '-c', [
-              'cargo lambda build --release --target x86_64-unknown-linux-gnu',
-              'cp ./target/lambda/bootstrap/bootstrap /asset-output/'
-            ].join(' && ')
-          ],
-          user: 'root',
-        },
-      });
-    } else {
-      console.log('🚀 Using pre-built artifact for CI/CD');
-      // Use pre-built artifact for CI/CD
-      return lambda.Code.fromAsset('../rust-lambda-build');
+  // Check if we're in local development mode
+  const isLocalDev = process.env.CDK_LOCAL === 'true' ||
+                     process.env.NODE_ENV === 'development' ||
+                     process.env.AWS_EXECUTION_ENV === undefined; // Not in Lambda/CDK context
+
+  if (isLocalDev) {
+    // First, check if we have pre-built artifacts from test-localstack.sh
+    const preBuiltPath = '../rust-lambda-build';
+    const fs = require('fs');
+    const path = require('path');
+
+    // Check if the pre-built directory exists and contains the bootstrap file
+    const bootstrapPath = path.join(preBuiltPath, 'bootstrap');
+    if (fs.existsSync(bootstrapPath)) {
+      console.log('🚀 Using pre-built Rust Lambda artifacts from test-localstack.sh');
+      return lambda.Code.fromAsset(preBuiltPath);
+    }else{
+      console.error('Error, no path found');
+      throw new Error("Rust lambda not found");
     }
+  } else {
+    console.log('🚀 Using pre-built artifact for CI/CD');
+    // Use pre-built artifact for CI/CD
+    return lambda.Code.fromAsset('../rust-lambda-build');
   }
+}
 
   /**
    * Creates S3 infrastructure including main data bucket with folder structure,

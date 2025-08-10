@@ -8,12 +8,7 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk",
-    "test:local": "../scripts/test-localstack.sh",
-    "localstack:up": "cd ../localstack && docker-compose up -d",
-    "localstack:down": "cd ../localstack && docker-compose down",
-    "localstack:logs": "cd ../localstack && docker-compose logs -f",
-    "deploy:localstack": "USE_PREBUILT_ARTIFACTS=true CDK_LOCAL=true npx cdklocal deploy CatalunyaDataStack-dev --require-approval never"
+    "cdk": "cdk"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
