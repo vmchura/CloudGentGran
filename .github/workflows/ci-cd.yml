@@ -69,22 +69,12 @@ jobs:
           cd deployment
           zip -r ../social-services-transformer.zip .
 
-      # ✅ Only run on GitHub runners
       - name: Upload Lambda artifact
-        if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: rust-lambda-${{ github.sha }}
           path: lambda/transformers/social_services/social-services-transformer.zip
-          retention-days: 7
-
-      # ✅ Save locally when running with act
-      - name: Save artifact locally (act)
-        if: ${{ env.ACT == 'true' }}
-        run: |
-          mkdir -p /tmp/artifacts
-          cp lambda/transformers/social_services/social-services-transformer.zip /tmp/artifacts/
-          echo "Saved artifact to /tmp/artifacts/"
+          retention-days: 1
 
   # ==========================================
   # BUILD AND TEST JOB
@@ -97,6 +87,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Download and extract the Rust artifact for testing
+      - name: Download Rust Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: ./rust-lambda-build
+
+      - name: Extract Rust Lambda
+        run: |
+          cd rust-lambda-build
+          unzip -o social-services-transformer.zip
+          ls -la
+          echo "✅ Extracted Rust lambda artifact for testing!"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -104,33 +104,32 @@ export class CatalunyaDataStack extends cdk.Stack {
   }
 
   /**
-   * Gets the appropriate Lambda code based on environment (local vs CI/CD)
+   * Gets the appropriate Python Lambda code, skipping bundling for tests
    */
-  private getLambdaCode(): lambda.Code {
-  const isLocalDev = process.env.CDK_LOCAL === 'true';
+  private getPythonLambdaCode(): lambda.Code {
+    const isTest = process.env.NODE_ENV === 'test' || 
+                   process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
 
-  if (isLocalDev) {
-    // Check if we have pre-built artifacts from test-localstack.sh
-    const preBuiltPath = '../rust-lambda-build';
-    const fs = require('fs');
-    const path = require('path');
-
-    const bootstrapPath = path.join(preBuiltPath, 'bootstrap');
-    if (fs.existsSync(bootstrapPath)) {
-      console.log('🚀 Using pre-built Rust Lambda artifacts for local development');
-      return lambda.Code.fromAsset(preBuiltPath);
+    if (isTest) {
+      // Skip bundling for tests - just use the source directory
+      console.log('🧪 Skipping Python bundling for tests');
+      return lambda.Code.fromAsset('../lambda/extractors/social_services');
     } else {
-      console.error('Error: No pre-built Rust lambda found for local development');
-      console.error(`Expected bootstrap file at: ${bootstrapPath}`);
-      console.error('Run your build script first: npm run test:local');
-      throw new Error("Rust lambda not found - run build script first");
+      // Use bundling for real deployments
+      console.log('📦 Using Python bundling for deployment');
+      return lambda.Code.fromAsset('../lambda/extractors/social_services', {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          command: [
+            'bash', '-c', [
+              'pip install -r requirements.txt -t /asset-output',
+              'cp -au . /asset-output'
+            ].join(' && ')
+          ],
+        },
+      });
     }
-  } else {
-    // All other environments (CI/CD, production, etc.)
-    console.log('🚀 Using pre-built artifact for deployment');
-    return lambda.Code.fromAsset('../rust-lambda-build');
   }
-}
 
   /**
    * Creates S3 infrastructure including main data bucket with folder structure,
@@ -256,17 +255,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       functionName: `${this.lambdaPrefix}-social_services`,
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'api_extractor.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/extractors/social_services', {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c', [
-              'pip install -r requirements.txt -t /asset-output',
-              'cp -au . /asset-output'
-            ].join(' && ')
-          ],
-        },
-      }),
+      code: this.getPythonLambdaCode(),
       timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
       memorySize: this.config.lambdaMemory,
       role: lambdaRole,
@@ -358,7 +347,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       functionName: `${this.lambdaPrefix}-social-services-transformer`,
       runtime: lambda.Runtime.PROVIDED_AL2023,
       handler: 'bootstrap',
-      code: this.getLambdaCode(),
+      code: lambda.Code.fromAsset('../rust-lambda-build'),
       timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
       memorySize: this.config.lambdaMemory,
       role: transformerRole,
