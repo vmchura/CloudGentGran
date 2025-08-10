@@ -14,11 +14,82 @@ permissions:
 
 jobs:
   # ==========================================
+  # BUILD RUST LAMBDA
+  # ==========================================
+  build-rust-lambda:
+    name: Build Rust Lambda
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+          override: true
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            lambda/transformers/social_services/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('lambda/transformers/social_services/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-lambda
+        run: |
+          if ! command -v cargo-lambda &> /dev/null; then
+            cargo install cargo-lambda
+          fi
+
+      - name: Install Zig
+        run: npm install -g @ziglang/cli
+
+      - name: Build Rust Lambda (no prompt)
+        working-directory: lambda/transformers/social_services
+        run: |
+          cargo lambda build --release --target x86_64-unknown-linux-gnu
+
+      - name: Create deployment package
+        working-directory: lambda/transformers/social_services
+        run: |
+          mkdir -p deployment
+          cp target/lambda/bootstrap/bootstrap deployment/
+          cd deployment
+          zip -r ../social-services-transformer.zip .
+
+      # ✅ Only run on GitHub runners
+      - name: Upload Lambda artifact
+        if: ${{ env.ACT != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: lambda/transformers/social_services/social-services-transformer.zip
+          retention-days: 7
+
+      # ✅ Save locally when running with act
+      - name: Save artifact locally (act)
+        if: ${{ env.ACT == 'true' }}
+        run: |
+          mkdir -p /tmp/artifacts
+          cp lambda/transformers/social_services/social-services-transformer.zip /tmp/artifacts/
+          echo "Saved artifact to /tmp/artifacts/"
+
+  # ==========================================
   # BUILD AND TEST JOB
   # ==========================================
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    needs: build-rust-lambda
     
     steps:
       - name: Checkout code
@@ -61,7 +132,7 @@ jobs:
   deploy-development:
     name: Deploy to Development
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [build-and-test, build-rust-lambda]
     if: |
       github.ref == 'refs/heads/develop' &&
       github.event_name == 'push' &&
@@ -71,6 +142,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download Rust Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: ./rust-lambda-build
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -139,7 +216,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [build-and-test, build-rust-lambda]
     if: |
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
@@ -148,6 +225,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download Rust Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: ./rust-lambda-build
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
