@@ -107,29 +107,27 @@ export class CatalunyaDataStack extends cdk.Stack {
    * Gets the appropriate Lambda code based on environment (local vs CI/CD)
    */
   private getLambdaCode(): lambda.Code {
-  // Check if we're in local development mode
-  const isLocalDev = process.env.CDK_LOCAL === 'true' ||
-                     process.env.NODE_ENV === 'development' ||
-                     process.env.AWS_EXECUTION_ENV === undefined; // Not in Lambda/CDK context
+  const isLocalDev = process.env.CDK_LOCAL === 'true';
 
   if (isLocalDev) {
-    // First, check if we have pre-built artifacts from test-localstack.sh
+    // Check if we have pre-built artifacts from test-localstack.sh
     const preBuiltPath = '../rust-lambda-build';
     const fs = require('fs');
     const path = require('path');
 
-    // Check if the pre-built directory exists and contains the bootstrap file
     const bootstrapPath = path.join(preBuiltPath, 'bootstrap');
     if (fs.existsSync(bootstrapPath)) {
-      console.log('🚀 Using pre-built Rust Lambda artifacts from test-localstack.sh');
+      console.log('🚀 Using pre-built Rust Lambda artifacts for local development');
       return lambda.Code.fromAsset(preBuiltPath);
-    }else{
-      console.error('Error, no path found');
-      throw new Error("Rust lambda not found");
+    } else {
+      console.error('Error: No pre-built Rust lambda found for local development');
+      console.error(`Expected bootstrap file at: ${bootstrapPath}`);
+      console.error('Run your build script first: npm run test:local');
+      throw new Error("Rust lambda not found - run build script first");
     }
   } else {
-    console.log('🚀 Using pre-built artifact for CI/CD');
-    // Use pre-built artifact for CI/CD
+    // All other environments (CI/CD, production, etc.)
+    console.log('🚀 Using pre-built artifact for deployment');
     return lambda.Code.fromAsset('../rust-lambda-build');
   }
 }
