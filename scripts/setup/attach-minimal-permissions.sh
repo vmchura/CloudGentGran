@@ -151,6 +151,37 @@ cat > "$TMP_POLICY_FILE" << EOF
       ]
     },
     {
+      "Sid": "GlueDataCatalogMinimal",
+      "Effect": "Allow",
+      "Action": [
+        "glue:CreateDatabase",
+        "glue:DeleteDatabase",
+        "glue:GetDatabase",
+        "glue:UpdateDatabase",
+        "glue:TagResource",
+        "glue:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:catalog",
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:database/catalunya_data_*"
+      ]
+    },
+    {
+      "Sid": "AthenaWorkgroupMinimal",
+      "Effect": "Allow",
+      "Action": [
+        "athena:CreateWorkGroup",
+        "athena:DeleteWorkGroup",
+        "athena:GetWorkGroup",
+        "athena:UpdateWorkGroup",
+        "athena:TagResource",
+        "athena:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:athena:${REGION}:${ACCOUNT_ID}:workgroup/catalunya-workgroup-*"
+      ]
+    },
+    {
       "Sid": "CDKBootstrapSSM",
       "Effect": "Allow",
       "Action": [

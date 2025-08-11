@@ -97,7 +97,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       exportName: `${this.projectName}-BucketName`,
     });
 
-    new cdk.CfnOutput(this, 'AthenaWorkgroupConfig', {
+    new cdk.CfnOutput(this, 'AthenaWorkgroup', {
       value: this.athenaWorkgroupName,
       description: 'Athena workgroup name',
       exportName: `${this.projectName}-AthenaWorkgroup`,
@@ -109,7 +109,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       exportName: `${this.projectName}-AthenaDatabase`,
     });
 
-    new cdk.CfnOutput(this, 'AthenaResultsBucketConfig', {
+    new cdk.CfnOutput(this, 'AthenaResultsBucketName', {
       value: this.athenaResultsBucketName,
       description: 'S3 bucket name for Athena query results',
       exportName: `${this.projectName}-AthenaResultsBucket`,
@@ -557,7 +557,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       requesterPaysEnabled: false,
     };
 
-    const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
+    const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroupResource', {
       name: this.athenaWorkgroupName,
       description: `Athena workgroup for Catalunya data pipeline - ${this.environmentName} environment`,
       state: 'ENABLED',
@@ -587,12 +587,5 @@ export class CatalunyaDataStack extends cdk.Stack {
 
     // Store reference for other resources
     (this as any).athenaWorkgroup = athenaWorkgroup;
-
-    // Output workgroup information
-    new cdk.CfnOutput(this, 'AthenaWorkgroupName', {
-      value: athenaWorkgroup.name || this.athenaWorkgroupName,
-      description: 'Name of the Athena workgroup',
-      exportName: `${this.projectName}-AthenaWorkgroupName`,
-    });
   }
 }
