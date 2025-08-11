@@ -5,7 +5,7 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 🏗️ Architecture Overview
 
-**Data Flow**: Catalunya APIs → AWS Lambda → S3 (3 layers) → GitHub Actions (DBT) → S3
+**Data Flow**: Catalunya APIs → AWS Lambda → S3 (3 layers) → Athena/DBT → S3
 
 - **Landing Layer** (`s3://bucket/landing/`): Raw JSON data from APIs
 - **Staging Layer** (`s3://bucket/staging/`): Cleaned and validated Parquet files
@@ -13,8 +13,8 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 🛠️ Technology Stack
 
-- **Cloud Platform**: AWS (Lambda, S3, Athena, EventBridge)
-- **Data Transformation**: DBT Core
+- **Cloud Platform**: AWS (Lambda, S3, Athena, Glue Data Catalog, EventBridge)
+- **Data Transformation**: DBT Core with Athena adapter
 - **Infrastructure**: AWS CDK (TypeScript)
 - **CI/CD**: GitHub Actions
 - **Languages**: Python (Lambda), SQL (DBT), TypeScript (CDK)
@@ -81,6 +81,7 @@ You need to create these roles before deploying the infrastructure.
 - **Lambda Extractor**: `catalunya-lambda-extractor-role-{dev,prod}`
 - **Lambda Transformer**: `catalunya-lambda-transformer-role-{dev,prod}`
 - **GitHub Actions - Deployment**: `catalunya-deployment-role-{dev,prod}` (OIDC)
+- **Mart Processing**: `catalunya-mart-role-{dev,prod}` (DBT/Athena execution)
 - **Monitoring**: `catalunya-monitoring-role-{dev,prod}`
 
 📖 **Detailed Role Descriptions**: See [docs/architecture.md](docs/architecture.md#security-architecture)
@@ -198,11 +199,12 @@ See [docs/deployment.md](docs/deployment.md) for detailed deployment procedures.
 ## 💰 Cost Management
 
 Current monthly costs (development environment):
-- **S3 Storage**: ~$2-5/month
+- **S3 Storage**: ~$2-5/month (data + Athena results)
 - **Lambda Executions**: ~$1-3/month
-- **Athena Queries**: ~$1-2/month
+- **Athena Queries**: ~$5-10/month (DBT transformations)
+- **Glue Data Catalog**: ~$1-2/month (metadata storage)
 - **CloudWatch**: ~$1-2/month
-- **Total**: <$15/month
+- **Total**: <$25/month
 
 ## 🤝 Contributing
 
