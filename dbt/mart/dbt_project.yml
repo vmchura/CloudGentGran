@@ -1,16 +1,11 @@
-
-# Name your project! Project names should contain only lowercase characters
-# and underscores. A good package name should reflect your organization's
-# name or the intended use of these models
-name: 'mart'
+# Catalunya Data Pipeline - DBT Mart Project
+name: 'catalunya_marts'
 version: '1.0.0'
 
 # This setting configures which "profile" dbt uses for this project.
-profile: 'mart'
+profile: 'catalunya_data'
 
 # These configurations specify where dbt should look for different types of files.
-# The `model-paths` config, for example, states that models in this project can be
-# found in the "models/" directory. You probably won't need to change these!
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
@@ -18,19 +13,23 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-clean-targets:         # directories to be removed by `dbt clean`
+clean-targets:
   - "target"
   - "dbt_packages"
 
+# Variables for different environments
+vars:
+  # Local development paths
+  staging_path: "./local_data/staging"
+  marts_path: "./local_data/marts"
 
 # Configuring models
-# Full documentation: https://docs.getdbt.com/docs/configuring-models
-
-# In this example config, we tell dbt to build all models in the example/
-# directory as views. These settings can be overridden in the individual model
-# files using the `{{ config(...) }}` macro.
 models:
-  mart:
-    # Config indicated by + and applies to all files under models/example/
-    example:
+  catalunya_marts:
+    # Staging models - temporary views for data transformation
+    staging:
       +materialized: view
+      
+    # Marts models - final tables for analytics
+    marts:
+      +materialized: table
