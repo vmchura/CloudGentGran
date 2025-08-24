@@ -12,31 +12,27 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Switch back to airflow user
+# Copy requirements and entrypoint script first (as root for permissions)
+COPY requirements.txt /requirements.txt
+COPY docker/entrypoint.sh /opt/airflow/custom_entrypoint.sh
+RUN chmod +x /opt/airflow/custom_entrypoint.sh
+
+# Switch back to airflow user for the rest
 USER airflow
 
 # Set up working directory
 WORKDIR /opt/airflow
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt /requirements.txt
+# Install Python dependencies
 RUN pip install --user --upgrade pip
 RUN pip install --user --no-cache-dir -r /requirements.txt
 
 # Create necessary directories
 RUN mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/plugins
-
-# Copy DBT profiles
-COPY dbt/profiles/ /opt/airflow/dbt_profiles/
 RUN mkdir -p /home/airflow/.dbt
 
-# Copy Airflow configuration
-COPY config/ /opt/airflow/config/
-COPY airflow/config/airflow.cfg /opt/airflow/airflow.cfg
-
-# Copy entrypoint script
-COPY docker/entrypoint.sh /opt/airflow/entrypoint.sh
-RUN chmod +x /opt/airflow/entrypoint.sh
+# Copy configuration files
+COPY dbt/profiles/ /opt/airflow/dbt_profiles/
 
 # Set environment variables
 ENV AIRFLOW_HOME=/opt/airflow
@@ -48,5 +44,5 @@ ENV DBT_PROFILES_DIR=/home/airflow/.dbt
 # Expose Airflow webserver port
 EXPOSE 8080
 
-# Use custom entrypoint
-ENTRYPOINT ["/opt/airflow/entrypoint.sh"]
+# Use the original Airflow entrypoint (but we'll call our script from docker-compose)
+# No ENTRYPOINT override - use the default Airflow one

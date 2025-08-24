@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Catalunya Data Pipeline - Orchestration Entrypoint Script
+# Catalunya Data Pipeline - Setup Script
+# This script only handles the initial setup, not Airflow execution
 
 set -e
 
@@ -49,8 +50,13 @@ setup_dbt_profiles() {
         cp /opt/airflow/dbt_profiles/profiles_dev.yml /home/airflow/.dbt/profiles.yml
     fi
 
-    # Set proper permissions
-    chown -R airflow:airflow /home/airflow/.dbt
+    # Set proper permissions (check if we're root or airflow user)
+    CURRENT_USER=$(whoami)
+    if [ "$CURRENT_USER" = "root" ]; then
+        chown -R airflow:root /home/airflow/.dbt
+    else
+        log "Running as $CURRENT_USER, skipping chown operations"
+    fi
 
     log "DBT profiles setup complete"
 }
@@ -118,8 +124,8 @@ setup_directories() {
     mkdir -p /opt/airflow/data
 
     # Set permissions
-    chown -R airflow:airflow /opt/airflow/logs
-    chown -R airflow:airflow /opt/airflow/data
+        chown -R airflow:root /opt/airflow/logs
+        chown -R airflow:root /opt/airflow/data
 
     log "Directories setup complete"
 }

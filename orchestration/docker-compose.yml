@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-airflow-common:
   &airflow-common
   build:
@@ -102,8 +100,18 @@ services:
       - -c
       - |
         mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
-        exec /opt/airflow/entrypoint.sh version
+        chown -R "${AIRFLOW_UID:-50000}:0" /sources/{logs,dags,plugins}
+        # Run our custom setup
+        /opt/airflow/custom_entrypoint.sh setup
+        # Then run normal airflow db upgrade and user creation
+        airflow db upgrade
+        airflow users create \
+          --username ${_AIRFLOW_WWW_USER_USERNAME:-airflow} \
+          --firstname Airflow \
+          --lastname Admin \
+          --role Admin \
+          --email admin@catalunya-data.org \
+          --password ${_AIRFLOW_WWW_USER_PASSWORD:-airflow} || echo "User might already exist"
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_UPGRADE: 'true'
