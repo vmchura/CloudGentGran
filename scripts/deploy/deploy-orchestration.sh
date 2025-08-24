@@ -98,6 +98,14 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALC
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 
 # Common Airflow configurations
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=admin"
+if [ "$ENVIRONMENT" = "production" ]; then
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
+else
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
+fi
+
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_EMAIL=admin@example.com"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
@@ -178,23 +186,6 @@ echo -e "${GREEN}✅ Database migration completed${NC}"
 
 # Step 11: Create admin user
 echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
-
-# Set default values if environment variables are empty
-if [ "$ENVIRONMENT" = "production" ]; then
-    USERNAME=${AIRFLOW_USER_NAME_PROD:-admin}
-    PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:-admin123}
-else
-    USERNAME=${AIRFLOW_USER_NAME_DEV:-admin}
-    PASSWORD=${AIRFLOW_USER_PASSWORD_DEV:-admin123}
-fi
-
-# Wait for database to be ready
-echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
-sleep 15
-
-# Create the user
-run_on_dokku "dokku run $APP_NAME airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD" || echo "User creation failed or user already exists"
-echo -e "${GREEN}✅ Admin user configured${NC}"
 
 # Step 12: Restart the app to ensure all changes take effect
 echo -e "${YELLOW}🔄 Restarting application...${NC}"

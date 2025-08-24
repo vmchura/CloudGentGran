@@ -30,7 +30,9 @@ COPY --chown=airflow:root dags/ /opt/airflow/dags/
 COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 COPY --chown=airflow:root config/ /opt/airflow/config/
 
-WORKDIR /opt/airflow
 EXPOSE 8080
+# Copy entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-CMD ["api-server"]
+CMD ["/entrypoint.sh"]
