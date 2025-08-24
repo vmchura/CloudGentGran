@@ -27,7 +27,6 @@ RUN mkdir -p /opt/airflow/dags \
 
 # Copy application files
 COPY --chown=airflow:root dags/ /opt/airflow/dags/
-COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 
 WORKDIR /opt/airflow
 EXPOSE 8080
