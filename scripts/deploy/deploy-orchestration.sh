@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Enhanced Dokku deployment script for Catalunya Airflow Orchestration
-# Usage: ./deploy-dokku.sh [environment] [dokku-server]
+# Usage: ./deploy-dokku.sh [environment] [dokku-server] [ssh_key path] [dokku_domain]
 # Environments: dev, prod
 
 # Colors for output
@@ -12,10 +12,10 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Configuration
-ENVIRONMENT=${1:-"development"}
-DOKKU_SERVER=${DOKKU_SERVER}
-SSH_KEY=${SSH_KEY}
-DOKKU_DOMAIN=${DOKKU_DOMAIN}
+ENVIRONMENT=${1}
+DOKKU_SERVER=${2}
+SSH_KEY=${3}
+DOKKU_DOMAIN=${4}
 
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
