@@ -95,12 +95,8 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_PROD}"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD}"
 else
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=development"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_DEV}"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}"
 fi
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
@@ -178,12 +174,8 @@ else
     PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}
 fi
 
-# Set the credentials in Dokku config if not already set
-run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_USERNAME=$USERNAME"
-run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=$PASSWORD"
-
 # Create the user
-run_on_dokku "dokku run $APP_NAME airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD" || echo "User may already exist"
+run_on_dokku "dokku run $APP_NAME bash -c 'airflow db check && airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD'" || echo "User creation failed or user already exists"
 echo -e "${GREEN}✅ Admin user configured${NC}"
 
 echo ""
