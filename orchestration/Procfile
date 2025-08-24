@@ -1,1 +1,6 @@
-web: airflow standalone
+# Procfile (Airflow 3)
+# The web process must bind to $PORT on Dokku.
+web: exec airflow api-server --port ${PORT:-8080} --workers ${WEB_CONCURRENCY:-1}
+scheduler: exec airflow scheduler
+dag-processor: exec airflow dag-processor
+triggerer: exec airflow triggerer

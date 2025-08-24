@@ -93,6 +93,10 @@ echo -e "${YELLOW}🔧 Configuring environment settings...${NC}"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALCHEMY_CONN='$DB_URL'"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN='$DB_URL'"
 
+POSTGRESQL_ALCHEMY =$(dokku postgres:info cloudgentgran-airflow-db-dev --dsn | sed 's/postgres:/postgresql:/')
+run_on_dokku "dokku config:set cloudgentgran-orchestration-dev AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
+run_on_dokku "dokku config:set cloudgentgran-orchestration-dev AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
+
 # Common Airflow configurations
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
