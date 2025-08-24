@@ -135,23 +135,12 @@ echo -e "${BLUE}This may take several minutes...${NC}"
 
 # Use git subtree to push only the orchestration directory
 echo -e "${YELLOW}🔄 Pushing orchestration subdirectory to Dokku...${NC}"
-GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main
+GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main-orchestration
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
     echo -e "${YELLOW}💡 Trying alternative subtree method...${NC}"
-
-    # Alternative method: create temporary branch and push
-    TEMP_BRANCH="deploy-$ENVIRONMENT-$(date +%s)"
-    git subtree split --prefix=orchestration -b $TEMP_BRANCH
-    GIT_SSH_COMMAND="ssh -i $SSH_KEY" git push $REMOTE_NAME $TEMP_BRANCH:main --force
-    git branch -D $TEMP_BRANCH
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Both deployment methods failed${NC}"
-        echo -e "${YELLOW}💡 Check logs: ssh -i $SSH_KEY $DOKKU_SERVER 'dokku logs $APP_NAME --tail'${NC}"
-        exit 1
-    fi
+    exit 1
 fi
 
 # Step 9: Set up domain
