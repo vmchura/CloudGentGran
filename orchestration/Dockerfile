@@ -29,10 +29,6 @@ RUN mkdir -p /opt/airflow/dags \
 COPY --chown=airflow:root dags/ /opt/airflow/dags/
 COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 
-# For now, create an empty dbt_mart directory
-# Later we'll need to solve the DBT integration
-RUN echo "# DBT project will be mounted here" > /opt/airflow/dbt_mart/README.md
-
 WORKDIR /opt/airflow
 EXPOSE 8080
 
