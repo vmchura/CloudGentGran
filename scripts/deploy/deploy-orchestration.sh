@@ -139,7 +139,6 @@ GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOT
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
-    echo -e "${YELLOW}💡 Trying alternative subtree method...${NC}"
     exit 1
 fi
 
