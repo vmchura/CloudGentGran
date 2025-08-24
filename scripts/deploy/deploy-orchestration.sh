@@ -173,6 +173,9 @@ else
     USERNAME=${AIRFLOW_USER_NAME_DEV}
     PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}
 fi
+# Wait for database to be ready
+echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
+sleep 10
 
 # Create the user
 run_on_dokku "dokku run $APP_NAME bash -c 'airflow db check && airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD'" || echo "User creation failed or user already exists"
