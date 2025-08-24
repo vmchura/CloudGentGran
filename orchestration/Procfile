@@ -1,2 +1,2 @@
-web: airflow webserver --port $PORT
+web: airflow api-server --port $PORT
 scheduler: airflow scheduler

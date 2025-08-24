@@ -32,4 +32,4 @@ COPY --chown=airflow:root config/ /opt/airflow/config/
 WORKDIR /opt/airflow
 EXPOSE 8080
 
-CMD ["webserver"]
+CMD ["api-server"]

@@ -146,6 +146,11 @@ if ! run_on_dokku "dokku domains:report $APP_NAME | grep -q '$SUBDOMAIN.$DOKKU_D
 else
     echo -e "${GREEN}✅ Domain already configured${NC}"
 fi
+# Step 9.1: Configure port 8080 access
+echo -e "${YELLOW}🔌 Configuring port 8080 access...${NC}"
+run_on_dokku "dokku ports:clear $APP_NAME"
+run_on_dokku "dokku ports:add $APP_NAME http:8080:8080"
+echo -e "${GREEN}✅ Port 8080 configured${NC}"
 
 # Step 9.5: Scale processes
 echo -e "${YELLOW}⚖️  Scaling Airflow processes...${NC}"
@@ -183,8 +188,7 @@ echo -e "${GREEN}✅ Admin user configured${NC}"
 
 echo ""
 echo -e "${GREEN}🎉 Deployment completed!${NC}"
-echo -e "🌍 Your Airflow is available at: ${YELLOW}http://$SUBDOMAIN.$DOKKU_DOMAIN${NC}"
-echo -e "👤 Login: ${YELLOW}$USERNAME${NC} / ${YELLOW}$PASSWORD${NC}"
+echo -e "🌍 Your Airflow is available at: ${YELLOW}http://$SUBDOMAIN.$DOKKU_DOMAIN:8080${NC}"
 echo ""
 echo -e "🔄 To redeploy, run from project root:"
 echo -e "   ${YELLOW}./orchestration/deploy-dokku.sh $ENVIRONMENT${NC}"
