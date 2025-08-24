@@ -28,7 +28,6 @@ RUN mkdir -p /opt/airflow/dags \
 # Copy application files
 COPY --chown=airflow:root dags/ /opt/airflow/dags/
 COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
-COPY --chown=airflow:root config/ /opt/airflow/config/
 
 # For now, create an empty dbt_mart directory
 # Later we'll need to solve the DBT integration
