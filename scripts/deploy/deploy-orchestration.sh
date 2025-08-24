@@ -151,17 +151,38 @@ else
     echo -e "${GREEN}✅ Domain already configured${NC}"
 fi
 
+# Step 9.5: Scale processes
+echo -e "${YELLOW}⚖️  Scaling Airflow processes...${NC}"
+run_on_dokku "dokku ps:scale $APP_NAME web=1 scheduler=1"
+echo -e "${GREEN}✅ Processes scaled${NC}"
+
 # Step 10: Run database initialization
 echo -e "${YELLOW}🗄️  Initializing Airflow database...${NC}"
-run_on_dokku "dokku run $APP_NAME airflow db init" || echo "Database already initialized"
-echo -e "${GREEN}✅ Database initialization completed${NC}"
+run_on_dokku "dokku run $APP_NAME airflow db migrate"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Database migration failed${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Database migration completed${NC}"
 
-# Step 11: Create admin user
+
+# Step 11: Create admin user (FIXED)
 echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
 
-USERNAME=$(run_on_dokku "dokku config:get $APP_NAME _AIRFLOW_WWW_USER_USERNAME")
-PASSWORD=$(run_on_dokku "dokku config:get $APP_NAME _AIRFLOW_WWW_USER_PASSWORD")
+# Set default values if environment variables are empty
+if [ "$ENVIRONMENT" = "production" ]; then
+    USERNAME=${AIRFLOW_USER_NAME_PROD}
+    PASSWORD=${AIRFLOW_USER_PASSWORD_PROD}
+else
+    USERNAME=${AIRFLOW_USER_NAME_DEV}
+    PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}
+fi
 
+# Set the credentials in Dokku config if not already set
+run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_USERNAME=$USERNAME"
+run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=$PASSWORD"
+
+# Create the user
 run_on_dokku "dokku run $APP_NAME airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD" || echo "User may already exist"
 echo -e "${GREEN}✅ Admin user configured${NC}"
 

@@ -25,11 +25,11 @@ RUN mkdir -p /opt/airflow/dags \
     && mkdir -p /opt/airflow/config \
     && mkdir -p /opt/airflow/dbt_mart
 
-# Copy application files
 COPY --chown=airflow:root dags/ /opt/airflow/dags/
+COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
+COPY --chown=airflow:root config/ /opt/airflow/config/
 
 WORKDIR /opt/airflow
 EXPOSE 8080
 
-# Default command
 CMD ["webserver"]
