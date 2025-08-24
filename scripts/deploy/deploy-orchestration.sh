@@ -100,8 +100,8 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__FERNET_KEY=
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__WEBSERVER__BASE_URL=http://$SUBDOMAIN.$DOKKU_DOMAIN:8080"
-
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__BASE_URL=http://$SUBDOMAIN.$DOKKU_DOMAIN:8080"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
