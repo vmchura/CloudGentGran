@@ -135,7 +135,7 @@ echo -e "${BLUE}This may take several minutes...${NC}"
 
 # Use git subtree to push only the orchestration directory
 echo -e "${YELLOW}🔄 Pushing orchestration subdirectory to Dokku...${NC}"
-GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main-orchestration
+GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
