@@ -85,22 +85,22 @@ fi
 echo -e "${YELLOW}🔧 Configuring environment settings...${NC}"
 
 # Common Airflow configurations
-run_on_dokku "dokku config:set $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
-run_on_dokku "dokku config:set $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
-run_on_dokku "dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY=''"
-run_on_dokku "dokku config:set $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
-run_on_dokku "dokku config:set $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
-run_on_dokku "dokku config:set $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__FERNET_KEY=''"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
 
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
-    run_on_dokku "dokku config:set $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
-    run_on_dokku "dokku config:set $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_PROD}"
-    run_on_dokku "dokku config:set $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD}"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_PROD}"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD}"
 else
-    run_on_dokku "dokku config:set $APP_NAME AIRFLOW_VAR_ENVIRONMENT=development"
-    run_on_dokku "dokku config:set $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_DEV}"
-    run_on_dokku "dokku config:set $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=development"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_DEV}"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}"
 fi
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
@@ -135,7 +135,7 @@ echo -e "${BLUE}This may take several minutes...${NC}"
 
 # Use git subtree to push only the orchestration directory
 echo -e "${YELLOW}🔄 Pushing orchestration subdirectory to Dokku...${NC}"
-GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main --force
+GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
