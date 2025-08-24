@@ -1,0 +1,31 @@
+# DBT Profiles for Catalunya Data Pipeline - Production Environment
+# This file is used by the orchestration layer for production deployment
+
+catalunya_data:
+  target: prod
+  outputs:
+    # Production with AWS Athena
+    prod:
+      type: athena
+      s3_staging_dir: s3://catalunya-athena-results-prod/query-results/
+      s3_data_dir: s3://catalunya-data-lake-prod/marts/
+      region_name: eu-west-1
+      database: catalunya_data_prod
+      schema: marts
+      work_group: catalunya-workgroup-prod
+      num_retries: 3
+      poll_interval: 1.0
+      threads: 4
+
+    # Staging environment (also uses Athena)
+    staging:
+      type: athena
+      s3_staging_dir: s3://catalunya-athena-results-staging/query-results/
+      s3_data_dir: s3://catalunya-data-lake-staging/marts/
+      region_name: eu-west-1
+      database: catalunya_data_staging
+      schema: marts
+      work_group: catalunya-workgroup-staging
+      num_retries: 2
+      poll_interval: 1.0
+      threads: 2
