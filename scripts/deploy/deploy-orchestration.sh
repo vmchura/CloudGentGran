@@ -81,16 +81,26 @@ else
     echo -e "${GREEN}✅ Database already linked to app${NC}"
 fi
 
+# Step 4: Get database URL for configuration
+echo -e "${YELLOW}🔧 Getting database connection details...${NC}"
+DB_URL=$(run_on_dokku "dokku postgres:info $DB_NAME --dsn" | tail -1)
+echo -e "${GREEN}✅ Database URL retrieved${NC}"
+
 # Step 5: Configure environment-specific settings
 echo -e "${YELLOW}🔧 Configuring environment settings...${NC}"
+
+# Configure Airflow to use PostgreSQL
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALCHEMY_CONN='$DB_URL'"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN='$DB_URL'"
 
 # Common Airflow configurations
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__FERNET_KEY=''"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__WEBSERVER__BASE_URL=http://$SUBDOMAIN.$DOKKU_DOMAIN:8080"
 
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
@@ -146,16 +156,12 @@ if ! run_on_dokku "dokku domains:report $APP_NAME | grep -q '$SUBDOMAIN.$DOKKU_D
 else
     echo -e "${GREEN}✅ Domain already configured${NC}"
 fi
+
 # Step 9.1: Configure port 8080 access
 echo -e "${YELLOW}🔌 Configuring port 8080 access...${NC}"
 run_on_dokku "dokku ports:clear $APP_NAME"
 run_on_dokku "dokku ports:add $APP_NAME http:8080:8080"
 echo -e "${GREEN}✅ Port 8080 configured${NC}"
-
-# Step 9.5: Scale processes
-echo -e "${YELLOW}⚖️  Scaling Airflow processes...${NC}"
-run_on_dokku "dokku ps:scale $APP_NAME web=1 scheduler=1"
-echo -e "${GREEN}✅ Processes scaled${NC}"
 
 # Step 10: Run database initialization
 echo -e "${YELLOW}🗄️  Initializing Airflow database...${NC}"
@@ -166,25 +172,30 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}✅ Database migration completed${NC}"
 
-
-# Step 11: Create admin user (FIXED)
+# Step 11: Create admin user
 echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
 
 # Set default values if environment variables are empty
 if [ "$ENVIRONMENT" = "production" ]; then
-    USERNAME=${AIRFLOW_USER_NAME_PROD}
-    PASSWORD=${AIRFLOW_USER_PASSWORD_PROD}
+    USERNAME=${AIRFLOW_USER_NAME_PROD:-admin}
+    PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:-admin123}
 else
-    USERNAME=${AIRFLOW_USER_NAME_DEV}
-    PASSWORD=${AIRFLOW_USER_PASSWORD_DEV}
+    USERNAME=${AIRFLOW_USER_NAME_DEV:-admin}
+    PASSWORD=${AIRFLOW_USER_PASSWORD_DEV:-admin123}
 fi
+
 # Wait for database to be ready
 echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
-sleep 10
+sleep 15
 
 # Create the user
-run_on_dokku "dokku run $APP_NAME bash -c 'airflow db check && airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD'" || echo "User creation failed or user already exists"
+run_on_dokku "dokku run $APP_NAME airflow users create --username $USERNAME --firstname Admin --lastname User --role Admin --email admin@example.com --password $PASSWORD" || echo "User creation failed or user already exists"
 echo -e "${GREEN}✅ Admin user configured${NC}"
+
+# Step 12: Restart the app to ensure all changes take effect
+echo -e "${YELLOW}🔄 Restarting application...${NC}"
+run_on_dokku "dokku ps:restart $APP_NAME"
+echo -e "${GREEN}✅ Application restarted${NC}"
 
 echo ""
 echo -e "${GREEN}🎉 Deployment completed!${NC}"

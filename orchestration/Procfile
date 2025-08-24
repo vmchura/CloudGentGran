@@ -1,2 +1,1 @@
-web: airflow api-server --port $PORT
-scheduler: airflow scheduler
+web: airflow standalone --port 8080
