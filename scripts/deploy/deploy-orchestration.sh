@@ -94,8 +94,8 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALC
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN='$DB_URL'"
 
 POSTGRESQL_ALCHEMY=$(run_on_dokku "dokku postgres:info $DB_NAME --dsn | sed 's/postgres:/postgresql:/'")
-run_on_dokku "dokku config:set cloudgentgran-orchestration-dev AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
-run_on_dokku "dokku config:set cloudgentgran-orchestration-dev AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 
 # Common Airflow configurations
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
