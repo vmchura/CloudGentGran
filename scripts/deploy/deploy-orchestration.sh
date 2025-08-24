@@ -93,7 +93,7 @@ run_on_dokku "dokku config:set $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
 run_on_dokku "dokku config:set $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
 
 # Environment-specific configurations
-if [ "$ENVIRONMENT" = "prod" ]; then
+if [ "$ENVIRONMENT" = "production" ]; then
     run_on_dokku "dokku config:set $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
     run_on_dokku "dokku config:set $APP_NAME _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USER_NAME_PROD}"
     run_on_dokku "dokku config:set $APP_NAME _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD}"
