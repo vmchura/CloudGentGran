@@ -5,7 +5,7 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 🏗️ Architecture Overview
 
-**Data Flow**: Catalunya APIs → AWS Lambda → S3 (3 layers) → GitHub Actions (DBT) → S3
+**Data Flow**: Catalunya APIs → AWS Lambda → S3 (3 layers) → Athena/DBT → S3
 
 - **Landing Layer** (`s3://bucket/landing/`): Raw JSON data from APIs
 - **Staging Layer** (`s3://bucket/staging/`): Cleaned and validated Parquet files
@@ -13,8 +13,8 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 🛠️ Technology Stack
 
-- **Cloud Platform**: AWS (Lambda, S3, Athena, EventBridge)
-- **Data Transformation**: DBT Core
+- **Cloud Platform**: AWS (Lambda, S3, Athena, Glue Data Catalog, EventBridge)
+- **Data Transformation**: DBT Core with Athena adapter
 - **Infrastructure**: AWS CDK (TypeScript)
 - **CI/CD**: GitHub Actions
 - **Languages**: Python (Lambda), SQL (DBT), TypeScript (CDK)
@@ -80,35 +80,33 @@ You need to create these roles before deploying the infrastructure.
 **Service Account Roles** (10):
 - **Lambda Extractor**: `catalunya-lambda-extractor-role-{dev,prod}`
 - **Lambda Transformer**: `catalunya-lambda-transformer-role-{dev,prod}`
-- **GitHub Actions DBT**: `catalunya-github-dbt-role-{dev,prod}` (OIDC)
-- **Production Deployment**: `catalunya-deployment-role-prod` (OIDC)
+- **GitHub Actions - Deployment**: `catalunya-deployment-role-{dev,prod}` (OIDC)
+- **Mart Processing**: `catalunya-mart-role-{dev,prod}` (DBT/Athena execution)
 - **Monitoring**: `catalunya-monitoring-role-{dev,prod}`
 
 📖 **Detailed Role Descriptions**: See [docs/architecture.md](docs/architecture.md#security-architecture)
 
 ### 🔑 GitHub Actions Secrets Setup
 
-Configure GitHub repository secrets for AWS deployment:
+Configure GitHub repository secrets for AWS deployment using OIDC authentication:
 
-#### Manual Setup
+#### OIDC Setup (Recommended - Current Implementation)
 ```bash
-# Development Environment
-gh secret set AWS_ACCESS_KEY_ID_DEV --body "your_dev_access_key_id"
-gh secret set AWS_SECRET_ACCESS_KEY_DEV --body "your_dev_secret_access_key"
-gh secret set AWS_REGION_DEV --body "eu-west-1"
-
-# Production Environment
-gh secret set AWS_ACCESS_KEY_ID_PROD --body "your_prod_access_key_id"
-gh secret set AWS_SECRET_ACCESS_KEY_PROD --body "your_prod_secret_access_key"
-gh secret set AWS_REGION_PROD --body "eu-west-1"
+# Required Secret - AWS Account ID
+gh secret set AWS_ACCOUNT_ID --body "123456789012"
 ```
 
 **Required Secrets:**
-- `AWS_ACCESS_KEY_ID_DEV` / `AWS_ACCESS_KEY_ID_PROD` - AWS Access Key IDs
-- `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD` - AWS Secret Access Keys  
-- `AWS_REGION_DEV` / `AWS_REGION_PROD` - AWS regions (e.g., `eu-west-1`)
+- `AWS_ACCOUNT_ID` - Your AWS Account ID (12-digit number)
 
-📖 **Detailed Instructions**: [docs/aws-secrets-setup.md](docs/aws-secrets-setup.md)
+**OIDC IAM Roles Required:**
+The CI/CD pipeline uses OpenID Connect (OIDC) to authenticate with AWS using IAM roles instead of long-term access keys. The following roles must be created with OIDC trust relationships:
+
+- `catalunya-deployment-role-dev` - For development deployments (branch: develop)
+- `catalunya-deployment-role-prod` - For production deployments (branch: main)
+
+
+📖 **Detailed OIDC Setup Instructions**: [docs/aws-secrets-setup.md](docs/aws-secrets-setup.md)
 
 ## 📁 Project Structure
 
@@ -201,11 +199,12 @@ See [docs/deployment.md](docs/deployment.md) for detailed deployment procedures.
 ## 💰 Cost Management
 
 Current monthly costs (development environment):
-- **S3 Storage**: ~$2-5/month
+- **S3 Storage**: ~$2-5/month (data + Athena results)
 - **Lambda Executions**: ~$1-3/month
-- **Athena Queries**: ~$1-2/month
+- **Athena Queries**: ~$5-10/month (DBT transformations)
+- **Glue Data Catalog**: ~$1-2/month (metadata storage)
 - **CloudWatch**: ~$1-2/month
-- **Total**: <$15/month
+- **Total**: <$25/month
 
 ## 🤝 Contributing
 

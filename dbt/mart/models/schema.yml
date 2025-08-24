@@ -1,0 +1,35 @@
+version: 2
+
+sources:
+  - name: staging
+    description: Catalunya data staging layer
+    tables:
+      - name: social_services
+        description: Social services data from staging parquet files
+
+models:
+  - name: src_social_services
+    description: Raw social services data from staging layer
+    columns:
+      - name: id
+        description: Record identifier
+        tests:
+          - unique
+          - not_null
+    
+  - name: social_services_mart
+    description: Social services mart table for analytics
+    columns:
+      - name: id
+        description: Record identifier
+        tests:
+          - unique
+          - not_null
+      - name: dbt_created_at
+        description: Timestamp when record was created by DBT
+        tests:
+          - not_null
+      - name: environment
+        description: Environment where DBT was executed (dev/prod)
+        tests:
+          - not_null

@@ -1,0 +1,35 @@
+services:
+  localstack:
+    container_name: cloudgentgran-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+    environment:
+      # Core LocalStack configuration
+      - DEBUG=1
+      - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
+      
+      # Lambda configuration
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_REMOTE_DOCKER=false
+      
+      # Persistence (optional - keeps data between restarts)
+      - PERSISTENCE=1
+      - DATA_DIR=/tmp/localstack/data
+      
+      # AWS configuration
+      - AWS_DEFAULT_REGION=eu-west-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - localstack
+
+networks:
+  localstack:
+    driver: bridge

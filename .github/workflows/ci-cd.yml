@@ -1,0 +1,372 @@
+name: Catalunya Data Pipeline - CI/CD
+
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'infrastructure/**'
+      - '.github/workflows/**'
+
+# Required for OIDC authentication with AWS
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # ==========================================
+  # BUILD RUST LAMBDA
+  # ==========================================
+  build-rust-lambda:
+    name: Build Rust Lambda
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+          override: true
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            lambda/transformers/social_services/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-lambda
+        run: |
+          if ! command -v cargo-lambda &> /dev/null; then
+            cargo install cargo-lambda
+          fi
+
+      - name: Install Zig
+        run: npm install -g @ziglang/cli
+
+      - name: Build Rust Lambda (no prompt)
+        working-directory: lambda/transformers/social_services
+        run: |
+          echo "🚀 Building Rust lambda with caching..."
+          cargo lambda build --release --target x86_64-unknown-linux-gnu
+          echo "✅ Build complete - this will be cached for future runs!"
+
+      - name: Create deployment package
+        working-directory: lambda/transformers/social_services
+        run: |
+          mkdir -p deployment
+          cp target/lambda/bootstrap/bootstrap deployment/
+          cd deployment
+          zip -r ../social-services-transformer.zip .
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: lambda/transformers/social_services/social-services-transformer.zip
+          retention-days: 1
+
+  # ==========================================
+  # BUILD AND TEST JOB
+  # ==========================================
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    needs: build-rust-lambda
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Download and extract the Rust artifact for testing
+      - name: Download Rust Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: ./rust-lambda-build
+
+      - name: Extract Rust Lambda
+        run: |
+          cd rust-lambda-build
+          unzip -o social-services-transformer.zip
+          ls -la
+          echo "✅ Extracted Rust lambda artifact for testing!"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: infrastructure/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./infrastructure
+        run: npm ci
+
+      - name: Run TypeScript build
+        working-directory: ./infrastructure
+        run: npm run build
+
+      - name: Run tests
+        working-directory: ./infrastructure
+        run: npm test
+
+      - name: CDK Diff (Syntax Check)
+        working-directory: ./infrastructure
+        run: |
+          # Install CDK CLI
+          npm install -g aws-cdk
+          # Synthesize templates to validate syntax
+          npx cdk synth --all --require-approval never
+        env:
+          # Use dummy values for synthesis check
+          CDK_DEFAULT_REGION: eu-west-1
+          CDK_DEFAULT_ACCOUNT: '123456789012'
+
+  # ==========================================
+  # DEPLOY TO DEVELOPMENT
+  # ==========================================
+  deploy-development:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build-and-test, build-rust-lambda]
+    if: |
+      github.ref == 'refs/heads/develop' &&
+      github.event_name == 'push' &&
+      contains(github.event.head_commit.message, 'Merge pull request')
+    environment: development
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Rust Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: ./rust-lambda-build
+
+      # Extract the ZIP so CDK can find the bootstrap file
+      - name: Extract Rust Lambda
+        run: |
+          cd rust-lambda-build
+          unzip -o social-services-transformer.zip
+          ls -la
+          echo "✅ Extracted Rust lambda artifact - no compilation needed!"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: infrastructure/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./infrastructure
+        run: npm ci
+
+      - name: Configure AWS credentials for Development
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-dev
+          role-session-name: GitHubActions-Development-${{ github.run_id }}
+          aws-region: eu-west-1
+          role-duration-seconds: 3600  # 1 hour max session
+          mask-aws-account-id: true
+
+      - name: Verify AWS identity
+        run: |
+          echo "🔐 Verifying AWS identity..."
+          aws sts get-caller-identity
+          echo "🌍 Current region: $(aws configure get region)"
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: CDK Bootstrap (if needed)
+        working-directory: ./infrastructure
+        run: |
+          # Check if already bootstrapped, bootstrap if not
+          npx cdk bootstrap --require-approval never || echo "Already bootstrapped or bootstrap not needed"
+
+      - name: CDK Deploy Development
+        working-directory: ./infrastructure
+        run: |
+          echo "🚀 Deploying with pre-built Rust lambda (no compilation)..."
+          npx cdk deploy CatalunyaDataStack-dev \
+            --require-approval never \
+            --verbose \
+            --outputs-file cdk-outputs-dev.json
+          echo "✅ Deployment complete - used cached Rust binary!"
+        env:
+          # Add deployment metadata
+          CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEPLOY_REGION: eu-west-1
+
+      - name: Upload deployment outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs-development-${{ github.run_id }}
+          path: infrastructure/cdk-outputs-dev.json
+          retention-days: 30
+
+      - name: Security - Clear AWS credentials
+        if: always()
+        run: |
+          unset AWS_ACCESS_KEY_ID
+          unset AWS_SECRET_ACCESS_KEY
+          unset AWS_SESSION_TOKEN
+
+  # ==========================================
+  # DEPLOY TO PRODUCTION  
+  # ==========================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-test, build-rust-lambda]
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Rust Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lambda-${{ github.sha }}
+          path: ./rust-lambda-build
+
+      # Extract the ZIP so CDK can find the bootstrap file
+      - name: Extract Rust Lambda
+        run: |
+          cd rust-lambda-build
+          unzip -o social-services-transformer.zip
+          ls -la
+          echo "✅ Extracted Rust lambda artifact - no compilation needed!"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: infrastructure/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./infrastructure
+        run: npm ci
+
+      - name: Configure AWS credentials for Production
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-prod
+          role-session-name: GitHubActions-Production-${{ github.run_id }}
+          aws-region: eu-west-1
+          role-duration-seconds: 3600  # 1 hour max session
+          mask-aws-account-id: true
+
+      - name: Verify AWS identity
+        run: |
+          echo "🔐 Verifying AWS identity..."
+          aws sts get-caller-identity
+          echo "🌍 Current region: $(aws configure get region)"
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: CDK Bootstrap (if needed)
+        working-directory: ./infrastructure
+        run: |
+          # Check if already bootstrapped, bootstrap if not
+          npx cdk bootstrap --require-approval never || echo "Already bootstrapped or bootstrap not needed"
+
+      - name: CDK Deploy Production
+        working-directory: ./infrastructure
+        run: |
+          echo "🚀 Deploying with pre-built Rust lambda (no compilation)..."
+          npx cdk deploy CatalunyaDataStack-prod \
+            --require-approval never \
+            --verbose \
+            --outputs-file cdk-outputs-prod.json
+          echo "✅ Deployment complete - used cached Rust binary!"
+        env:
+          # Add deployment metadata
+          CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEPLOY_REGION: eu-west-1
+
+      - name: Upload deployment outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs-production-${{ github.run_id }}
+          path: infrastructure/cdk-outputs-prod.json
+          retention-days: 90
+
+      - name: Security - Clear AWS credentials
+        if: always()
+        run: |
+          unset AWS_ACCESS_KEY_ID
+          unset AWS_SECRET_ACCESS_KEY
+          unset AWS_SESSION_TOKEN
+
+  # ==========================================
+  # SECURITY AND COMPLIANCE
+  # ==========================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: infrastructure/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./infrastructure
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: ./infrastructure
+        run: npm audit --audit-level moderate
+
+      - name: CDK Security Check
+        working-directory: ./infrastructure
+        run: |
+          npm install -g aws-cdk
+          # Generate CloudFormation templates
+          npx cdk synth --all --require-approval never
+          # Check for security best practices in generated templates
+          echo "CloudFormation templates generated successfully - manual security review recommended"
+        env:
+          CDK_DEFAULT_REGION: eu-west-1
+          CDK_DEFAULT_ACCOUNT: '123456789012'
+
+      - name: Check for sensitive data in code
+        run: |
+          echo "🔍 Scanning for potential secrets..."
+          # Check for AWS keys, passwords, etc.
+          if grep -r -i -E "(aws_access_key|aws_secret|password|secret)" --exclude-dir=node_modules --exclude-dir=.git .; then
+            echo "⚠️ Potential sensitive data found in code"
+            exit 1
+          else
+            echo "✅ No obvious sensitive data found"
+          fi

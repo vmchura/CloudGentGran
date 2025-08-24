@@ -246,9 +246,9 @@ s3://catalunya-data-dev/marts/
 - Read access to S3 landing layer only
 - Write access to S3 staging layer only
 
-#### **GitHub Actions DBT Roles**
-- `catalunya-github-dbt-role-dev` (OIDC: develop branch)
-- `catalunya-github-dbt-role-prod` (OIDC: main branch)
+#### **GitHub Actions Deployment Roles**
+- `catalunya-deployment-role-dev` (OIDC: develop branch)
+- `catalunya-deployment-role-prod` (OIDC: main branch)
 
 **Purpose**: Execute DBT transformations to create business-ready analytics models from staging data.
 
@@ -262,6 +262,24 @@ s3://catalunya-data-dev/marts/
 - Write access to S3 marts layer only
 - 
 **Design Rationale**: Separates business logic transformations from data ingestion, enables SQL-based analytics development, and provides git-based version control for transformation logic with proper environment isolation.
+
+#### **Mart Processing Roles**
+- `catalunya-mart-role-dev`
+- `catalunya-mart-role-prod`
+
+**Purpose**: Execute DBT transformations and data mart creation operations using AWS Athena as the query engine.
+
+**Runtime Context**: Invoked by GitHub Actions workflows or manual DBT executions for staging-to-mart data transformations.
+
+**Data Flow Position**: S3 Staging Layer → Athena/DBT → S3 Marts Layer
+
+**Security Boundaries**:
+- Read access to S3 staging layer and Glue Data Catalog
+- Write access to S3 marts layer
+- Athena query execution permissions within designated workgroup
+- Access to dedicated Athena results S3 bucket
+
+**Design Rationale**: Dedicated role for DBT operations ensures proper separation of concerns between data ingestion and analytics preparation, with controlled access to query engines and result storage.
 
 #### **Production Deployment Role**
 - `catalunya-deployment-role-prod` (OIDC: main branch only)
