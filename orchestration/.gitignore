@@ -46,3 +46,7 @@ data/
 *.pem
 *.key
 credentials.json
+
+# Deployment artifacts - temporary dbt copy
+# This directory is created during deployment and should not be committed to main branch
+dbt/

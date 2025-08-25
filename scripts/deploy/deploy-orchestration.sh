@@ -9,6 +9,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
@@ -16,6 +18,13 @@ ENVIRONMENT=${1}
 DOKKU_SERVER=${2}
 SSH_KEY=${3}
 DOKKU_DOMAIN=${4}
+
+# Global variables
+DEPLOYMENT_BRANCH="orchestration-main"
+ORIGINAL_BRANCH=""
+DEPLOYMENT_TAG=""
+DEPLOY_START_TIME=$(date +%s)
+CLEANUP_NEEDED=false
 
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
@@ -38,7 +47,55 @@ echo -e "App Name: ${YELLOW}$APP_NAME${NC}"
 echo -e "Database: ${YELLOW}$DB_NAME${NC}"
 echo -e "Server: ${YELLOW}$DOKKU_SERVER${NC}"
 echo -e "Domain: ${YELLOW}$SUBDOMAIN.$DOKKU_DOMAIN${NC}"
+echo -e "Deployment Branch: ${PURPLE}$DEPLOYMENT_BRANCH${NC}"
+echo -e "Deploy Time: ${CYAN}$(date)${NC}"
 echo ""
+# Cleanup function - called on script exit
+cleanup_deployment() {
+    local exit_code=$?
+
+    if [ "$CLEANUP_NEEDED" = true ]; then
+        echo -e "${YELLOW}🧹 Cleaning up deployment artifacts...${NC}"
+
+        # Return to original branch if we changed it
+        if [ -n "$ORIGINAL_BRANCH" ]; then
+            echo -e "${BLUE}🔄 Returning to original branch: $ORIGINAL_BRANCH${NC}"
+            git checkout "$ORIGINAL_BRANCH" 2>/dev/null || {
+                echo -e "${RED}⚠️  Warning: Could not return to original branch${NC}"
+            }
+        fi
+
+        # Delete deployment branch if it exists
+        if git show-ref --verify --quiet "refs/heads/$DEPLOYMENT_BRANCH"; then
+            echo -e "${BLUE}🗑️  Deleting deployment branch: $DEPLOYMENT_BRANCH${NC}"
+            git branch -D "$DEPLOYMENT_BRANCH" 2>/dev/null || {
+                echo -e "${RED}⚠️  Warning: Could not delete deployment branch${NC}"
+            }
+        fi
+
+        # Clean up any temporary dbt copy in orchestration
+        if [ -d "orchestration/dbt" ]; then
+            echo -e "${BLUE}🗑️  Removing temporary dbt copy from orchestration${NC}"
+            rm -rf orchestration/dbt
+        fi
+    fi
+
+    local end_time=$(date +%s)
+    local duration=$((end_time - DEPLOY_START_TIME))
+
+    if [ $exit_code -eq 0 ]; then
+        echo -e "${GREEN}🎉 Deployment completed successfully in ${duration}s${NC}"
+        if [ -n "$DEPLOYMENT_TAG" ]; then
+            echo -e "${CYAN}📋 Deployment tagged as: $DEPLOYMENT_TAG${NC}"
+        fi
+    else
+        echo -e "${RED}💥 Deployment failed after ${duration}s (exit code: $exit_code)${NC}"
+        echo -e "${RED}🔍 Check logs above for error details${NC}"
+    fi
+}
+
+# Set up cleanup trap
+trap cleanup_deployment EXIT
 
 # Function to run commands on Dokku server
 run_on_dokku() {
@@ -77,12 +134,103 @@ create_admin_user() {
     echo -e "${GREEN}✅ Admin user setup completed${NC}"
 }
 
-# Step 0: Ensure we're in the project root (not orchestration directory)
-if [ ! -d "orchestration" ] || [ ! -f "orchestration/Dockerfile" ]; then
-    echo -e "${RED}❌ orchestration directory not found. Please run from project root.${NC}"
+# Step 0: Pre-flight checks
+echo -e "${YELLOW}🔍 Pre-flight checks...${NC}"
+
+# Ensure we're in the project root
+if [ ! -d "orchestration" ] || [ ! -d "dbt" ]; then
+    echo -e "${RED}❌ Required directories not found. Please run from project root.${NC}"
+    echo -e "${RED}   Expected: orchestration/ and dbt/ directories${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ Project structure looks good${NC}"
+
+if [ ! -f "orchestration/Dockerfile" ]; then
+    echo -e "${RED}❌ orchestration/Dockerfile not found${NC}"
+    exit 1
+fi
+
+# Check if we have uncommitted changes
+if ! git diff-index --quiet HEAD --; then
+    echo -e "${YELLOW}⚠️  Warning: You have uncommitted changes${NC}"
+    echo -e "${BLUE}💡 Consider committing changes before deployment${NC}"
+    read -p "Continue anyway? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}🔄 Deployment cancelled${NC}"
+        exit 0
+    fi
+fi
+
+# Store original branch
+ORIGINAL_BRANCH=$(git branch --show-current)
+echo -e "${BLUE}📍 Current branch: $ORIGINAL_BRANCH${NC}"
+
+# Ensure SSH key exists
+if [ ! -f "$SSH_KEY" ]; then
+    echo -e "${RED}❌ SSH key not found: $SSH_KEY${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Pre-flight checks passed${NC}"
+
+echo -e "${YELLOW}🌿 Creating deployment branch strategy...${NC}"
+
+# Delete existing deployment branch if it exists
+if git show-ref --verify --quiet "refs/heads/$DEPLOYMENT_BRANCH"; then
+    echo -e "${BLUE}🗑️  Deleting existing deployment branch${NC}"
+    git branch -D "$DEPLOYMENT_BRANCH"
+fi
+
+# Create deployment branch from current HEAD
+echo -e "${BLUE}🆕 Creating deployment branch: $DEPLOYMENT_BRANCH${NC}"
+git checkout -b "$DEPLOYMENT_BRANCH"
+CLEANUP_NEEDED=true
+
+# Copy dbt directory into orchestration
+echo -e "${YELLOW}📦 Integrating dbt models into deployment...${NC}"
+
+# Remove any existing dbt copy in orchestration
+if [ -d "orchestration/dbt" ]; then
+    echo -e "${BLUE}🗑️  Removing old dbt integration${NC}"
+    rm -rf orchestration/dbt
+fi
+
+# Copy dbt directory into orchestration
+echo -e "${BLUE}📁 Copying dbt/ -> orchestration/dbt/${NC}"
+cp -r dbt orchestration/
+
+# Verify dbt copy
+if [ ! -d "orchestration/dbt" ]; then
+    echo -e "${RED}❌ Failed to copy dbt directory${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ dbt integration completed ($(du -sh orchestration/dbt | cut -f1))${NC}"
+
+# Commit deployment artifacts
+echo -e "${YELLOW}💾 Committing deployment artifacts...${NC}"
+DEPLOYMENT_TAG="deployment-$(date +%Y%m%d-%H%M%S)-$ENVIRONMENT"
+
+git add orchestration/dbt/
+
+if git commit -m "🚀 Deployment artifacts for $ENVIRONMENT
+
+- Integrated dbt models from dbt/ directory
+- Environment: $ENVIRONMENT
+- Timestamp: $(date)
+- Original branch: $ORIGINAL_BRANCH
+- Tag: $DEPLOYMENT_TAG
+
+This is an automated deployment commit.
+"; then
+    echo -e "${GREEN}✅ Deployment artifacts committed${NC}"
+else
+    echo -e "${YELLOW}ℹ️  No changes to commit (deployment artifacts already up to date)${NC}"
+fi
+
+# Tag the deployment for rollback capability
+git tag "$DEPLOYMENT_TAG"
+echo -e "${CYAN}🏷️  Tagged deployment: $DEPLOYMENT_TAG${NC}"
 
 # Step 1: Create PostgreSQL database if it doesn't exist
 echo -e "${YELLOW}🗄️  Setting up PostgreSQL database...${NC}"
@@ -166,25 +314,15 @@ else
 fi
 echo -e "${GREEN}✅ Dokku remote configured as '$REMOTE_NAME'${NC}"
 
-# Step 7: Prepare git for deployment
-echo -e "${YELLOW}📦 Preparing git for deployment...${NC}"
-
-# Ensure we're on the main branch
-git checkout main 2>/dev/null || git checkout master 2>/dev/null || echo "Using current branch"
-
-# Add all files to git
-git add .
-
-# Commit changes
-git commit -m "Deploy orchestration to $ENVIRONMENT $(date)" || echo "No changes to commit"
-
 # Step 8: Deploy to Dokku using git subtree (MONOREPO SOLUTION)
 echo -e "${YELLOW}🚀 Deploying orchestration directory to Dokku...${NC}"
 echo -e "${BLUE}This may take several minutes...${NC}"
 
 # Use git subtree to push only the orchestration directory
 echo -e "${YELLOW}🔄 Pushing orchestration subdirectory to Dokku...${NC}"
-GIT_SSH_COMMAND="ssh -i $SSH_KEY" git subtree push --prefix=orchestration $REMOTE_NAME main
+git subtree split --prefix=orchestration $DEPLOYMENT_BRANCH -b tmp-deploy
+GIT_SSH_COMMAND="ssh -i $SSH_KEY" git push $REMOTE_NAME tmp-deploy:main --force
+git branch -D tmp-deploy
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
