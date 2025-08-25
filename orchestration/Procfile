@@ -1,2 +1,4 @@
 web: airflow api-server
 scheduler: airflow scheduler
+triggerer: airflow triggerer
+dag-processor: airflow dag-processor
