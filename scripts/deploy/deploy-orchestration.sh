@@ -149,24 +149,13 @@ if [ ! -f "orchestration/Dockerfile" ]; then
     exit 1
 fi
 
-# Check if we have uncommitted changes
-if ! git diff-index --quiet HEAD --; then
-    echo -e "${YELLOW}⚠️  Warning: You have uncommitted changes${NC}"
-    echo -e "${BLUE}💡 Consider committing changes before deployment${NC}"
-    read -p "Continue anyway? [y/N] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}🔄 Deployment cancelled${NC}"
-        exit 0
-    fi
-fi
 
 # Store original branch
 ORIGINAL_BRANCH=$(git branch --show-current)
 echo -e "${BLUE}📍 Current branch: $ORIGINAL_BRANCH${NC}"
 
 # Ensure SSH key exists
-if [ ! -f "$SSH_KEY" ]; then
+if [ ! -f $SSH_KEY ]; then
     echo -e "${RED}❌ SSH key not found: $SSH_KEY${NC}"
     exit 1
 fi
