@@ -154,12 +154,6 @@ fi
 ORIGINAL_BRANCH=$(git branch --show-current)
 echo -e "${BLUE}📍 Current branch: $ORIGINAL_BRANCH${NC}"
 
-# Ensure SSH key exists
-if [ ! -f $SSH_KEY ]; then
-    echo -e "${RED}❌ SSH key not found: $SSH_KEY${NC}"
-    exit 1
-fi
-
 echo -e "${GREEN}✅ Pre-flight checks passed${NC}"
 
 echo -e "${YELLOW}🌿 Creating deployment branch strategy...${NC}"
