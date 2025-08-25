@@ -24,6 +24,4 @@ else
   echo "Admin user '$AIRFLOW_ADMIN_USERNAME' already exists"
 fi
 
-# Start services
-airflow api-server --host 0.0.0.0 --port ${PORT:-8080} --workers ${WEB_CONCURRENCY:-2} --daemon
-exec airflow scheduler
+exec "$@"

@@ -1,1 +1,2 @@
-web: ""
+web: airflow api-server
+scheduler: airflow scheduler
