@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Enhanced Dokku deployment script for Catalunya Airflow Orchestration
-# Usage: ./deploy-dokku.sh [environment] [dokku-server] [ssh_key path] [dokku_domain]
+# Usage: ./deploy-orchestration.sh [environment] [dokku-server] [ssh_key path] [dokku_domain]
 # Environments: dev, prod
 
 # Colors for output
@@ -43,6 +43,38 @@ echo ""
 # Function to run commands on Dokku server
 run_on_dokku() {
     ssh -i $SSH_KEY $DOKKU_SERVER "$1"
+}
+
+# Function to create admin user (replaces entrypoint.sh functionality)
+create_admin_user() {
+    echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
+
+    # Get admin credentials from environment
+    if [ "$ENVIRONMENT" = "production" ]; then
+        ADMIN_USERNAME="${AIRFLOW_USER_NAME_PROD:-admin}"
+        ADMIN_PASSWORD="${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
+    else
+        ADMIN_USERNAME="${AIRFLOW_USER_NAME_DEV:-admin}"
+        ADMIN_PASSWORD="${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
+    fi
+
+    # Create admin user via dokku run (replaces entrypoint.sh user creation)
+    run_on_dokku "dokku run $APP_NAME bash -c '
+        if ! airflow users list | awk \"{print \\\$1}\" | grep -qx \"$ADMIN_USERNAME\"; then
+            echo \"Creating Airflow admin user: $ADMIN_USERNAME\"
+            airflow users create \
+                --username \"$ADMIN_USERNAME\" \
+                --password \"$ADMIN_PASSWORD\" \
+                --firstname \"Admin\" \
+                --lastname \"User\" \
+                --role Admin \
+                --email \"admin@example.com\"
+        else
+            echo \"Admin user $ADMIN_USERNAME already exists\"
+        fi
+    '"
+
+    echo -e "${GREEN}✅ Admin user setup completed${NC}"
 }
 
 # Step 0: Ensure we're in the project root (not orchestration directory)
@@ -95,7 +127,6 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALC
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 
 # Common Airflow configurations
-
 if [ "$ENVIRONMENT" = "production" ]; then
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_PROD:-admin}"
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
@@ -113,6 +144,7 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPL
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__BASE_URL=http://$SUBDOMAIN.$DOKKU_DOMAIN:8080"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
+
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
@@ -189,7 +221,7 @@ fi
 echo -e "${GREEN}✅ Database migration completed${NC}"
 
 # Step 11: Create admin user
-echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
+create_admin_user
 
 # Step 12: Restart the app to ensure all changes take effect
 echo -e "${YELLOW}🔄 Restarting application...${NC}"
@@ -201,4 +233,4 @@ echo -e "${GREEN}🎉 Deployment completed!${NC}"
 echo -e "🌍 Your Airflow is available at: ${YELLOW}http://$SUBDOMAIN.$DOKKU_DOMAIN:8080${NC}"
 echo ""
 echo -e "🔄 To redeploy, run from project root:"
-echo -e "   ${YELLOW}./orchestration/deploy-dokku.sh $ENVIRONMENT${NC}"
+echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT${NC}"

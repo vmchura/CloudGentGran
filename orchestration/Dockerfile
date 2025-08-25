@@ -31,10 +31,5 @@ COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 COPY --chown=airflow:root config/ /opt/airflow/config/
 
 EXPOSE 8080
-# Copy entrypoint
-COPY entrypoint.sh /entrypoint.sh
-USER root
-RUN chmod +x /entrypoint.sh
-USER airflow
-ENTRYPOINT ["/entrypoint.sh"]
-CMD []
+
+CMD ["airflow", "standalone"]
