@@ -95,10 +95,12 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALC
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 
 # Common Airflow configurations
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=admin"
+
 if [ "$ENVIRONMENT" = "production" ]; then
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_PROD:-admin}"
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
 else
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_DEV:-admin}"
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
 fi
 
