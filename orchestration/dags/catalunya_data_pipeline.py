@@ -17,7 +17,6 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.operators.s3 import S3ListOperator
 from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
-from airflow.utils.dates import days_ago
 
 # Default arguments for the DAG
 default_args: Dict[str, Any] = {
@@ -36,7 +35,7 @@ dag = DAG(
     'catalunya_data_pipeline',
     default_args=default_args,
     description='Catalunya Open Data Pipeline with DBT transformations',
-    schedule_interval=timedelta(hours=6),  # Run every 6 hours
+    schedule=timedelta(hours=6),  # Run every 6 hours
     max_active_runs=1,
     tags=['catalunya', 'opendata', 'dbt', 'etl'],
 )

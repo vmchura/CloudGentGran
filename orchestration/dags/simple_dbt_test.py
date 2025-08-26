@@ -34,7 +34,7 @@ dag = DAG(
     'simple_dbt_test',
     default_args=default_args,
     description='Simple DBT test with Catalunya social services models',
-    schedule_interval=None,  # Manual trigger only for testing
+    schedule=None,  # Manual trigger only for testing
     max_active_runs=1,
     tags=['catalunya', 'dbt', 'test', 'local'],
 )
