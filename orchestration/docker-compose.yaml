@@ -58,6 +58,12 @@ x-airflow-common:
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    # Enable triggerer for async tasks
+    AIRFLOW__CORE__ENABLE_TRIGGERER: 'true'
+    # DBT Configuration
+    DBT_PROJECT_DIR: /opt/airflow/dbt/mart
+    DBT_PROFILES_DIR: /home/airflow/.dbt
     # yamllint disable rule:line-length
     # Use simple http server on scheduler for health checks
     # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
@@ -73,7 +79,12 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
-    - ${AIRFLOW_PROJ_DIR:-.}/../dbt/mart:/opt/airflow/dbt_mart
+    # Mount the dbt project from parent directory for local development
+    - ${AIRFLOW_PROJ_DIR:-.}/../dbt:/opt/airflow/dbt
+    # Create .dbt directory for profiles
+    - airflow-dbt-profiles:/home/airflow/.dbt
+    # Mount local data for dbt development
+    - ${AIRFLOW_PROJ_DIR:-.}/../dbt/mart/local_data:/opt/airflow/dbt/mart/local_data
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -118,6 +129,38 @@ services:
     command: scheduler
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Add triggerer service as requested
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Add dag-processor service as requested  
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -182,6 +225,24 @@ services:
         echo "Creating missing opt dirs if missing:"
         echo
         mkdir -v -p /opt/airflow/{logs,dags,plugins,config}
+        mkdir -v -p /home/airflow/.dbt
+        echo
+        echo "Setting up DBT profiles directory:"
+        echo
+        # Create DBT profiles.yml for local development
+        cat > /home/airflow/.dbt/profiles.yml << 'EOF'
+        # Catalunya Data Pipeline - DBT Profiles
+        # Local development configuration using DuckDB
+        
+        catalunya_data:
+          outputs:
+            dev:
+              type: duckdb
+              path: /opt/airflow/dbt/mart/local_data/catalunya_dev.duckdb
+              threads: 4
+          target: dev
+        EOF
+        echo "DBT profiles.yml created for local development"
         echo
         echo "Airflow version:"
         /entrypoint airflow version
@@ -201,6 +262,7 @@ services:
         echo "Change ownership of files in /opt/airflow to ${AIRFLOW_UID}:0"
         echo
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/
+        chown -R "${AIRFLOW_UID}:0" /home/airflow/.dbt
         echo
         echo "Change ownership of files in shared volumes to ${AIRFLOW_UID}:0"
         echo
@@ -222,3 +284,4 @@ services:
 
 volumes:
   postgres-db-volume:
+  airflow-dbt-profiles:
