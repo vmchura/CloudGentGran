@@ -123,47 +123,6 @@ def run_dbt_debug(**context) -> str:
     except Exception as e:
         raise Exception(f"Error running DBT debug: {str(e)}")
 
-def create_sample_data(**context) -> str:
-    """Create sample data for testing the DBT models locally."""
-    import pandas as pd
-
-    dbt_project_dir = os.getenv('DBT_PROJECT_DIR', '/opt/airflow/dbt/mart')
-    staging_path = f"{dbt_project_dir}/local_data/staging/social_services"
-
-    # Create directory if it doesn't exist
-    os.makedirs(staging_path, exist_ok=True)
-
-    # Create sample social services data
-    sample_data = pd.DataFrame({
-        'id': [1, 2, 3, 4, 5],
-        'service_name': [
-            'Centro de Salud Barcelona Norte',
-            'Biblioteca Pública Sant Martí',
-            'Centro de Servicios Sociales Gràcia',
-            'Oficina de Atención Ciudadana Eixample',
-            'Centro Deportivo Municipal Sants'
-        ],
-        'service_type': ['health', 'education', 'social', 'administrative', 'sports'],
-        'district': ['Sant Andreu', 'Sant Martí', 'Gràcia', 'Eixample', 'Sants-Montjuïc'],
-        'address': [
-            'Carrer Gran de Sant Andreu, 123',
-            'Carrer de Mallorca, 456',
-            'Carrer de Gràcia, 789',
-            'Carrer de Balmes, 321',
-            'Carrer de Sants, 654'
-        ],
-        'created_at': pd.Timestamp.now(),
-        'updated_at': pd.Timestamp.now()
-    })
-
-    # Save as parquet file
-    output_path = f"{staging_path}/social_services_sample.parquet"
-    sample_data.to_parquet(output_path, index=False)
-
-    print(f"✅ Sample data created at: {output_path}")
-    print(f"📊 Created {len(sample_data)} sample records")
-
-    return "sample_data_created"
 
 def run_dbt_models(**context) -> str:
     """Run the DBT models that exist in the project."""
@@ -215,12 +174,6 @@ dbt_debug_task = PythonOperator(
     dag=dag,
 )
 
-create_data_task = PythonOperator(
-    task_id='create_sample_data',
-    python_callable=create_sample_data,
-    dag=dag,
-)
-
 run_models_task = PythonOperator(
     task_id='run_dbt_models',
     python_callable=run_dbt_models,
@@ -251,4 +204,4 @@ validate_task = BashOperator(
 )
 
 # Set task dependencies
-check_env_task >> dbt_debug_task >> create_data_task >> run_models_task >> validate_task
+check_env_task >> dbt_debug_task >> run_models_task >> validate_task
