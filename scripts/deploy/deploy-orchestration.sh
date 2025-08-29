@@ -329,7 +329,7 @@ echo -e "${GREEN}✅ Port 8080 configured${NC}"
 
 # Step 9.5: Scale processes
 echo -e "${YELLOW}⚖️  Scaling Airflow processes...${NC}"
-run_on_dokku "dokku ps:scale $APP_NAME web=1 scheduler=1 triggerer=1 dag-processor=1"
+run_on_dokku "dokku ps:scale $APP_NAME web=1"
 echo -e "${GREEN}✅ Processes scaled${NC}"
 
 # Step 10: Run database initialization
