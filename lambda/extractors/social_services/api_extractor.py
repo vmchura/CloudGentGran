@@ -1,7 +1,7 @@
 """
 Catalunya Data Pipeline - Public API Extractor
 This Lambda function extracts data from a public API and writes to the landing S3 bucket.
-After completion, it emits an EventBridge event to trigger the transformer Lambda.
+Returns extraction metadata for Airflow orchestration coordination.
 https://analisi.transparenciacatalunya.cat/Societat-benestar/Registre-d-entitats-serveis-i-establiments-socials/ivft-vegh/about_data
 """
 
@@ -26,17 +26,6 @@ def get_s3_client():
     else:
         logger.info("Using default S3 endpoint")
         return boto3.client('s3')
-
-
-def get_eventbridge_client():
-    """Get EventBridge client with optional endpoint URL for LocalStack"""
-    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
-    if endpoint_url:
-        logger.info(f"Using EventBridge endpoint: {endpoint_url}")
-        return boto3.client('events', endpoint_url=endpoint_url)
-    else:
-        logger.info("Using default EventBridge endpoint")
-        return boto3.client('events')
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -97,21 +86,28 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         logger.info(f"Successfully extracted {total_records} total records in {len(s3_keys)} files")
 
-        # Emit EventBridge event to trigger transformer
-        try:
-            emit_completion_event(bucket_name, semantic_identifier, downloaded_date, len(s3_keys), total_records)
-            logger.info("Successfully emitted EventBridge completion event")
-        except Exception as e:
-            logger.error(f"Failed to emit EventBridge event: {str(e)}")
-            # Don't fail the entire process for this
-            pass
+        # Return enhanced data for Airflow coordination
+        logger.info("Successfully completed extraction - returning metadata for Airflow coordination")
 
         return create_response(True, f"Successfully processed {len(s3_keys)} blocks with {total_records} total records", {
             'bucket': bucket_name,
+            'semantic_identifier': semantic_identifier,
             'downloaded_date': downloaded_date,
             'file_count': len(s3_keys),
             'total_records': total_records,
-            's3_keys': s3_keys[:5]  # Include first 5 keys for reference
+            's3_keys': s3_keys[:10],  # First 10 for reference
+            'source_prefix': f"landing/{semantic_identifier}/downloaded_date={downloaded_date}/",
+            'extraction_completed_at': datetime.utcnow().isoformat(),
+            'next_step': 'trigger_transformer',  # Airflow coordination hint
+            'transformer_payload': {
+                'bucket_name': bucket_name,
+                'semantic_identifier': semantic_identifier,
+                'downloaded_date': downloaded_date,
+                'file_count': len(s3_keys),
+                'total_records': total_records,
+                'source_prefix': f"landing/{semantic_identifier}/downloaded_date={downloaded_date}/",
+                'extraction_timestamp': datetime.utcnow().isoformat()
+            }
         })
 
     except Exception as e:
@@ -159,53 +155,6 @@ def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str, o
 
     except Exception as e:
         logger.error(f"Failed to upload to S3: {str(e)}")
-        raise
-
-
-def emit_completion_event(bucket_name: str, semantic_identifier: str, downloaded_date: str, file_count: int, total_records: int) -> None:
-    """
-    Emit EventBridge event to trigger the transformer Lambda
-    
-    Args:
-        bucket_name: S3 bucket name
-        semantic_identifier: Semantic identifier for the dataset  
-        downloaded_date: Date string (YYYYMMDD)
-        file_count: Number of files created
-        total_records: Total number of records extracted
-    """
-    try:
-        eventbridge_client = get_eventbridge_client()
-        
-        event_detail = {
-            'bucket_name': bucket_name,
-            'semantic_identifier': semantic_identifier,
-            'downloaded_date': downloaded_date,
-            'file_count': file_count,
-            'total_records': total_records,
-            'extraction_timestamp': datetime.utcnow().isoformat(),
-            'source_prefix': f"landing/{semantic_identifier}/downloaded_date={downloaded_date}/"
-        }
-        
-        # Put event to EventBridge
-        response = eventbridge_client.put_events(
-            Entries=[
-                {
-                    'Source': 'social-services-api-extractor',
-                    'DetailType': 'Data Download Complete',
-                    'Detail': json.dumps(event_detail),
-                    'EventBusName': 'default'  # Use default event bus
-                }
-            ]
-        )
-        
-        if response['FailedEntryCount'] > 0:
-            logger.error(f"Failed to emit EventBridge event: {response}")
-            raise Exception(f"EventBridge put_events failed: {response}")
-        else:
-            logger.info(f"Successfully emitted EventBridge event: {event_detail}")
-            
-    except Exception as e:
-        logger.error(f"Error emitting EventBridge event: {str(e)}")
         raise
 
 
