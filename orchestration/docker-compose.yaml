@@ -97,11 +97,11 @@ services:
         
         catalunya_data:
           outputs:
-            dev:
+            local:
               type: duckdb
-              path: /opt/airflow/dbt/mart/local_data/catalunya_dev.duckdb
+              path: /opt/airflow/dbt/mart/local_data/catalunya_local.duckdb
               threads: 4
-          target: dev
+          target: local
         EOF
         echo "DBT profiles.yml created successfully"
         

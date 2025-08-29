@@ -2,18 +2,27 @@
 # Copy this to ~/.dbt/profiles.yml 
 
 catalunya_data:
-  target: dev
+  target: local
   outputs:
     # Local development with DuckDB
-    dev:
+    local:
       type: duckdb
-      path: ./dev.duckdb
+      path: ./local_data/catalunya_local.duckdb
       schema: marts
       extensions:
         - httpfs  # For S3 access (if needed)
         - parquet # For parquet files
     
-    # Production with AWS Athena
+    # Development environment with AWS Athena
+    dev:
+      type: athena
+      s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
+      region_name: eu-west-1
+      database: catalunya_data_dev
+      schema: marts
+      work_group: catalunya-workgroup-dev
+    
+    # Production environment with AWS Athena
     prod:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-prod/query-results/
