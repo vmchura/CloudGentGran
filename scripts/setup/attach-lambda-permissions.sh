@@ -87,16 +87,6 @@ cat > "$TMP_POLICY_FILE" << EOF
           "aws:RequestedRegion": "${REGION}"
         }
       }
-    },
-    {
-      "Sid": "EventBridgeEmitEvents",
-      "Effect": "Allow",
-      "Action": [
-        "events:PutEvents"
-      ],
-      "Resource": [
-        "arn:aws:events:${REGION}:${ACCOUNT_ID}:event-bus/default"
-      ]
     }
   ]
 }
@@ -194,4 +184,3 @@ echo "🔍 Policy grants the following permissions:"
 echo "  - CloudWatch Logs: Create log groups and streams, write log events (${ENVIRONMENT} only)"
 echo "  - S3: Read bucket metadata, write to landing/ prefix (${ENVIRONMENT} bucket only)"
 echo "  - X-Ray: Put trace segments and telemetry records"
-echo "  - EventBridge: Emit events to default bus"

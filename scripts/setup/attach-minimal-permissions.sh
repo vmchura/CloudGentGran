@@ -134,23 +134,6 @@ cat > "$TMP_POLICY_FILE" << EOF
       ]
     },
     {
-      "Sid": "EventBridgeRules",
-      "Effect": "Allow",
-      "Action": [
-        "events:PutRule",
-        "events:DeleteRule",
-        "events:DescribeRule",
-        "events:ListTargetsByRule",
-        "events:PutTargets",
-        "events:RemoveTargets",
-        "events:TagResource",
-        "events:UntagResource"
-      ],
-      "Resource": [
-        "arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/catalunya-*"
-      ]
-    },
-    {
       "Sid": "GlueDataCatalogMinimal",
       "Effect": "Allow",
       "Action": [
