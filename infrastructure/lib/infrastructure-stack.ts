@@ -2,8 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as athena from 'aws-cdk-lib/aws-athena';
 import { Construct } from 'constructs';
@@ -301,7 +299,8 @@ export class CatalunyaDataStack extends cdk.Stack {
   }
 
   /**
-   * Creates Lambda infrastructure including the API extractor function with proper IAM roles and EventBridge scheduling
+   * Creates Lambda infrastructure including the API extractor function with proper IAM roles.
+   * Scheduling and orchestration handled by Airflow.
    */
   private createLambdaInfrastructure(): void {
     // ========================================
@@ -334,28 +333,8 @@ export class CatalunyaDataStack extends cdk.Stack {
         ENVIRONMENT: this.environmentName,
         REGION: this.region
       },
-      description: `API Extractor Lambda for ${this.environmentName} environment`,
+      description: `API Extractor Lambda for ${this.environmentName} environment - Orchestrated by Airflow`,
     });
-
-    // ========================================
-    // EventBridge Rule for Scheduling
-    // ========================================
-    
-    const extractorScheduleRule = new events.Rule(this, 'ApiExtractorSchedule', {
-      ruleName: `${this.lambdaPrefix}-api-extractor-schedule`,
-      description: `Scheduled trigger for API extractor Lambda in ${this.environmentName}`,
-      schedule: events.Schedule.expression(this.config.scheduleCron),
-      enabled: true,
-    });
-
-    // Add Lambda as target
-    extractorScheduleRule.addTarget(new targets.LambdaFunction(this.apiExtractorLambda, {
-      event: events.RuleTargetInput.fromObject({
-        source: 'eventbridge.schedule',
-        environment: this.environmentName,
-        trigger_time: events.EventField.fromPath('$.time')
-      })
-    }));
 
     // ========================================
     // Tags and Outputs
@@ -364,7 +343,6 @@ export class CatalunyaDataStack extends cdk.Stack {
     const commonTags = ConfigHelper.getCommonTags(this.environmentName);
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(this.apiExtractorLambda).add(key, value);
-      cdk.Tags.of(extractorScheduleRule).add(key, value);
     });
 
     // Additional Lambda tags
@@ -384,17 +362,11 @@ export class CatalunyaDataStack extends cdk.Stack {
       description: 'Name of the API Extractor Lambda function',
       exportName: `${this.projectName}-ApiExtractorLambdaName`,
     });
-
-    new cdk.CfnOutput(this, 'ApiExtractorScheduleArn', {
-      value: extractorScheduleRule.ruleArn,
-      description: 'ARN of the API Extractor EventBridge schedule rule',
-      exportName: `${this.projectName}-ApiExtractorScheduleArn`,
-    });
   }
 
   /**
    * Creates Transformer Lambda infrastructure including the social services transformer function 
-   * with EventBridge event triggers and proper IAM roles
+   * with proper IAM roles. Orchestration handled by Airflow.
    */
   private createTransformerInfrastructure(): void {
     // ========================================
@@ -425,35 +397,8 @@ export class CatalunyaDataStack extends cdk.Stack {
         ENVIRONMENT: this.environmentName,
         REGION: this.region
       },
-      description: `Social Services Transformer Lambda (Rust) for ${this.environmentName} environment`,
+      description: `Social Services Transformer Lambda (Rust) for ${this.environmentName} environment - Orchestrated by Airflow`,
     });
-
-    // ========================================
-    // EventBridge Rule for Data Download Complete Events
-    // ========================================
-    
-    const transformerEventRule = new events.Rule(this, 'TransformerEventRule', {
-      ruleName: `${this.lambdaPrefix}-transformer-trigger`,
-      description: `EventBridge rule to trigger transformer when API extraction completes`,
-      eventPattern: {
-        source: ['social-services-api-extractor'],
-        detailType: ['Data Download Complete'],
-        detail: {
-          semantic_identifier: ['social_services']
-        }
-      },
-      enabled: true,
-    });
-
-    // Add Transformer Lambda as target
-    transformerEventRule.addTarget(new targets.LambdaFunction(this.socialServicesTransformerLambda, {
-      event: events.RuleTargetInput.fromObject({
-        source: 'eventbridge.data-download-complete',
-        detail: events.EventField.fromPath('$.detail'),
-        environment: this.environmentName,
-        trigger_time: events.EventField.fromPath('$.time')
-      })
-    }));
 
     // ========================================
     // Tags and Outputs
@@ -462,7 +407,6 @@ export class CatalunyaDataStack extends cdk.Stack {
     const commonTags = ConfigHelper.getCommonTags(this.environmentName);
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(this.socialServicesTransformerLambda).add(key, value);
-      cdk.Tags.of(transformerEventRule).add(key, value);
     });
 
     // Additional transformer tags
@@ -481,12 +425,6 @@ export class CatalunyaDataStack extends cdk.Stack {
       value: this.socialServicesTransformerLambda.functionName,
       description: 'Name of the Social Services Transformer Lambda function',
       exportName: `${this.projectName}-SocialServicesTransformerLambdaName`,
-    });
-
-    new cdk.CfnOutput(this, 'TransformerEventRuleArn', {
-      value: transformerEventRule.ruleArn,
-      description: 'ARN of the EventBridge rule that triggers the transformer',
-      exportName: `${this.projectName}-TransformerEventRuleArn`,
     });
   }
 
