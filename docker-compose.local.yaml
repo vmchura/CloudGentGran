@@ -1,0 +1,214 @@
+# Catalunya Data Pipeline - Local Development Environment
+# Combines Airflow orchestration with LocalStack AWS services emulation
+# Usage: docker-compose -f docker-compose.local.yaml up -d
+
+version: '3.8'
+
+x-airflow-common:
+  &airflow-common
+  build: ./orchestration
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+
+    # DBT Configuration
+    DBT_PROJECT_DIR: /opt/airflow/dbt/mart
+    DBT_PROFILES_DIR: /home/airflow/.dbt
+
+    # LocalStack Integration
+    AWS_ENDPOINT_URL: http://localstack:4566
+    AWS_ACCESS_KEY_ID: test
+    AWS_SECRET_ACCESS_KEY: test
+    AWS_DEFAULT_REGION: eu-west-1
+
+    # Environment Variables for DAGs
+    AIRFLOW_VAR_ENVIRONMENT: local
+    AIRFLOW_VAR_USE_LOCALSTACK: "true"
+
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+  volumes:
+    - ./orchestration/dags:/opt/airflow/dags
+    - ./orchestration/logs:/opt/airflow/logs
+    - ./orchestration/config:/opt/airflow/config
+    - ./orchestration/plugins:/opt/airflow/plugins
+    - ./dbt:/opt/airflow/dbt
+    - airflow-dbt-profiles:/home/airflow/.dbt
+  user: "${AIRFLOW_UID:-50000}:0"
+  networks:
+    - cloudgentgran-local
+  depends_on:
+    &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+    localstack:
+      condition: service_healthy
+
+services:
+  # ===========================================
+  # PostgreSQL Database for Airflow
+  # ===========================================
+  postgres:
+    image: postgres:13
+    container_name: cloudgentgran-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - cloudgentgran-local
+
+  # ===========================================
+  # LocalStack - AWS Services Emulator
+  # ===========================================
+  localstack:
+    container_name: cloudgentgran-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+    environment:
+      # Core LocalStack configuration
+      - DEBUG=1
+      - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
+
+      # Lambda configuration
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_REMOTE_DOCKER=false
+
+      # Persistence (optional - keeps data between restarts)
+      - PERSISTENCE=1
+      - DATA_DIR=/tmp/localstack/data
+
+      # AWS configuration
+      - AWS_DEFAULT_REGION=eu-west-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./localstack/volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    networks:
+      - cloudgentgran-local
+
+  # ===========================================
+  # Apache Airflow - Main Service
+  # ===========================================
+  airflow:
+    <<: *airflow-common
+    container_name: cloudgentgran-airflow
+    command: standalone
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s  # Extra time for LocalStack dependency
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+
+  # ===========================================
+  # Airflow Initialization Service
+  # ===========================================
+  airflow-init:
+    <<: *airflow-common
+    container_name: cloudgentgran-airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        if [[ -z "${AIRFLOW_UID}" ]]; then
+          echo "Setting AIRFLOW_UID to $(id -u)"
+          export AIRFLOW_UID=$(id -u)
+        fi
+        
+        echo "🔧 Creating missing directories..."
+        mkdir -p /opt/airflow/{logs,dags,plugins,config}
+        mkdir -p /home/airflow/.dbt
+        mkdir -p /opt/airflow/dbt/mart/local_data
+        
+        echo "🔧 Setting up DBT profiles for Catalunya Data Pipeline..."
+        cat > /home/airflow/.dbt/profiles.yml << 'EOF'
+        # Catalunya Data Pipeline - DBT Profiles
+        # Local development configuration using DuckDB
+        
+        catalunya_data:
+          outputs:
+            local:
+              type: duckdb
+              path: /opt/airflow/dbt/mart/local_data/catalunya_local.duckdb
+              threads: 4
+          target: local
+        EOF
+        echo "✅ DBT profiles.yml created successfully"
+        
+        echo "🔧 Setting file permissions..."
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/
+        chown -R "${AIRFLOW_UID}:0" /home/airflow/.dbt
+        
+        echo "🔧 Initializing Airflow database..."
+        airflow db migrate
+        
+        echo "🔧 Creating admin user..."
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@catalunya.cat \
+          --password admin \
+          --password admin || echo "Admin user already exists"
+        
+        echo "🎉 Catalunya Data Pipeline initialization completed!"
+        echo "📊 Airflow UI: http://localhost:8080 (admin/admin)"
+        echo "🔧 LocalStack UI: http://localhost:4566/_localstack/health"
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
+    user: "0:0"
+    restart: "no"  # Init service should not restart
+
+# ===========================================
+# Networks
+# ===========================================
+networks:
+  cloudgentgran-local:
+    driver: bridge
+    name: cloudgentgran-local
+
+# ===========================================
+# Volumes
+# ===========================================
+volumes:
+  postgres-db-volume:
+    name: cloudgentgran-postgres-data
+  airflow-dbt-profiles:
+    name: cloudgentgran-airflow-dbt-profiles
