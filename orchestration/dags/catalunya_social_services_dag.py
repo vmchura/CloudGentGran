@@ -24,7 +24,11 @@ from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeF
 logger = logging.getLogger(__name__)
 
 # Environment configuration
-ENVIRONMENT = Variable.get("environment", default_var="local")
+try:
+    ENVIRONMENT = Variable.get("environment", default_var="local")
+except Exception:
+    # Fallback if Variable.get fails during DAG parsing
+    ENVIRONMENT = "local"
 
 # Environment-specific settings
 ENV_CONFIG = {

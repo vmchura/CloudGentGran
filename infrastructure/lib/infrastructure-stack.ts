@@ -373,11 +373,45 @@ export class CatalunyaDataStack extends cdk.Stack {
     // IAM Role for Transformer Lambda
     // ========================================
     
-    const transformerRole = iam.Role.fromRoleArn(
-      this,
-      'TransformerRole',
-      `arn:aws:iam::${this.account}:role/catalunya-lambda-transformer-role-${this.environmentName}`
-    );
+    let transformerRole: iam.IRole;
+
+    // For LocalStack (account 000000000000), create the role inline
+    // For real AWS, use existing IAM role
+    if (this.account === '000000000000') {
+      console.log('🔧 Creating Lambda transformer role inline for LocalStack');
+      transformerRole = new iam.Role(this, 'TransformerRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        ],
+        inlinePolicies: {
+          S3Access: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  's3:GetObject',
+                  's3:PutObject',
+                  's3:DeleteObject',
+                  's3:ListBucket'
+                ],
+                resources: [
+                  `arn:aws:s3:::${this.bucketName}`,
+                  `arn:aws:s3:::${this.bucketName}/*`
+                ]
+              })
+            ]
+          })
+        }
+      });
+    } else {
+      // Use existing IAM role for real AWS environments
+      transformerRole = iam.Role.fromRoleArn(
+        this,
+        'TransformerRole',
+        `arn:aws:iam::${this.account}:role/catalunya-lambda-transformer-role-${this.environmentName}`
+      );
+    }
 
     // ========================================
     // Social Services Transformer Lambda (Rust)
