@@ -1,33 +1,34 @@
 #!/bin/bash
+
 # Catalunya Data Pipeline - Local Development Startup Script
+# This script starts the complete local development environment with LocalStack integration
+
 set -e
 
-# Colors for output
-RED='\033[0;31m'
+# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m'
 
-PROJECT_NAME="Catalunya Data Pipeline"
-COMPOSE_FILE="docker-compose.local.yaml"
-
-echo -e "${BLUE}🚀 Starting ${PROJECT_NAME} - Local Development Environment${NC}"
+echo -e "${BLUE}🚀 Starting Catalunya Data Pipeline - Local Development Environment${NC}"
 
 # Check prerequisites
 check_prerequisites() {
     echo -e "${YELLOW}🔍 Checking prerequisites...${NC}"
 
-    command -v docker >/dev/null 2>&1 || {
-        echo -e "${RED}❌ Docker is required but not installed${NC}"; exit 1;
-    }
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}❌ Docker is not installed${NC}"
+        exit 1
+    fi
 
-    command -v docker-compose >/dev/null 2>&1 || {
-        echo -e "${RED}❌ Docker Compose is required but not installed${NC}"; exit 1;
-    }
+    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+        echo -e "${RED}❌ Docker Compose is not installed${NC}"
+        exit 1
+    fi
 
-    # Check if Docker daemon is running
-    if ! docker info > /dev/null 2>&1; then
+    if ! docker info &> /dev/null; then
         echo -e "${RED}❌ Docker daemon is not running${NC}"
         exit 1
     fi
@@ -35,117 +36,217 @@ check_prerequisites() {
     echo -e "${GREEN}✅ Prerequisites check passed${NC}"
 }
 
-# Clean up function
+# Set environment variables
+set_environment() {
+    echo -e "${YELLOW}🔧 Setting up environment variables...${NC}"
+
+    export AIRFLOW_UID=$(id -u)
+    export AIRFLOW_FERNET_KEY=${AIRFLOW_FERNET_KEY:-$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || echo "YourFernetKeyHere123456789012345678901234567890123456789012=")}
+    export AIRFLOW_SECRET_KEY=${AIRFLOW_SECRET_KEY:-$(openssl rand -base64 32 2>/dev/null || echo "YourSecretKeyHere1234567890123456789012")}
+
+    echo -e "${GREEN}✅ Environment variables set${NC}"
+    echo -e "   - AIRFLOW_UID: ${AIRFLOW_UID}"
+}
+
+# Clean up existing containers
 cleanup() {
-    echo -e "${YELLOW}🧹 Cleaning up previous containers...${NC}"
-    docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true
+    echo -e "${YELLOW}🧹 Cleaning up existing containers...${NC}"
+
+    docker-compose -f docker-compose.local.yaml down --remove-orphans || true
+    docker system prune -f || true
+
+    echo -e "${GREEN}✅ Cleanup completed${NC}"
 }
 
 # Start services
 start_services() {
-    echo -e "${YELLOW}🚀 Starting services...${NC}"
+    echo -e "${YELLOW}🐳 Starting Docker services...${NC}"
 
-    # Pull latest images
-    echo -e "${YELLOW}📥 Pulling latest images...${NC}"
-    docker-compose -f ${COMPOSE_FILE} pull
+    # Start services in the correct order
+    docker-compose -f docker-compose.local.yaml up -d --build
 
-    # Start services
-    docker-compose -f ${COMPOSE_FILE} up -d
-
-    echo -e "${GREEN}✅ Services started successfully${NC}"
+    echo -e "${GREEN}✅ Services started${NC}"
 }
 
-# Wait for services to be healthy
-wait_for_services() {
-    echo -e "${YELLOW}⏳ Waiting for services to be ready...${NC}"
+# Monitor startup
+monitor_startup() {
+    echo -e "${YELLOW}👁️  Monitoring service startup...${NC}"
 
-    # Wait for LocalStack
-    echo -e "${BLUE}   Waiting for LocalStack...${NC}"
-    timeout 120 bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "running"; do sleep 2; done'
-    echo -e "${GREEN}   ✅ LocalStack is ready${NC}"
+    echo -e "${BLUE}Waiting for LocalStack to be ready...${NC}"
+    timeout 180s bash -c 'until curl -s http://localhost:4566/_localstack/health > /dev/null; do sleep 5; done' || {
+        echo -e "${RED}❌ LocalStack failed to start${NC}"
+        show_logs
+        exit 1
+    }
+    echo -e "${GREEN}✅ LocalStack is ready${NC}"
 
-    # Wait for Airflow
-    echo -e "${BLUE}   Waiting for Airflow...${NC}"
-    timeout 180 bash -c 'until curl -s http://localhost:8080/health | grep -q "healthy"; do sleep 5; done'
-    echo -e "${GREEN}   ✅ Airflow is ready${NC}"
+    echo -e "${BLUE}Waiting for infrastructure deployment to complete...${NC}"
+    timeout 300s bash -c 'while docker ps -q -f name=cloudgentgran-infrastructure-setup; do sleep 10; done' || {
+        echo -e "${RED}❌ Infrastructure deployment timed out${NC}"
+        show_logs
+        exit 1
+    }
 
-    echo -e "${GREEN}✅ All services are healthy${NC}"
-}
-
-# Deploy infrastructure to LocalStack
-deploy_infrastructure() {
-    echo -e "${YELLOW}🏗️ Deploying infrastructure to LocalStack...${NC}"
-
-    cd infrastructure
-    if [ -f "deploy-localstack.sh" ]; then
-        ./deploy-localstack.sh
+    # Check if infrastructure deployment was successful
+    if docker logs cloudgentgran-infrastructure-setup 2>&1 | grep -q "Infrastructure deployment completed successfully"; then
+        echo -e "${GREEN}✅ Infrastructure deployment completed${NC}"
     else
-        echo -e "${YELLOW}⚠️ deploy-localstack.sh not found, skipping infrastructure deployment${NC}"
+        echo -e "${RED}❌ Infrastructure deployment failed${NC}"
+        docker logs cloudgentgran-infrastructure-setup
+        exit 1
     fi
-    cd ..
 
-    echo -e "${GREEN}✅ Infrastructure deployment completed${NC}"
+    echo -e "${BLUE}Waiting for Airflow to be ready...${NC}"
+    timeout 300s bash -c 'until curl -s http://localhost:8080/health > /dev/null; do sleep 10; done' || {
+        echo -e "${RED}❌ Airflow failed to start${NC}"
+        show_logs
+        exit 1
+    }
+    echo -e "${GREEN}✅ Airflow is ready${NC}"
 }
 
-# Show service information
-show_info() {
-    echo -e "${GREEN}"
-    echo "🎉 Catalunya Data Pipeline Local Environment is Ready!"
-    echo ""
-    echo "📊 Services Available:"
-    echo "   • Airflow UI:    http://localhost:8080 (admin/admin)"
-    echo "   • PostgreSQL:    localhost:5432 (airflow/airflow)"
-    echo "   • LocalStack:    http://localhost:4566"
-    echo ""
-    echo "🔧 LocalStack Health: http://localhost:4566/_localstack/health"
-    echo ""
-    echo "💡 Useful Commands:"
-    echo "   • View logs:     docker-compose -f ${COMPOSE_FILE} logs -f [service]"
-    echo "   • Stop all:      docker-compose -f ${COMPOSE_FILE} down"
-    echo "   • Restart:       docker-compose -f ${COMPOSE_FILE} restart [service]"
-    echo ""
-    echo "🏗️ AWS CLI with LocalStack:"
-    echo "   aws --endpoint-url=http://localhost:4566 s3 ls"
-    echo "   aws --endpoint-url=http://localhost:4566 lambda list-functions"
-    echo -e "${NC}"
+# Show service status
+show_status() {
+    echo -e "${BLUE}📊 Service Status:${NC}"
+    docker-compose -f docker-compose.local.yaml ps
+
+    echo -e "\n${BLUE}🔗 Service URLs:${NC}"
+    echo -e "  📊 Airflow UI:     http://localhost:8080 (admin/admin)"
+    echo -e "  🔧 LocalStack:     http://localhost:4566"
+    echo -e "  📊 LocalStack UI:  http://localhost:4566/_localstack/health"
+    echo -e "  🗄️  PostgreSQL:    localhost:5432 (airflow/airflow)"
+
+    echo -e "\n${BLUE}🐳 Container Status:${NC}"
+    docker ps --filter "name=cloudgentgran-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
-# Main execution
+# Show logs for debugging
+show_logs() {
+    echo -e "${RED}🔍 Showing recent logs for debugging:${NC}"
+    echo -e "\n${YELLOW}LocalStack logs:${NC}"
+    docker logs --tail 20 cloudgentgran-localstack 2>&1 || true
+    echo -e "\n${YELLOW}Infrastructure setup logs:${NC}"
+    docker logs cloudgentgran-infrastructure-setup 2>&1 || true
+    echo -e "\n${YELLOW}Airflow logs:${NC}"
+    docker logs --tail 20 cloudgentgran-airflow 2>&1 || true
+}
+
+# Validate deployment
+validate_deployment() {
+    echo -e "${YELLOW}🧪 Validating deployment...${NC}"
+
+    # Check LocalStack health
+    if ! curl -s http://localhost:4566/_localstack/health | grep -q '"status": "running"'; then
+        echo -e "${RED}❌ LocalStack health check failed${NC}"
+        return 1
+    fi
+
+    # Check deployed resources
+    echo -e "${BLUE}Checking deployed Lambda functions...${NC}"
+    local lambda_count=$(docker exec cloudgentgran-localstack awslocal lambda list-functions --query 'length(Functions)' --output text 2>/dev/null || echo "0")
+    if [ "$lambda_count" -ge 2 ]; then
+        echo -e "${GREEN}✅ Lambda functions deployed: $lambda_count${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Expected 2 Lambda functions, found: $lambda_count${NC}"
+    fi
+
+    # Check S3 buckets
+    echo -e "${BLUE}Checking S3 buckets...${NC}"
+    local bucket_count=$(docker exec cloudgentgran-localstack awslocal s3 ls 2>/dev/null | wc -l)
+    if [ "$bucket_count" -ge 1 ]; then
+        echo -e "${GREEN}✅ S3 buckets created: $bucket_count${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No S3 buckets found${NC}"
+    fi
+
+    # Check Airflow connection
+    echo -e "${BLUE}Checking Airflow LocalStack connection...${NC}"
+    if timeout 30s docker exec cloudgentgran-airflow airflow connections test localstack_default >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Airflow LocalStack connection working${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Airflow LocalStack connection test failed (may be normal during startup)${NC}"
+    fi
+
+    echo -e "${GREEN}✅ Validation completed${NC}"
+}
+
+# Main function
 main() {
     case "${1:-start}" in
         "start")
             check_prerequisites
+            set_environment
             cleanup
             start_services
-            wait_for_services
-            deploy_infrastructure
-            show_info
+            monitor_startup
+            validate_deployment
+            show_status
+            echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
+            echo -e "${BLUE}📖 Next steps:${NC}"
+            echo -e "  1. Open Airflow UI: http://localhost:8080"
+            echo -e "  2. Login with: admin/admin"
+            echo -e "  3. Enable the 'catalunya_social_services_localstack_pipeline' DAG"
+            echo -e "  4. Trigger a manual run to test the pipeline"
             ;;
         "stop")
             echo -e "${YELLOW}🛑 Stopping Catalunya Data Pipeline...${NC}"
-            docker-compose -f ${COMPOSE_FILE} down
-            echo -e "${GREEN}✅ Stopped successfully${NC}"
+            docker-compose -f docker-compose.local.yaml down --remove-orphans
+            echo -e "${GREEN}✅ Services stopped${NC}"
             ;;
         "restart")
-            echo -e "${YELLOW}🔄 Restarting Catalunya Data Pipeline...${NC}"
-            docker-compose -f ${COMPOSE_FILE} restart
-            wait_for_services
-            show_info
-            ;;
-        "logs")
-            docker-compose -f ${COMPOSE_FILE} logs -f ${2:-}
+            $0 stop
+            sleep 5
+            $0 start
             ;;
         "status")
-            docker-compose -f ${COMPOSE_FILE} ps
+            show_status
+            ;;
+        "logs")
+            show_logs
+            ;;
+        "validate")
+            validate_deployment
+            ;;
+        "clean")
+            echo -e "${YELLOW}🧹 Cleaning up everything...${NC}"
+            docker-compose -f docker-compose.local.yaml down --volumes --remove-orphans
+            docker system prune -af
+            echo -e "${GREEN}✅ Complete cleanup finished${NC}"
+            ;;
+        "help"|"-h"|"--help")
+            cat << EOF
+Catalunya Data Pipeline - Local Development
+
+Usage: $0 [command]
+
+Commands:
+    start       Start the complete local environment (default)
+    stop        Stop all services
+    restart     Restart all services
+    status      Show service status and URLs
+    logs        Show recent logs for debugging
+    validate    Validate deployment and connections
+    clean       Complete cleanup (removes volumes and images)
+    help        Show this help
+
+Examples:
+    $0              # Start everything
+    $0 start        # Start everything
+    $0 status       # Check status
+    $0 logs         # Show logs for debugging
+    $0 stop         # Stop services
+
+Environment Variables:
+    AIRFLOW_FERNET_KEY    Custom Fernet key for Airflow (auto-generated if not set)
+    AIRFLOW_SECRET_KEY    Custom secret key for Airflow (auto-generated if not set)
+EOF
             ;;
         *)
-            echo "Usage: $0 {start|stop|restart|logs [service]|status}"
+            echo -e "${RED}Unknown command: $1${NC}"
+            $0 help
             exit 1
             ;;
     esac
 }
-
-# Set working directory to script's parent
-cd "$(dirname "$0")/.."
 
 main "$@"

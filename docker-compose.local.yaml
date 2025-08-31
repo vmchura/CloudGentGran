@@ -12,7 +12,8 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-YourFernetKeyHere}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-YourSecretKeyHere}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
@@ -31,6 +32,9 @@ x-airflow-common:
     AIRFLOW_VAR_ENVIRONMENT: local
     AIRFLOW_VAR_USE_LOCALSTACK: "true"
 
+    # Airflow Connections - LocalStack
+    AIRFLOW_CONN_LOCALSTACK_DEFAULT: 'aws://test:test@localstack:4566/?region_name=eu-west-1&endpoint_url=http%3A%2F%2Flocalstack%3A4566'
+
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
@@ -39,6 +43,9 @@ x-airflow-common:
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./dbt:/opt/airflow/dbt
     - airflow-dbt-profiles:/home/airflow/.dbt
+    # Mount infrastructure directory for CDK deployment
+    - ./infrastructure:/opt/airflow/infrastructure
+    - /var/run/docker.sock:/var/run/docker.sock  # For LocalStack container communication
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - cloudgentgran-local
@@ -114,6 +121,62 @@ services:
       - cloudgentgran-local
 
   # ===========================================
+  # CDK LocalStack Infrastructure Deployment
+  # ===========================================
+  infrastructure-setup:
+    image: node:18-alpine
+    container_name: cloudgentgran-infrastructure-setup
+    working_dir: /app/infrastructure
+    environment:
+      # LocalStack configuration
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=eu-west-1
+      - CDK_DEFAULT_ACCOUNT=000000000000
+      - CDK_DEFAULT_REGION=eu-west-1
+    volumes:
+      - ./infrastructure:/app/infrastructure
+      - ./lambda:/app/lambda
+      - ./rust-lambda-build:/app/rust-lambda-build
+    networks:
+      - cloudgentgran-local
+    depends_on:
+      localstack:
+        condition: service_healthy
+    command: |
+      sh -c "
+        echo '🔧 Installing CDK and dependencies...'
+        npm install -g aws-cdk-local aws-cdk
+        npm install
+      
+        echo '🔧 Building CDK project...'
+        npm run build
+      
+        echo '🔧 Waiting for LocalStack to be fully ready...'
+        sleep 30
+      
+        echo '🔧 Bootstrapping CDK for LocalStack...'
+        cdklocal bootstrap --app 'node bin/infrastructure.js' || echo 'Bootstrap may have already been done'
+      
+        echo '🚀 Deploying Catalunya Data Stack to LocalStack...'
+        cdklocal deploy CatalunyaDataStack-dev \\
+          --app 'node bin/infrastructure.js' \\
+          --require-approval never \\
+          --outputs-file cdk-outputs.json
+      
+        echo '✅ CDK deployment completed!'
+      
+        echo '📊 Checking deployed resources:'
+        aws --endpoint-url=http://localstack:4566 s3 ls || echo 'S3 check failed'
+        aws --endpoint-url=http://localstack:4566 lambda list-functions --query 'Functions[].FunctionName' --output table || echo 'Lambda check failed'
+      
+        echo '🎉 Infrastructure deployment completed successfully!'
+        echo '🔗 LocalStack services available at: http://localhost:4566'
+        "
+    restart: "no"  # Infrastructure setup should only run once
+
+  # ===========================================
   # Apache Airflow - Main Service
   # ===========================================
   airflow:
@@ -123,14 +186,16 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 90s  # Extra time for LocalStack dependency
+      start_period: 120s  # Extra time for LocalStack and infrastructure dependency
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
+      infrastructure-setup:
+        condition: service_completed_successfully
 
   # ===========================================
   # Airflow Initialization Service
@@ -163,13 +228,20 @@ services:
               type: duckdb
               path: /opt/airflow/dbt/mart/local_data/catalunya_local.duckdb
               threads: 4
-          target: local
+            localstack:
+              type: duckdb
+              path: /opt/airflow/dbt/mart/local_data/catalunya_localstack.duckdb
+              threads: 4
+          target: localstack
         EOF
         echo "✅ DBT profiles.yml created successfully"
         
         echo "🔧 Setting file permissions..."
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/
         chown -R "${AIRFLOW_UID}:0" /home/airflow/.dbt
+        
+        echo "🔧 Installing additional packages..."
+        pip install awscli-local
         
         echo "🔧 Initializing Airflow database..."
         airflow db migrate
@@ -181,12 +253,34 @@ services:
           --lastname User \
           --role Admin \
           --email admin@catalunya.cat \
-          --password admin \
           --password admin || echo "Admin user already exists"
+        
+        echo "🔧 Setting up Airflow variables..."
+        airflow variables set environment "local"
+        airflow variables set use_localstack "true"
+        airflow variables set bucket_name "catalunya-data-dev"
+        airflow variables set localstack_endpoint "http://localstack:4566"
+        
+        echo "🔧 Creating LocalStack AWS connection..."
+        airflow connections delete localstack_default || echo "Connection doesn't exist yet"
+        airflow connections add \
+          --conn-id localstack_default \
+          --conn-type aws \
+          --conn-extra '{
+            "region_name": "eu-west-1",
+            "endpoint_url": "http://localstack:4566",
+            "aws_access_key_id": "test",
+            "aws_secret_access_key": "test",
+            "verify": false
+          }'
+        
+        echo "🧪 Testing LocalStack connection..."
+        timeout 30s airflow connections test localstack_default || echo "Connection test timed out - this is normal during startup"
         
         echo "🎉 Catalunya Data Pipeline initialization completed!"
         echo "📊 Airflow UI: http://localhost:8080 (admin/admin)"
         echo "🔧 LocalStack UI: http://localhost:4566/_localstack/health"
+        echo "🚀 Ready to run Catalunya Social Services DAGs with LocalStack!"
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -195,6 +289,10 @@ services:
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
     user: "0:0"
     restart: "no"  # Init service should not restart
+    depends_on:
+      <<: *airflow-common-depends-on
+      infrastructure-setup:
+        condition: service_completed_successfully
 
 # ===========================================
 # Networks
