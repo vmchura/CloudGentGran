@@ -33,6 +33,14 @@ check_prerequisites() {
         exit 1
     fi
 
+    # Check for Node.js and npm for CDK deployment
+    if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+        echo -e "${RED}❌ Node.js/npm not found on host${NC}"
+        echo -e "${YELLOW}⚠️  CDK deployment requires Node.js and npm${NC}"
+        echo -e "${BLUE}Please install Node.js (v14+) to continue${NC}"
+        exit 1
+    fi
+
     echo -e "${GREEN}✅ Prerequisites check passed${NC}"
 }
 
@@ -58,6 +66,46 @@ cleanup() {
     echo -e "${GREEN}✅ Cleanup completed${NC}"
 }
 
+# Deploy CDK infrastructure on host
+deploy_infrastructure() {
+    echo -e "${YELLOW}🏗️  Deploying infrastructure with CDK on host...${NC}"
+
+    # Store current directory
+    local original_dir=$(pwd)
+
+    # Ensure LocalStack is ready
+    echo -e "${BLUE}⏳ Waiting for LocalStack to be fully ready...${NC}"
+    timeout 120s bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "running"; do sleep 3; done' || {
+        echo -e "${RED}❌ LocalStack not ready for CDK deployment${NC}"
+        show_logs
+        exit 1
+    }
+
+    # Additional wait to ensure LocalStack services are fully initialized
+    echo -e "${BLUE}⏳ Ensuring LocalStack services are fully initialized...${NC}"
+    sleep 10
+
+    # Change to infrastructure directory
+    cd infrastructure
+
+    # Make script executable and run it
+    chmod +x deploy-localstack.sh
+
+    echo -e "${BLUE}🚀 Running CDK deployment script...${NC}"
+    if ./deploy-localstack.sh; then
+        echo -e "${GREEN}✅ Infrastructure deployment successful${NC}"
+    else
+        echo -e "${RED}❌ Infrastructure deployment failed${NC}"
+        cd "$original_dir"
+        exit 1
+    fi
+
+    # Return to original directory
+    cd "$original_dir"
+
+    echo -e "${GREEN}✅ CDK infrastructure deployment completed${NC}"
+}
+
 # Start services
 start_services() {
     echo -e "${YELLOW}🐳 Starting Docker services...${NC}"
@@ -79,22 +127,6 @@ monitor_startup() {
         exit 1
     }
     echo -e "${GREEN}✅ LocalStack is ready${NC}"
-
-    echo -e "${BLUE}Waiting for infrastructure deployment to complete...${NC}"
-    timeout 300s bash -c 'while docker ps -q -f name=cloudgentgran-infrastructure-setup; do sleep 10; done' || {
-        echo -e "${RED}❌ Infrastructure deployment timed out${NC}"
-        show_logs
-        exit 1
-    }
-
-    # Check if infrastructure deployment was successful
-    if docker logs cloudgentgran-infrastructure-setup 2>&1 | grep -q "Infrastructure deployment completed successfully"; then
-        echo -e "${GREEN}✅ Infrastructure deployment completed${NC}"
-    else
-        echo -e "${RED}❌ Infrastructure deployment failed${NC}"
-        docker logs cloudgentgran-infrastructure-setup
-        exit 1
-    fi
 
     echo -e "${BLUE}Waiting for Airflow to be ready...${NC}"
     timeout 300s bash -c 'until curl -s http://localhost:8080/health > /dev/null; do sleep 10; done' || {
@@ -125,8 +157,6 @@ show_logs() {
     echo -e "${RED}🔍 Showing recent logs for debugging:${NC}"
     echo -e "\n${YELLOW}LocalStack logs:${NC}"
     docker logs --tail 20 cloudgentgran-localstack 2>&1 || true
-    echo -e "\n${YELLOW}Infrastructure setup logs:${NC}"
-    docker logs cloudgentgran-infrastructure-setup 2>&1 || true
     echo -e "\n${YELLOW}Airflow logs:${NC}"
     docker logs --tail 20 cloudgentgran-airflow 2>&1 || true
 }
@@ -179,6 +209,7 @@ main() {
             cleanup
             start_services
             monitor_startup
+            deploy_infrastructure  # CDK deployment after LocalStack is ready
             validate_deployment
             show_status
             echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
@@ -207,10 +238,17 @@ main() {
         "validate")
             validate_deployment
             ;;
+        "deploy-infra")
+            echo -e "${YELLOW}🏗️  Deploying infrastructure only...${NC}"
+            check_prerequisites
+            deploy_infrastructure
+            ;;
         "clean")
             echo -e "${YELLOW}🧹 Cleaning up everything...${NC}"
             docker-compose -f docker-compose.local.yaml down --volumes --remove-orphans
             docker system prune -af
+            # Clean CDK outputs
+            rm -f infrastructure/cdk-outputs.json
             echo -e "${GREEN}✅ Complete cleanup finished${NC}"
             ;;
         "help"|"-h"|"--help")
@@ -220,14 +258,15 @@ Catalunya Data Pipeline - Local Development
 Usage: $0 [command]
 
 Commands:
-    start       Start the complete local environment (default)
-    stop        Stop all services
-    restart     Restart all services
-    status      Show service status and URLs
-    logs        Show recent logs for debugging
-    validate    Validate deployment and connections
-    clean       Complete cleanup (removes volumes and images)
-    help        Show this help
+    start          Start the complete local environment (default)
+    stop           Stop all services
+    restart        Restart all services
+    status         Show service status and URLs
+    logs           Show recent logs for debugging
+    validate       Validate deployment and connections
+    deploy-infra   Deploy only the CDK infrastructure (requires LocalStack running)
+    clean          Complete cleanup (removes volumes and images)
+    help           Show this help
 
 Examples:
     $0              # Start everything
@@ -235,10 +274,15 @@ Examples:
     $0 status       # Check status
     $0 logs         # Show logs for debugging
     $0 stop         # Stop services
+    $0 deploy-infra # Deploy CDK infrastructure only
 
 Environment Variables:
     AIRFLOW_FERNET_KEY    Custom Fernet key for Airflow (auto-generated if not set)
     AIRFLOW_SECRET_KEY    Custom secret key for Airflow (auto-generated if not set)
+
+Prerequisites:
+    - Docker and Docker Compose
+    - Node.js (v14+) and npm for CDK deployment
 EOF
             ;;
         *)
