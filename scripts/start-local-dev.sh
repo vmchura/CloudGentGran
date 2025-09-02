@@ -88,22 +88,38 @@ deploy_infrastructure() {
     # Change to infrastructure directory
     cd infrastructure
 
-    # Make script executable and run it
+    # Make script executable
     chmod +x deploy-localstack.sh
 
     echo -e "${BLUE}🚀 Running CDK deployment script...${NC}"
-    if ./deploy-localstack.sh; then
+    echo -e "${BLUE}📄 Deployment output:${NC}"
+
+    # Run the script with proper output handling and error checking
+    set -o pipefail   # important: makes pipeline return the first failing command
+    if bash -x deploy-localstack.sh 2>&1 | tee /tmp/deploy-localstack.log; then
         echo -e "${GREEN}✅ Infrastructure deployment successful${NC}"
     else
-        echo -e "${RED}❌ Infrastructure deployment failed${NC}"
+        exit_code=$?
+        echo -e "${RED}❌ Infrastructure deployment failed with exit code: $exit_code${NC}"
+        echo -e "${YELLOW}📄 Last 20 lines of deployment log:${NC}"
+        tail -20 /tmp/deploy-localstack.log || true
         cd "$original_dir"
-        exit 1
+        exit $exit_code
     fi
 
     # Return to original directory
     cd "$original_dir"
 
     echo -e "${GREEN}✅ CDK infrastructure deployment completed${NC}"
+
+    # Show what was deployed
+    echo -e "${BLUE}📊 Deployment summary:${NC}"
+    if [ -f infrastructure/cdk-outputs.json ]; then
+        echo -e "${YELLOW}CDK Outputs:${NC}"
+        cat infrastructure/cdk-outputs.json | jq '.' 2>/dev/null || cat infrastructure/cdk-outputs.json
+    else
+        echo -e "${YELLOW}⚠️  No CDK outputs file found${NC}"
+    fi
 }
 
 # Start services

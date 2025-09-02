@@ -38,7 +38,7 @@ ENV_CONFIG = {
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "schedule": timedelta(hours=2),  # More frequent for testing
-        "timeout_minutes": 10,
+        "timeout_minutes": 15,  # Increased timeout for LocalStack Lambda cold starts
         "bucket_name": "catalunya-data-dev",
         "retry_attempts": 3,
         "retry_delay": timedelta(minutes=2)
@@ -391,7 +391,8 @@ invoke_transformer = LambdaInvokeFunctionOperator(
     function_name=config['transformer_function'],
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',
-    payload='{{ task_instance.xcom_pull(key="transformer_payload") | tojson }}',
+    payload='{{ task_instance.xcom_pull(task_ids="parse_extraction_response", key="transformer_payload") | tojson }}',
+    execution_timeout=timedelta(minutes=10),  # Give Lambda more time for LocalStack
     dag=dag
 )
 
