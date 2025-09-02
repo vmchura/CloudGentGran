@@ -85,12 +85,15 @@ def parse_extraction_response(**context) -> Dict[str, Any]:
     logger.info(f"Raw Lambda response received: {type(lambda_response)}")
 
     # Parse Lambda response - handle different response formats
-    if isinstance(lambda_response, dict):
+    if lambda_response is None:
+        logger.error("Lambda response is None - this means the invoke_api_extractor task didn't run or failed")
+        raise AirflowException("No Lambda response found - previous task may have failed")
+    elif isinstance(lambda_response, dict):
         # Direct response dict
         response_body = lambda_response
         logger.info(f"Using direct response dict")
     elif isinstance(lambda_response, str):
-        # JSON string response
+        # JSON string response (common with LocalStack)
         try:
             response_body = json.loads(lambda_response)
             logger.info(f"Parsed JSON string response")
@@ -164,10 +167,30 @@ def validate_extraction_results(**context) -> str:
     Pure coordination logic - no heavy processing.
     """
     task_instance = context['task_instance']
-    extraction_data = task_instance.xcom_pull(key='extraction_metadata')
+    
+    # Debug: Check what XCom data is available
+    logger.info("🔍 Checking available XCom data...")
+    try:
+        # Try to get all XCom data from parse_extraction_response
+        all_xcom_data = task_instance.xcom_pull(task_ids='parse_extraction_response')
+        logger.info(f"All XCom data from parse_extraction_response: {all_xcom_data}")
+        
+        # Get the specific key
+        extraction_data = task_instance.xcom_pull(task_ids='parse_extraction_response', key='extraction_metadata')
+        logger.info(f"Extraction metadata: {extraction_data}")
+        
+    except Exception as e:
+        logger.error(f"Error retrieving XCom data: {e}")
+        raise AirflowException(f"Failed to retrieve XCom data: {e}")
 
     if not extraction_data:
-        raise AirflowException("No extraction metadata found - previous task may have failed")
+        logger.error("extraction_data is None or empty")
+        # Try alternative approach - get the return value of parse_extraction_response
+        extraction_data = task_instance.xcom_pull(task_ids='parse_extraction_response')
+        logger.info(f"Trying return value instead: {extraction_data}")
+        
+        if not extraction_data:
+            raise AirflowException("No extraction metadata found - previous task may have failed")
 
     # Business validation rules
     min_expected_records = 100  # Minimum expected for social services data
@@ -263,8 +286,8 @@ def trigger_dbt_workflow(**context) -> str:
     task_instance = context['task_instance']
 
     # Get metadata from previous tasks
-    extraction_data = task_instance.xcom_pull(key='extraction_metadata')
-    transformation_data = task_instance.xcom_pull(key='transformation_metadata')
+    extraction_data = task_instance.xcom_pull(task_ids='parse_extraction_response', key='extraction_metadata')
+    transformation_data = task_instance.xcom_pull(task_ids='parse_transformation_response', key='transformation_metadata')
 
     logger.info("🚀 Preparing DBT workflow trigger...")
     logger.info(f"   - Environment: {ENVIRONMENT}")
