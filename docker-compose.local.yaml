@@ -93,9 +93,12 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
 
-      # Lambda configuration
+      # Lambda configuration - optimized for better performance
       - LAMBDA_EXECUTOR=docker-reuse
       - LAMBDA_REMOTE_DOCKER=false
+      - LAMBDA_DOCKER_NETWORK=cloudgentgran-local
+      - LAMBDA_CONTAINER_REGISTRY=local
+      - LAMBDA_RUNTIME_EXECUTOR_TIMEOUT=900  # 15 minutes timeout
 
       # Persistence (optional - keeps data between restarts)
       - PERSISTENCE=1
@@ -115,6 +118,16 @@ services:
       retries: 5
       start_period: 60s
     restart: always
+    # Resource allocation for better Lambda performance
+    shm_size: '1G'
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
     networks:
       - cloudgentgran-local
 

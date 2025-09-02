@@ -40,7 +40,7 @@ ENV_CONFIG = {
         "schedule": timedelta(hours=2),  # More frequent for testing
         "timeout_minutes": 15,  # Increased timeout for LocalStack Lambda cold starts
         "bucket_name": "catalunya-data-dev",
-        "retry_attempts": 3,
+        "retry_attempts": 1,
         "retry_delay": timedelta(minutes=2)
     },
     "dev": {
@@ -392,7 +392,7 @@ invoke_transformer = LambdaInvokeFunctionOperator(
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',
     payload='{{ task_instance.xcom_pull(task_ids="parse_extraction_response", key="transformer_payload") | tojson }}',
-    execution_timeout=timedelta(minutes=10),  # Give Lambda more time for LocalStack
+    execution_timeout=timedelta(minutes=config.get('lambda_timeout_minutes', 15)),  # Configurable timeout
     dag=dag
 )
 
