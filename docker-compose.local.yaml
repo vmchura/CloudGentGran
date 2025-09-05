@@ -26,14 +26,14 @@ x-airflow-common:
     AWS_ENDPOINT_URL: http://localstack:4566
     AWS_ACCESS_KEY_ID: test
     AWS_SECRET_ACCESS_KEY: test
-    AWS_DEFAULT_REGION: us-east-1
+    AWS_DEFAULT_REGION: eu-west-1
 
     # Environment Variables for DAGs
     AIRFLOW_VAR_ENVIRONMENT: local
     AIRFLOW_VAR_USE_LOCALSTACK: "true"
 
     # Airflow Connections - LocalStack
-    AIRFLOW_CONN_LOCALSTACK_DEFAULT: 'aws://test:test@localstack:4566/?region_name=us-east-1&endpoint_url=http%3A%2F%2Flocalstack%3A4566'
+    AIRFLOW_CONN_LOCALSTACK_DEFAULT: 'aws://test:test@localstack:4566/?region_name=eu-west-1&endpoint_url=http%3A%2F%2Flocalstack%3A4566'
 
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
   volumes:
@@ -105,7 +105,7 @@ services:
       - DATA_DIR=/tmp/localstack/data
 
       # AWS configuration
-      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=eu-west-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
     volumes:
@@ -220,7 +220,7 @@ services:
           --conn-id localstack_default \
           --conn-type aws \
           --conn-extra '{
-            "region_name": "us-east-1",
+            "region_name": "eu-west-1",
             "endpoint_url": "http://localstack:4566",
             "aws_access_key_id": "test",
             "aws_secret_access_key": "test",

@@ -143,7 +143,7 @@ jobs:
           echo "🧪 Synthesizing templates for LocalStack..."
           npx cdk synth --all --require-approval never
         env:
-          CDK_DEFAULT_REGION: us-east-1
+          CDK_DEFAULT_REGION: eu-west-1
           CDK_DEFAULT_ACCOUNT: '000000000000'
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
@@ -241,7 +241,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_DEFAULT_REGION: eu-west-1
           AWS_ENDPOINT_URL: http://localhost:4566
 
       - name: CDK Bootstrap (AWS)
@@ -264,10 +264,10 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_DEFAULT_REGION: eu-west-1
           AWS_ENDPOINT_URL: http://localhost:4566
           CDK_DEPLOY_ACCOUNT: '000000000000'
-          CDK_DEPLOY_REGION: us-east-1
+          CDK_DEPLOY_REGION: eu-west-1
 
       - name: CDK Deploy Development (AWS)
         if: ${{ !env.ACT }}

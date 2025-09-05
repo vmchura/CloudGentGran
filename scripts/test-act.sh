@@ -66,7 +66,7 @@ create_secrets_file() {
         cat > .secrets << EOF
 AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
-AWS_DEFAULT_REGION=us-east-1
+AWS_DEFAULT_REGION=eu-west-1
 AWS_ENDPOINT_URL=$LOCALSTACK_ENDPOINT
 EOF
         echo "Created .secrets file with LocalStack credentials"
@@ -98,10 +98,10 @@ run_full_workflow() {
         --container-architecture linux/amd64 \
         --env AWS_ACCESS_KEY_ID=test \
         --env AWS_SECRET_ACCESS_KEY=test \
-        --env AWS_DEFAULT_REGION=us-east-1 \
+        --env AWS_DEFAULT_REGION=eu-west-1 \
         --env AWS_ENDPOINT_URL="$LOCALSTACK_ENDPOINT" \
         --env CDK_DEFAULT_ACCOUNT=000000000000 \
-        --env CDK_DEFAULT_REGION=us-east-1 \
+        --env CDK_DEFAULT_REGION=eu-west-1 \
         --secret-file .secrets \
         --rm \
         "$@" || {
