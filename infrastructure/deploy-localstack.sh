@@ -20,12 +20,16 @@ export AWS_DEFAULT_REGION=eu-west-1
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 
+# For CDK >= 2.177.0, we need to explicitly allow region environment variables
+export AWS_ENVAR_ALLOWLIST=AWS_REGION,AWS_DEFAULT_REGION,CDK_DEFAULT_REGION
+
 echo -e "${BLUE}🚀 Deploying CDK Stack to LocalStack using cdklocal${NC}"
 echo -e "${BLUE}🌍 Target region: ${CDK_DEFAULT_REGION}${NC}"
 echo -e "${BLUE}🔧 Environment variables:${NC}"
 echo -e "${BLUE}   CDK_DEFAULT_REGION=${CDK_DEFAULT_REGION}${NC}"
 echo -e "${BLUE}   AWS_REGION=${AWS_REGION}${NC}"
 echo -e "${BLUE}   AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}${NC}"
+echo -e "${BLUE}   AWS_ENVAR_ALLOWLIST=${AWS_ENVAR_ALLOWLIST}${NC}"
 
 # Function for error handling
 handle_error() {
