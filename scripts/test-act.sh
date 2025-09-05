@@ -52,11 +52,12 @@ run_act() {
     # Run act with artifact server enabled and test environment variables
     act push \
         --artifact-server-path "$ARTIFACTS_DIR" \
+        --env AWS_PROFILE=localstack \
         --env AWS_ENDPOINT_URL=http://localhost:4566 \
         --env ACTIONS_RUNTIME_TOKEN=fake-token-for-local-testing \
         --env NODE_ENV=test \
         --env CDK_DEFAULT_ACCOUNT=123456789012 \
-        --env CDK_DEFAULT_REGION=eu-east-1 \
+        --env CDK_DEFAULT_REGION=eu-west-1 \
         --secret-file .secrets \
         --rm
     echo -e "${GREEN}✅ act execution complete${NC}"
