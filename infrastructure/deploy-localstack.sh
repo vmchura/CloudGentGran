@@ -13,7 +13,19 @@ NC='\033[0m'
 
 LOCALSTACK_ENDPOINT="http://localhost:4566"
 
+# Set CDK and AWS environment variables for eu-west-1 and LocalStack
+export CDK_DEFAULT_REGION=eu-west-1
+export AWS_REGION=eu-west-1
+export AWS_DEFAULT_REGION=eu-west-1
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+
 echo -e "${BLUE}🚀 Deploying CDK Stack to LocalStack using cdklocal${NC}"
+echo -e "${BLUE}🌍 Target region: ${CDK_DEFAULT_REGION}${NC}"
+echo -e "${BLUE}🔧 Environment variables:${NC}"
+echo -e "${BLUE}   CDK_DEFAULT_REGION=${CDK_DEFAULT_REGION}${NC}"
+echo -e "${BLUE}   AWS_REGION=${AWS_REGION}${NC}"
+echo -e "${BLUE}   AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}${NC}"
 
 # Function for error handling
 handle_error() {
@@ -43,6 +55,9 @@ check_localstack() {
 if ! check_localstack; then
     exit 1
 fi
+
+echo -e "${YELLOW}🧹 Cleaning up previous deployment outputs...${NC}"
+rm -f cdk-outputs.json
 
 echo -e "${YELLOW}📦 Installing dependencies...${NC}"
 if npm install; then
@@ -94,11 +109,6 @@ if [ -f cdk-outputs.json ]; then
 else
     echo -e "${YELLOW}⚠️  No CDK outputs file generated${NC}"
 fi
-
-# Set AWS credentials for LocalStack
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=eu-west-1
 
 echo -e "${BLUE}📋 Verifying deployed LocalStack resources:${NC}"
 
