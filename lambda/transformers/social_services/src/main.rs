@@ -13,6 +13,12 @@ use serde::{Deserialize, Serialize};
 struct LambdaInput {
     detail: Option<EventDetail>,
     downloaded_date: Option<String>,
+    bucket_name: Option<String>,
+    semantic_identifier: Option<String>,
+    extraction_timestamp: Option<String>,
+    file_count: Option<u32>,
+    source_prefix: Option<String>,
+    total_records: Option<u32>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -72,6 +78,25 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
                 .or_else(|| env::var("SEMANTIC_IDENTIFIER").ok())
                 .ok_or_else(|| anyhow!("SEMANTIC_IDENTIFIER not found"))?;
             (detail.downloaded_date.clone(), bucket, semantic)
+        }
+        LambdaInput {
+            downloaded_date: Some(date),
+            bucket_name: Some(bucket),
+            semantic_identifier: Some(semantic),
+            ..
+        } => {
+            // Direct invocation from Airflow DAG with full payload
+            (date.clone(), bucket.clone(), semantic.clone())
+        }
+        LambdaInput { downloaded_date: Some(date), .. } => {
+            // Direct invocation from Airflow DAG with minimal payload
+            let bucket = event.payload.bucket_name.clone()
+                .or_else(|| env::var("BUCKET_NAME").ok())
+                .unwrap_or_else(|| "catalunya-data-dev".to_string()); // Default for LocalStack
+            let semantic = event.payload.semantic_identifier.clone()
+                .or_else(|| env::var("SEMANTIC_IDENTIFIER").ok())
+                .unwrap_or_else(|| "social_services".to_string()); // Default semantic identifier
+            (date.clone(), bucket, semantic)
         }
         _ => {
             let msg = "No downloaded_date found in event";

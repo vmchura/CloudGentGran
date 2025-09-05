@@ -95,14 +95,13 @@ deploy_infrastructure() {
     echo -e "${BLUE}📄 Deployment output:${NC}"
 
     # Run the script with proper output handling and error checking
-    set -o pipefail   # important: makes pipeline return the first failing command
-    if bash -x deploy-localstack.sh 2>&1 | tee /tmp/deploy-localstack.log; then
+    set -o pipefail
+
+    if bash -x deploy-localstack.sh; then
         echo -e "${GREEN}✅ Infrastructure deployment successful${NC}"
     else
         exit_code=$?
         echo -e "${RED}❌ Infrastructure deployment failed with exit code: $exit_code${NC}"
-        echo -e "${YELLOW}📄 Last 20 lines of deployment log:${NC}"
-        tail -20 /tmp/deploy-localstack.log || true
         cd "$original_dir"
         exit $exit_code
     fi

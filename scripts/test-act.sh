@@ -52,8 +52,10 @@ run_act() {
     # Run act with artifact server enabled
     act push \
         --artifact-server-path "$ARTIFACTS_DIR" \
+        --env AWS_ENDPOINT_URL=http://localhost:4566 \
+        --env ACTIONS_RUNTIME_TOKEN=fake-token-for-local-testing \
+        --secret-file .secrets \
         --rm
-    
     echo -e "${GREEN}✅ act execution complete${NC}"
 }
 
