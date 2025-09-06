@@ -75,7 +75,7 @@ deploy_infrastructure() {
 
     # Ensure LocalStack is ready
     echo -e "${BLUE}⏳ Waiting for LocalStack to be fully ready...${NC}"
-    timeout 120s bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "running"; do sleep 3; done' || {
+    timeout 180s bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "available"; do sleep 3; done' || {
         echo -e "${RED}❌ LocalStack not ready for CDK deployment${NC}"
         show_logs
         exit 1
@@ -83,7 +83,7 @@ deploy_infrastructure() {
 
     # Additional wait to ensure LocalStack services are fully initialized
     echo -e "${BLUE}⏳ Ensuring LocalStack services are fully initialized...${NC}"
-    sleep 10
+    sleep 90
 
     # Change to infrastructure directory
     cd infrastructure
@@ -181,7 +181,7 @@ validate_deployment() {
     echo -e "${YELLOW}🧪 Validating deployment...${NC}"
 
     # Check LocalStack health
-    if ! curl -s http://localhost:4566/_localstack/health | grep -q '"status": "running"'; then
+    if ! curl -s http://localhost:4566/_localstack/health | grep -q '"running"'; then
         echo -e "${RED}❌ LocalStack health check failed${NC}"
         return 1
     fi
