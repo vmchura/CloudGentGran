@@ -2,8 +2,6 @@
 # Combines Airflow orchestration with LocalStack AWS services emulation
 # Usage: docker-compose -f docker-compose.local.yaml up -d
 
-version: '3.8'
-
 x-airflow-common:
   &airflow-common
   build: ./orchestration
@@ -113,8 +111,8 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 30s
-      timeout: 10s
+      interval: 60s
+      timeout: 20s
       retries: 5
       start_period: 60s
     restart: always
@@ -149,6 +147,90 @@ services:
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
+
+  # ===========================================
+  # S3FS - Mount S3 buckets as file systems
+  # ===========================================
+  s3fs-mounts:
+    image: efrecon/s3fs:1.78
+    container_name: cloudgentgran-s3fs
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - S3_REGION=eu-west-1
+      - S3_BUCKET=catalunya-data-dev
+      - S3_ENDPOINT_URL=http://localstack:4566
+    volumes:
+      - ./localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:shared
+      - ./localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:shared
+    entrypoint: /bin/sh
+    command: >
+      -c "
+        echo '🔧 Starting S3FS mounts for LocalStack S3 buckets...'
+        
+        echo '⏳ Waiting for LocalStack to be ready...'
+        until wget -q --spider http://localstack:4566/_localstack/health 2>/dev/null; do
+          echo 'Waiting for LocalStack...'
+          sleep 5
+        done
+        echo '✅ LocalStack is ready!'
+        
+        echo '📁 Creating mount points...'
+        mkdir -p /mnt/s3-data /mnt/s3-results
+        
+        echo '🔧 Setting up credentials...'
+        echo 'test:test' > /etc/passwd-s3fs
+        chmod 600 /etc/passwd-s3fs
+        
+        echo '📁 Mounting catalunya-data-dev bucket...'
+        s3fs catalunya-data-dev /mnt/s3-data \
+          -o url=http://localstack:4566 \
+          -o use_path_request_style \
+          -o allow_other \
+          -o uid=1000 \
+          -o gid=1000 \
+          -o umask=022 \
+          -o passwd_file=/etc/passwd-s3fs \
+          -o dbglevel=info \
+          -f &
+        
+        echo '📁 Mounting catalunya-athena-results-dev bucket...'
+        s3fs catalunya-athena-results-dev /mnt/s3-results \
+          -o url=http://localstack:4566 \
+          -o use_path_request_style \
+          -o allow_other \
+          -o uid=1000 \
+          -o gid=1000 \
+          -o umask=022 \
+          -o passwd_file=/etc/passwd-s3fs \
+          -o dbglevel=info \
+          -f &
+        
+        echo '✅ S3FS mounts started successfully!'
+        echo '📂 Main data bucket mounted at: /mnt/s3-data'
+        echo '📂 Athena results bucket mounted at: /mnt/s3-results'
+        echo '🔄 Keeping container alive...'
+        
+        # Keep the container running and both background processes
+        wait
+      "
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - cloudgentgran-local
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mountpoint", "-q", "/mnt/s3-data"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # ===========================================
   # Airflow Initialization Service
