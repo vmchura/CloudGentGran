@@ -60,7 +60,24 @@ set_environment() {
 cleanup() {
     echo -e "${YELLOW}🧹 Cleaning up existing containers...${NC}"
 
+    # Stop Docker Compose services
     docker-compose -f docker-compose.local.yaml down --remove-orphans || true
+
+    # Clean up any stale S3FS mounts
+    echo -e "${YELLOW}🔧 Cleaning up stale S3FS mounts...${NC}"
+    sudo umount -f ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
+    sudo umount -f ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
+
+    # Remove and recreate mount directories
+    sudo rm -rf ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
+    sudo rm -rf ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
+    mkdir -p ./localstack/s3-mounts/catalunya-data-dev
+    mkdir -p ./localstack/s3-mounts/catalunya-athena-results-dev
+
+    # Set proper ownership
+    sudo chown -R $USER:$USER ./localstack/s3-mounts/ 2>/dev/null || true
+
+    # Clean up Docker
     docker system prune -f || true
 
     echo -e "${GREEN}✅ Cleanup completed${NC}"

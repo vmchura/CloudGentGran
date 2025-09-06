@@ -181,6 +181,19 @@ services:
         done
         echo '✅ LocalStack is ready!'
         
+        echo '⏳ Waiting for S3 buckets to be created by CDK...'
+        until wget -q --spider http://localstack:4566/catalunya-data-dev 2>/dev/null; do
+          echo 'Waiting for catalunya-data-dev bucket to be created...'
+          sleep 60
+        done
+        echo '✅ catalunya-data-dev bucket found!'
+        
+        until wget -q --spider http://localstack:4566/catalunya-athena-results-dev 2>/dev/null; do
+          echo 'Waiting for catalunya-athena-results-dev bucket to be created...'
+          sleep 60
+        done
+        echo '✅ catalunya-athena-results-dev bucket found!'
+        
         echo '📁 Creating mount points...'
         mkdir -p /mnt/s3-data /mnt/s3-results
         
