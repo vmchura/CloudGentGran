@@ -1,11 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as glue from 'aws-cdk-lib/aws-glue';
-import * as athena from 'aws-cdk-lib/aws-athena';
 import { Construct } from 'constructs';
 import { ConfigHelper, EnvironmentConfig } from './config';
+import { S3Construct } from './s3-construct';
+import { LambdaConstruct } from './lambda-construct';
+import { AnalyticsConstruct } from './analytics-construct';
 
 export interface CatalunyaDataStackProps extends cdk.StackProps {
   environmentName: string;
@@ -16,73 +14,106 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly environmentName: string;
   public readonly projectName: string;
   public readonly config: EnvironmentConfig;
-  
+
   public readonly bucketName: string;
   public readonly lambdaPrefix: string;
   public readonly athenaWorkgroupName: string;
   public readonly athenaDatabaseName: string;
   public readonly athenaResultsBucketName: string;
-  
-  // S3 Resources
-  public readonly dataBucket: s3.Bucket;
-  public readonly athenaResultsBucket: s3.Bucket;
-  
-  // Glue Resources
-  public readonly glueDatabase: glue.CfnDatabase;
-  
-  // Athena Resources  
-  public readonly athenaWorkgroup: athena.CfnWorkGroup;
-  
-  // Lambda Resources
-  public apiExtractorLambda: lambda.Function;
-  public socialServicesTransformerLambda: lambda.Function;
-  
+
+  // Construct references
+  public readonly s3Infrastructure: S3Construct;
+  public readonly lambdaInfrastructure: LambdaConstruct;
+  public readonly analyticsInfrastructure: AnalyticsConstruct;
+
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
 
     ConfigHelper.validateEnvironment(props.environmentName);
 
+    // ========================================
+    // Configuration Setup
+    // ========================================
     this.environmentName = props.environmentName;
     this.projectName = props.projectName;
-    
+
     this.config = ConfigHelper.getEnvironmentConfig(this, this.environmentName);
-    
+
     this.bucketName = this.config.bucketName;
     this.lambdaPrefix = ConfigHelper.getResourceName('catalunya', this.environmentName);
     this.athenaWorkgroupName = ConfigHelper.getResourceName('catalunya-workgroup', this.environmentName);
     this.athenaDatabaseName = `catalunya_data_${this.environmentName}`;
     this.athenaResultsBucketName = ConfigHelper.getResourceName('catalunya-athena-results', this.environmentName);
 
+    // Apply common tags to the entire stack
     const commonTags = ConfigHelper.getCommonTags(this.environmentName);
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(this).add(key, value);
     });
 
     // ========================================
-    // S3 Infrastructure
+    // S3 Infrastructure (Storage Layer)
     // ========================================
-    this.createS3Infrastructure();
+    this.s3Infrastructure = new S3Construct(this, 'S3Infrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      bucketName: this.bucketName,
+      athenaResultsBucketName: this.athenaResultsBucketName,
+    });
 
     // ========================================
-    // Glue Data Catalog Infrastructure
+    // Lambda Infrastructure (Processing Layer)
     // ========================================
-    this.createGlueDataCatalog();
+    this.lambdaInfrastructure = new LambdaConstruct(this, 'LambdaInfrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      bucketName: this.bucketName,
+      lambdaPrefix: this.lambdaPrefix,
+      account: this.account,
+      region: this.region,
+    });
 
     // ========================================
-    // Athena Infrastructure
+    // Analytics Infrastructure (Query Layer)
     // ========================================
-    this.createAthenaInfrastructure();
+    this.analyticsInfrastructure = new AnalyticsConstruct(this, 'AnalyticsInfrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      account: this.account,
+      athenaDatabaseName: this.athenaDatabaseName,
+      athenaWorkgroupName: this.athenaWorkgroupName,
+      athenaResultsBucketName: this.athenaResultsBucketName,
+      athenaResultsBucket: this.s3Infrastructure.athenaResultsBucket,
+    });
 
     // ========================================
-    // Lambda Infrastructure
+    // Cross-Construct Dependencies
     // ========================================
-    this.createLambdaInfrastructure();
+
+    // Lambda depends on S3 buckets
+    this.lambdaInfrastructure.node.addDependency(this.s3Infrastructure);
+
+    // Analytics depends on both S3 and Lambda (for proper resource ordering)
+    this.analyticsInfrastructure.node.addDependency(this.s3Infrastructure);
+    this.analyticsInfrastructure.node.addDependency(this.lambdaInfrastructure);
 
     // ========================================
-    // Transformer Infrastructure
+    // CloudFormation Outputs
     // ========================================
-    this.createTransformerInfrastructure();
+    this.createStackOutputs();
 
+    // Set stack description
+    this.templateOptions.description = props.description;
+  }
+
+  /**
+   * Creates CloudFormation outputs for key stack resources
+   */
+  private createStackOutputs(): void {
+    // Environment and configuration outputs
     new cdk.CfnOutput(this, 'Environment', {
       value: this.environmentName,
       description: 'Environment name (dev/prod)',
@@ -119,8 +150,6 @@ export class CatalunyaDataStack extends cdk.Stack {
       exportName: `${this.projectName}-LambdaPrefix`,
     });
 
-    this.templateOptions.description = props.description;
-
     new cdk.CfnOutput(this, 'Region', {
       value: this.region,
       description: 'AWS region where resources are deployed',
@@ -128,436 +157,49 @@ export class CatalunyaDataStack extends cdk.Stack {
     });
   }
 
-  /**
-   * Gets the appropriate Python Lambda code, skipping bundling for tests
-   */
-  private getPythonLambdaCode(): lambda.Code {
-    const isTest = process.env.NODE_ENV === 'test' || 
-                   process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
+  // ========================================
+  // Public Accessors for Backward Compatibility
+  // ========================================
 
-    if (isTest) {
-      // Skip bundling for tests - just use the source directory
-      console.log('🧪 Skipping Python bundling for tests');
-      return lambda.Code.fromAsset('../lambda/extractors/social_services');
-    } else {
-      // Use bundling for real deployments
-      console.log('📦 Using Python bundling for deployment');
-      return lambda.Code.fromAsset('../lambda/extractors/social_services', {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c', [
-              'pip install -r requirements.txt -t /asset-output',
-              'cp -au . /asset-output'
-            ].join(' && ')
-          ],
-        },
-      });
-    }
+  /**
+   * Access to the main data bucket
+   */
+  public get dataBucket() {
+    return this.s3Infrastructure.dataBucket;
   }
 
   /**
-   * Creates S3 infrastructure including main data bucket with folder structure,
-   * lifecycle policies, encryption, and CORS configuration, plus dedicated Athena results bucket
+   * Access to the Athena results bucket
    */
-  private createS3Infrastructure(): void {
-    // Define lifecycle rules for cost optimization
-    const lifecycleRules: s3.LifecycleRule[] = [
-      {
-          id: 'LandingLayerExpiration',
-          prefix: 'landing/',
-          enabled: true,
-          expiration: cdk.Duration.days(7),
-      },
-      {
-        id: 'StagingLayerTransition',
-        prefix: 'staging/',
-        enabled: true,
-        transitions: [
-          {
-            storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-            transitionAfter: cdk.Duration.days(60),
-          },
-        ],
-      },
-      {
-        id: 'MartsLayerRetention',
-        prefix: 'marts/',
-        enabled: true,
-        transitions: [
-          {
-            storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-            transitionAfter: cdk.Duration.days(60),
-          },
-        ],
-      },
-      {
-        id: 'AthenaResultsCleanup',
-        prefix: 'athena-results/',
-        enabled: true,
-        expiration: cdk.Duration.days(this.config.retentionPeriod),
-      },
-    ];
-
-    // Create the main data bucket
-    const dataBucket = new s3.Bucket(this, 'DataBucket', {
-      bucketName: this.bucketName,
-
-      publicReadAccess: false,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      
-      // Versioning for data protection
-      versioned: this.environmentName === 'prod',
-      
-      // Lifecycle rules for cost optimization
-      lifecycleRules: lifecycleRules,
-      
-      // CORS configuration for potential web access
-      cors: [
-        {
-          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
-          allowedOrigins: ['*'],
-          allowedHeaders: ['*'],
-          maxAge: 3600,
-        },
-      ],
-      
-      // Deletion protection
-      removalPolicy: this.environmentName === 'prod' 
-        ? cdk.RemovalPolicy.RETAIN 
-        : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: this.environmentName !== 'prod',
-    });
-
-    // Create dedicated Athena results bucket
-    const athenaResultsBucket = new s3.Bucket(this, 'AthenaResultsBucket', {
-      bucketName: this.athenaResultsBucketName,
-
-      publicReadAccess: false,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      
-      // Versioning not needed for query results
-      versioned: false,
-      
-      // Lifecycle rules for query result cleanup
-      lifecycleRules: [
-        {
-          id: 'QueryResultsCleanup',
-          enabled: true,
-          expiration: cdk.Duration.days(30), // Keep results for 30 days
-          abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
-        },
-      ],
-      
-      // Deletion protection
-      removalPolicy: this.environmentName === 'prod' 
-        ? cdk.RemovalPolicy.RETAIN 
-        : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: this.environmentName !== 'prod',
-    });
-
-    // Store references for other resources
-    (this as any).dataBucket = dataBucket;
-    (this as any).athenaResultsBucket = athenaResultsBucket;
-
-    // Tag the buckets
-    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
-    
-    [dataBucket, athenaResultsBucket].forEach(bucket => {
-      Object.entries(commonTags).forEach(([key, value]) => {
-        cdk.Tags.of(bucket).add(key, value);
-      });
-    });
-
-    // Additional S3 bucket tags
-    cdk.Tags.of(dataBucket).add('Purpose', 'DataLake');
-    cdk.Tags.of(dataBucket).add('Layer', 'Storage');
-    cdk.Tags.of(dataBucket).add('DataClassification', 'OpenData');
-
-    cdk.Tags.of(athenaResultsBucket).add('Purpose', 'QueryResults');
-    cdk.Tags.of(athenaResultsBucket).add('Layer', 'Analytics');
-    cdk.Tags.of(athenaResultsBucket).add('DataClassification', 'Processed');
-
-    // Output bucket information
-    new cdk.CfnOutput(this, 'S3BucketArn', {
-      value: dataBucket.bucketArn,
-      description: 'ARN of the main data S3 bucket',
-      exportName: `${this.projectName}-S3BucketArn`,
-    });
-
-    new cdk.CfnOutput(this, 'S3BucketDomainName', {
-      value: dataBucket.bucketDomainName,
-      description: 'Domain name of the main data S3 bucket',
-      exportName: `${this.projectName}-S3BucketDomainName`,
-    });
-
-    new cdk.CfnOutput(this, 'AthenaResultsBucketArn', {
-      value: athenaResultsBucket.bucketArn,
-      description: 'ARN of the Athena results S3 bucket',
-      exportName: `${this.projectName}-AthenaResultsBucketArn`,
-    });
+  public get athenaResultsBucket() {
+    return this.s3Infrastructure.athenaResultsBucket;
   }
 
   /**
-   * Creates Lambda infrastructure including the API extractor function with proper IAM roles.
-   * Scheduling and orchestration handled by Airflow.
+   * Access to the Glue database
    */
-  private createLambdaInfrastructure(): void {
-    // ========================================
-    // IAM Role for Lambda
-    // ========================================
-    
-    // Use existing IAM role or create inline permissions
-    const lambdaRole = iam.Role.fromRoleArn(
-      this,
-      'ApiExtractorRole',
-      `arn:aws:iam::${this.account}:role/catalunya-lambda-extractor-role-${this.environmentName}`
-    );
-
-    // ========================================
-    // Lambda Function
-    // ========================================
-    
-    this.apiExtractorLambda = new lambda.Function(this, 'social_services_ApiExtractorLambda', {
-      functionName: `${this.lambdaPrefix}-social_services`,
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'api_extractor.lambda_handler',
-      code: this.getPythonLambdaCode(),
-      timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
-      memorySize: this.config.lambdaMemory,
-      role: lambdaRole,
-      environment: {
-        BUCKET_NAME: this.bucketName,
-        SEMANTIC_IDENTIFIER: 'social_services',
-        DATASET_IDENTIFIER: 'ivft-vegh',
-        ENVIRONMENT: this.environmentName,
-        REGION: this.region
-      },
-      description: `API Extractor Lambda for ${this.environmentName} environment - Orchestrated by Airflow`,
-    });
-
-    // ========================================
-    // Tags and Outputs
-    // ========================================
-    
-    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
-    Object.entries(commonTags).forEach(([key, value]) => {
-      cdk.Tags.of(this.apiExtractorLambda).add(key, value);
-    });
-
-    // Additional Lambda tags
-    cdk.Tags.of(this.apiExtractorLambda).add('Purpose', 'DataExtraction');
-    cdk.Tags.of(this.apiExtractorLambda).add('Layer', 'Ingestion');
-    cdk.Tags.of(this.apiExtractorLambda).add('DataSource', 'PublicAPI');
-
-    // Lambda outputs
-    new cdk.CfnOutput(this, 'ApiExtractorLambdaArn', {
-      value: this.apiExtractorLambda.functionArn,
-      description: 'ARN of the API Extractor Lambda function',
-      exportName: `${this.projectName}-ApiExtractorLambdaArn`,
-    });
-
-    new cdk.CfnOutput(this, 'ApiExtractorLambdaName', {
-      value: this.apiExtractorLambda.functionName,
-      description: 'Name of the API Extractor Lambda function',
-      exportName: `${this.projectName}-ApiExtractorLambdaName`,
-    });
+  public get glueDatabase() {
+    return this.analyticsInfrastructure.glueDatabase;
   }
 
   /**
-   * Creates Transformer Lambda infrastructure including the social services transformer function 
-   * with proper IAM roles. Orchestration handled by Airflow.
+   * Access to the Athena workgroup
    */
-  private createTransformerInfrastructure(): void {
-    // ========================================
-    // IAM Role for Transformer Lambda
-    // ========================================
-    
-    let transformerRole: iam.IRole;
-
-    // For LocalStack (account 000000000000), create the role inline
-    // For real AWS, use existing IAM role
-    if (this.account === '000000000000') {
-      console.log('🔧 Creating Lambda transformer role inline for LocalStack');
-      transformerRole = new iam.Role(this, 'TransformerRole', {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        ],
-        inlinePolicies: {
-          S3Access: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObject',
-                  's3:PutObject',
-                  's3:DeleteObject',
-                  's3:ListBucket'
-                ],
-                resources: [
-                  `arn:aws:s3:::${this.bucketName}`,
-                  `arn:aws:s3:::${this.bucketName}/*`
-                ]
-              })
-            ]
-          })
-        }
-      });
-    } else {
-      // Use existing IAM role for real AWS environments
-      transformerRole = iam.Role.fromRoleArn(
-        this,
-        'TransformerRole',
-        `arn:aws:iam::${this.account}:role/catalunya-lambda-transformer-role-${this.environmentName}`
-      );
-    }
-
-    // ========================================
-    // Social Services Transformer Lambda (Rust)
-    // ========================================
-    
-    this.socialServicesTransformerLambda = new lambda.Function(this, 'SocialServicesTransformerLambda', {
-      functionName: `${this.lambdaPrefix}-social-services-transformer`,
-      runtime: lambda.Runtime.PROVIDED_AL2023,
-      handler: 'bootstrap',
-      code: lambda.Code.fromAsset('../rust-lambda-build'),
-      timeout: cdk.Duration.seconds(this.config.lambdaTimeout),
-      memorySize: this.config.lambdaMemory,
-      role: transformerRole,
-      environment: {
-        BUCKET_NAME: this.bucketName,
-        SEMANTIC_IDENTIFIER: 'social_services',
-        ENVIRONMENT: this.environmentName,
-        REGION: this.region
-      },
-      description: `Social Services Transformer Lambda (Rust) for ${this.environmentName} environment - Orchestrated by Airflow`,
-    });
-
-    // ========================================
-    // Tags and Outputs
-    // ========================================
-    
-    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
-    Object.entries(commonTags).forEach(([key, value]) => {
-      cdk.Tags.of(this.socialServicesTransformerLambda).add(key, value);
-    });
-
-    // Additional transformer tags
-    cdk.Tags.of(this.socialServicesTransformerLambda).add('Purpose', 'DataTransformation');
-    cdk.Tags.of(this.socialServicesTransformerLambda).add('Layer', 'Processing');
-    cdk.Tags.of(this.socialServicesTransformerLambda).add('DataFlow', 'LandingToStaging');
-
-    // Transformer outputs
-    new cdk.CfnOutput(this, 'SocialServicesTransformerLambdaArn', {
-      value: this.socialServicesTransformerLambda.functionArn,
-      description: 'ARN of the Social Services Transformer Lambda function',
-      exportName: `${this.projectName}-SocialServicesTransformerLambdaArn`,
-    });
-
-    new cdk.CfnOutput(this, 'SocialServicesTransformerLambdaName', {
-      value: this.socialServicesTransformerLambda.functionName,
-      description: 'Name of the Social Services Transformer Lambda function',
-      exportName: `${this.projectName}-SocialServicesTransformerLambdaName`,
-    });
+  public get athenaWorkgroup() {
+    return this.analyticsInfrastructure.athenaWorkgroup;
   }
 
   /**
-   * Creates AWS Glue Data Catalog database for storing table metadata
+   * Access to the API extractor Lambda function
    */
-  private createGlueDataCatalog(): void {
-    // ========================================
-    // Glue Database
-    // ========================================
-    
-    const glueDatabase = new glue.CfnDatabase(this, 'GlueDatabase', {
-      catalogId: this.account,
-      databaseInput: {
-        name: this.athenaDatabaseName,
-        description: `Catalunya data catalog for ${this.environmentName} environment`,
-        parameters: {
-          'classification': 'parquet',
-          'typeOfData': 'file',
-          'creator': 'Catalunya Data Pipeline',
-          'environment': this.environmentName,
-        },
-      },
-    });
-
-    // Store reference for other resources
-    (this as any).glueDatabase = glueDatabase;
-
-    // Tag the database
-    const commonTags = ConfigHelper.getCommonTags(this.environmentName);
-    Object.entries(commonTags).forEach(([key, value]) => {
-      cdk.Tags.of(glueDatabase).add(key, value);
-    });
-
-    // Additional Glue database tags
-    cdk.Tags.of(glueDatabase).add('Purpose', 'DataCatalog');
-    cdk.Tags.of(glueDatabase).add('Layer', 'Metadata');
-    cdk.Tags.of(glueDatabase).add('DataFormat', 'Parquet');
-
-    // Output database information
-    new cdk.CfnOutput(this, 'GlueDatabaseName', {
-      value: glueDatabase.ref,
-      description: 'Name of the Glue Data Catalog database',
-      exportName: `${this.projectName}-GlueDatabaseName`,
-    });
+  public get apiExtractorLambda() {
+    return this.lambdaInfrastructure.apiExtractorLambda;
   }
 
   /**
-   * Creates Athena workgroup with query result location and cost controls
+   * Access to the social services transformer Lambda function
    */
-  private createAthenaInfrastructure(): void {
-    // ========================================
-    // Athena Workgroup
-    // ========================================
-    
-    const workgroupConfiguration: athena.CfnWorkGroup.WorkGroupConfigurationProperty = {
-      resultConfiguration: {
-        outputLocation: `s3://${this.athenaResultsBucketName}/query-results/`,
-        encryptionConfiguration: {
-          encryptionOption: 'SSE_S3',
-        },
-      },
-      enforceWorkGroupConfiguration: true,
-      publishCloudWatchMetricsEnabled: true,
-      bytesScannedCutoffPerQuery: this.environmentName === 'prod' 
-        ? 10 * 1024 * 1024 * 1024 // 10GB limit for prod
-        : 1 * 1024 * 1024 * 1024,  // 1GB limit for dev
-      requesterPaysEnabled: false,
-    };
-
-    const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroupResource', {
-      name: this.athenaWorkgroupName,
-      description: `Athena workgroup for Catalunya data pipeline - ${this.environmentName} environment`,
-      state: 'ENABLED',
-      workGroupConfiguration: workgroupConfiguration,
-      tags: [
-        {
-          key: 'Environment',
-          value: this.environmentName,
-        },
-        {
-          key: 'Project',
-          value: this.projectName,
-        },
-        {
-          key: 'Purpose',
-          value: 'DataAnalytics',
-        },
-        {
-          key: 'Layer',
-          value: 'QueryEngine',
-        },
-      ],
-    });
-
-    // Add dependency on results bucket
-    athenaWorkgroup.addDependency(this.athenaResultsBucket.node.defaultChild as cdk.CfnResource);
-
-    // Store reference for other resources
-    (this as any).athenaWorkgroup = athenaWorkgroup;
+  public get socialServicesTransformerLambda() {
+    return this.lambdaInfrastructure.socialServicesTransformerLambda;
   }
 }
