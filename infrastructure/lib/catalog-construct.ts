@@ -28,8 +28,6 @@ export class CatalogConstruct extends Construct {
       environmentName,
       projectName,
       config,
-      dataBucketName,
-      athenaDatabaseName,
       lambdaPrefix,
       account,
       region
@@ -38,14 +36,14 @@ export class CatalogConstruct extends Construct {
     // Generate catalog bucket name
     this.catalogBucketName = ConfigHelper.getResourceName('catalunya-catalog', environmentName);
 
-    // Create catalog infrastructure
+    // Create simplified catalog infrastructure
     this.catalogBucket = this.createCatalogBucket(environmentName, projectName);
-    this.catalogInitializerLambda = this.createCatalogInitializerLambda({
+    this.catalogInitializerLambda = this.createSimpleCatalogLambda({
       environmentName,
       projectName,
       config,
-      dataBucketName,
-      athenaDatabaseName,
+      dataBucketName: props.dataBucketName,
+      athenaDatabaseName: props.athenaDatabaseName,
       lambdaPrefix,
       account,
       region
@@ -53,40 +51,36 @@ export class CatalogConstruct extends Construct {
   }
 
   /**
-   * Creates the S3 bucket for storing dimension tables and catalog metadata
+   * Creates a simplified S3 bucket for storing raw parquet files
    */
   private createCatalogBucket(environmentName: string, projectName: string): s3.Bucket {
     const catalogBucket = new s3.Bucket(this, 'CatalogBucket', {
       bucketName: this.catalogBucketName,
-
       publicReadAccess: false,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 
-      // Versioning for dimension table protection
-      versioned: environmentName === 'prod',
-
-      // Lifecycle rules for catalog data management
+      // Basic lifecycle rules for raw parquet files
       lifecycleRules: [
         {
-          id: 'DimensionTablesRetention',
-          prefix: 'dimensions/',
+          id: 'RawParquetRetention',
+          prefix: 'raw_parquet/',
           enabled: true,
           transitions: [
             {
               storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(90), // Dimension tables accessed less frequently
+              transitionAfter: cdk.Duration.days(30),
             },
           ],
         },
         {
-          id: 'TemporaryFilesCleanup',
+          id: 'TempFilesCleanup',
           prefix: 'temp/',
           enabled: true,
-          expiration: cdk.Duration.days(7), // Clean up temporary processing files
+          expiration: cdk.Duration.days(7),
         },
       ],
 
-      // CORS configuration for potential catalog web access
+      // Basic CORS for potential access
       cors: [
         {
           allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
@@ -109,21 +103,21 @@ export class CatalogConstruct extends Construct {
       cdk.Tags.of(catalogBucket).add(key, value);
     });
 
-    // Catalog-specific tags
-    cdk.Tags.of(catalogBucket).add('Purpose', 'CatalogStorage');
-    cdk.Tags.of(catalogBucket).add('Layer', 'Catalog');
-    cdk.Tags.of(catalogBucket).add('DataClassification', 'DimensionTables');
+    // Simplified catalog-specific tags
+    cdk.Tags.of(catalogBucket).add('Purpose', 'RawParquetStorage');
+    cdk.Tags.of(catalogBucket).add('Layer', 'DataLake');
+    cdk.Tags.of(catalogBucket).add('DataFormat', 'Parquet');
 
     // Output catalog bucket information
     new cdk.CfnOutput(this, 'CatalogBucketArn', {
       value: catalogBucket.bucketArn,
-      description: 'ARN of the catalog S3 bucket for dimension tables',
+      description: 'ARN of the catalog S3 bucket for raw parquet files',
       exportName: `${projectName}-CatalogBucketArn`,
     });
 
     new cdk.CfnOutput(this, 'CatalogBucketName', {
       value: this.catalogBucketName,
-      description: 'S3 bucket name for dimension tables and catalog data',
+      description: 'S3 bucket name for raw parquet files',
       exportName: `${projectName}-CatalogBucketName`,
     });
 
@@ -131,36 +125,34 @@ export class CatalogConstruct extends Construct {
   }
 
   /**
-   * Creates the catalog initializer Lambda function for managing dimension tables
+   * Creates a simplified Lambda function for creating raw parquet files
    */
-  private createCatalogInitializerLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
+  private createSimpleCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
     const {
       environmentName,
       projectName,
       config,
-      dataBucketName,
-      athenaDatabaseName,
       lambdaPrefix,
       account,
       region
     } = props;
 
     // ========================================
-    // IAM Role for Catalog Initializer Lambda
+    // IAM Role for Simple Catalog Lambda
     // ========================================
     let catalogRole: iam.IRole;
 
     // For LocalStack (account 000000000000), create the role inline
-    // For real AWS, use existing IAM role
+    // For real AWS, use existing IAM role or create simplified one
     if (account === '000000000000') {
-      console.log('🔧 Creating Lambda catalog role inline for LocalStack');
-      catalogRole = new iam.Role(this, 'CatalogInitializerRole', {
+      console.log('🔧 Creating simplified Lambda catalog role for LocalStack');
+      catalogRole = new iam.Role(this, 'SimpleCatalogRole', {
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
         ],
         inlinePolicies: {
-          CatalogAccess: new iam.PolicyDocument({
+          S3Access: new iam.PolicyDocument({
             statements: [
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
@@ -172,25 +164,7 @@ export class CatalogConstruct extends Construct {
                 ],
                 resources: [
                   `arn:aws:s3:::${this.catalogBucketName}`,
-                  `arn:aws:s3:::${this.catalogBucketName}/*`,
-                  `arn:aws:s3:::${dataBucketName}`,
-                  `arn:aws:s3:::${dataBucketName}/*`
-                ]
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  'glue:GetDatabase',
-                  'glue:GetTable',
-                  'glue:CreateTable',
-                  'glue:UpdateTable',
-                  'glue:DeleteTable',
-                  'glue:GetPartitions'
-                ],
-                resources: [
-                  `arn:aws:glue:${region}:${account}:catalog`,
-                  `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
-                  `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`
+                  `arn:aws:s3:::${this.catalogBucketName}/*`
                 ]
               })
             ]
@@ -198,19 +172,19 @@ export class CatalogConstruct extends Construct {
         }
       });
     } else {
-      // Use existing IAM role for real AWS environments
+      // Use existing IAM role for real AWS environments (without Glue permissions)
       catalogRole = iam.Role.fromRoleArn(
         this,
-        'CatalogInitializerRole',
-        `arn:aws:iam::${account}:role/catalunya-lambda-catalog-role-${environmentName}`
+        'SimpleCatalogRole',
+        `arn:aws:iam::${account}:role/catalunya-lambda-simple-catalog-role-${environmentName}`
       );
     }
 
     // ========================================
-    // Catalog Initializer Lambda
+    // Simple Catalog Lambda
     // ========================================
-    const catalogInitializerLambda = new lambda.Function(this, 'CatalogInitializerLambda', {
-      functionName: `${lambdaPrefix}-catalog-initializer`,
+    const catalogLambda = new lambda.Function(this, 'SimpleCatalogLambda', {
+      functionName: `${lambdaPrefix}-simple-catalog`,
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'catalog_initializer.lambda_handler',
       code: lambda.Code.fromAsset('../lambda/catalog', {
@@ -218,53 +192,50 @@ export class CatalogConstruct extends Construct {
           image: lambda.Runtime.PYTHON_3_9.bundlingImage,
           command: [
             'bash', '-c', [
-              // Install only what’s needed
+              // Install minimal dependencies for parquet creation
               'pip install pandas fastparquet -t /asset-output',
               'cp -au . /asset-output'
             ].join(' && ')
           ],
         },
       }),
-      timeout: cdk.Duration.seconds(300),
-      memorySize: 512,
+      timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
+      memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
         CATALOG_BUCKET_NAME: this.catalogBucketName,
-        DATA_BUCKET_NAME: dataBucketName,
-        GLUE_DATABASE_NAME: athenaDatabaseName,
         ENVIRONMENT: environmentName,
         REGION: region
       },
-      description: `Catalog Initializer Lambda for ${environmentName} environment - Manages dimension tables`,
+      description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
     });
-
 
     // ========================================
     // Tags and Outputs
     // ========================================
     const commonTags = ConfigHelper.getCommonTags(environmentName);
     Object.entries(commonTags).forEach(([key, value]) => {
-      cdk.Tags.of(catalogInitializerLambda).add(key, value);
+      cdk.Tags.of(catalogLambda).add(key, value);
     });
 
-    // Catalog-specific tags
-    cdk.Tags.of(catalogInitializerLambda).add('Purpose', 'CatalogManagement');
-    cdk.Tags.of(catalogInitializerLambda).add('Layer', 'Catalog');
-    cdk.Tags.of(catalogInitializerLambda).add('DataFlow', 'DimensionTables');
+    // Simplified tags
+    cdk.Tags.of(catalogLambda).add('Purpose', 'ParquetGeneration');
+    cdk.Tags.of(catalogLambda).add('Layer', 'DataProcessing');
+    cdk.Tags.of(catalogLambda).add('Complexity', 'Simple');
 
     // Lambda outputs
-    new cdk.CfnOutput(this, 'CatalogInitializerLambdaArn', {
-      value: catalogInitializerLambda.functionArn,
-      description: 'ARN of the Catalog Initializer Lambda function',
-      exportName: `${projectName}-CatalogInitializerLambdaArn`,
+    new cdk.CfnOutput(this, 'SimpleCatalogLambdaArn', {
+      value: catalogLambda.functionArn,
+      description: 'ARN of the Simple Catalog Lambda function',
+      exportName: `${projectName}-SimpleCatalogLambdaArn`,
     });
 
-    new cdk.CfnOutput(this, 'CatalogInitializerLambdaName', {
-      value: catalogInitializerLambda.functionName,
-      description: 'Name of the Catalog Initializer Lambda function',
-      exportName: `${projectName}-CatalogInitializerLambdaName`,
+    new cdk.CfnOutput(this, 'SimpleCatalogLambdaName', {
+      value: catalogLambda.functionName,
+      description: 'Name of the Simple Catalog Lambda function',
+      exportName: `${projectName}-SimpleCatalogLambdaName`,
     });
 
-    return catalogInitializerLambda;
+    return catalogLambda;
   }
 }
