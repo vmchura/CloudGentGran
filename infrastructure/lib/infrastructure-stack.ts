@@ -4,6 +4,7 @@ import { ConfigHelper, EnvironmentConfig } from './config';
 import { S3Construct } from './s3-construct';
 import { LambdaConstruct } from './lambda-construct';
 import { AnalyticsConstruct } from './analytics-construct';
+import { CatalogConstruct } from './catalog-construct';
 
 export interface CatalunyaDataStackProps extends cdk.StackProps {
   environmentName: string;
@@ -20,6 +21,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly athenaWorkgroupName: string;
   public readonly athenaDatabaseName: string;
   public readonly athenaResultsBucketName: string;
+  public readonly catalogInfrastructure: CatalogConstruct;
 
   // Construct references
   public readonly s3Infrastructure: S3Construct;
@@ -90,11 +92,29 @@ export class CatalunyaDataStack extends cdk.Stack {
     });
 
     // ========================================
+    // Catalog Infrastructure (Dimension Tables Layer)
+    // ========================================
+    this.catalogInfrastructure = new CatalogConstruct(this, 'CatalogInfrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      dataBucketName: this.bucketName,
+      athenaDatabaseName: this.athenaDatabaseName,
+      lambdaPrefix: this.lambdaPrefix,
+      account: this.account,
+      region: this.region,
+    });
+
+    // ========================================
     // Cross-Construct Dependencies
     // ========================================
 
     // Lambda depends on S3 buckets
     this.lambdaInfrastructure.node.addDependency(this.s3Infrastructure);
+
+    // Catalog depends on S3 and Analytics (for Glue database)
+    this.catalogInfrastructure.node.addDependency(this.s3Infrastructure);
+    this.catalogInfrastructure.node.addDependency(this.analyticsInfrastructure);
 
     // Analytics depends on both S3 and Lambda (for proper resource ordering)
     this.analyticsInfrastructure.node.addDependency(this.s3Infrastructure);
@@ -107,6 +127,7 @@ export class CatalunyaDataStack extends cdk.Stack {
 
     // Set stack description
     this.templateOptions.description = props.description;
+
   }
 
   /**
@@ -201,5 +222,18 @@ export class CatalunyaDataStack extends cdk.Stack {
    */
   public get socialServicesTransformerLambda() {
     return this.lambdaInfrastructure.socialServicesTransformerLambda;
+  }
+  /**
+   * Access to the catalog bucket
+   */
+  public get catalogBucket() {
+    return this.catalogInfrastructure.catalogBucket;
+  }
+
+  /**
+   * Access to the catalog initializer Lambda function
+   */
+  public get catalogInitializerLambda() {
+    return this.catalogInfrastructure.catalogInitializerLambda;
   }
 }
