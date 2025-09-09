@@ -1,0 +1,285 @@
+"""
+Catalog Initializer DAG
+=======================
+Orchestrates the execution of the Catalog Initializer Lambda function,
+which manages dimension tables stored as Parquet in S3 and registers them
+in the AWS Glue Data Catalog.
+
+Environment Configuration:
+- local: Triggers a LocalStack-deployed Lambda (via CDK)
+- dev:   Triggers the AWS Lambda deployed in the development account
+- prod:  Triggers the AWS Lambda deployed in the production account
+
+Details:
+- Single-task DAG invoking the Lambda function
+- Payload can be customized to specify environment and actions
+- Is disabled by default and triggered manually
+Last updated: 2025-09-08
+"""
+
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, Any
+
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.models import Variable
+from airflow.exceptions import AirflowException
+from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
+
+logger = logging.getLogger(__name__)
+
+# Environment configuration
+try:
+    ENVIRONMENT = Variable.get("environment", default_var="local")
+except Exception:
+    # Fallback if Variable.get fails during DAG parsing
+    ENVIRONMENT = "local"
+
+# Environment-specific settings
+ENV_CONFIG = {
+    "local": {
+        "use_localstack": True,
+        "aws_conn_id": "localstack_default",
+        "catalog_initializer_function": "catalunya-dev-catalog-initializer",
+        "timeout_minutes": 10,
+        "bucket_name": "catalunya-catalog-dev",
+        "retry_attempts": 1,
+        "retry_delay": timedelta(minutes=2)
+    },
+    "dev": {
+        "use_localstack": False,
+        "aws_conn_id": "aws_default",
+        "catalog_initializer_function": "catalunya-dev-catalog-initializer",
+        "timeout_minutes": 15,
+        "bucket_name": "catalunya-catalog-dev",
+        "retry_attempts": 2,
+        "retry_delay": timedelta(minutes=5)
+    },
+    "prod": {
+        "use_localstack": False,
+        "aws_conn_id": "aws_default",
+        "catalog_initializer_function": "catalunya-prod-catalog-initializer",
+        "timeout_minutes": 20,
+        "bucket_name": "catalunya-catalog-prod",
+        "retry_attempts": 2,
+        "retry_delay": timedelta(minutes=5)
+    }
+}
+
+config = ENV_CONFIG.get(ENVIRONMENT, ENV_CONFIG["local"])
+
+# =============================================================================
+# RESPONSE PARSING FUNCTIONS
+# =============================================================================
+
+def parse_catalog_initializer_response(**context) -> Dict[str, Any]:
+    """
+    Parse Catalog Initializer Lambda response and validate execution.
+    Works with both LocalStack and real Lambda responses.
+    """
+    task_instance = context['task_instance']
+
+    # Get the Lambda response from the invoke task
+    lambda_response = task_instance.xcom_pull(task_ids='invoke_catalog_initializer')
+    logger.info(f"Raw Lambda response received: {type(lambda_response)}")
+
+    # Parse Lambda response - handle different response formats
+    if lambda_response is None:
+        logger.error("Lambda response is None - this means the invoke_catalog_initializer task didn't run or failed")
+        raise AirflowException("No Lambda response found - previous task may have failed")
+    elif isinstance(lambda_response, dict):
+        # Direct response dict
+        response_body = lambda_response
+        logger.info(f"Using direct response dict")
+    elif isinstance(lambda_response, str):
+        # JSON string response (common with LocalStack)
+        try:
+            response_body = json.loads(lambda_response)
+            logger.info(f"Parsed JSON string response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            raise AirflowException(f"Invalid JSON response from Lambda: {lambda_response}")
+    elif hasattr(lambda_response, 'get'):
+        # Response with Payload
+        payload = lambda_response.get('Payload')
+        if payload:
+            try:
+                response_body = json.loads(payload) if isinstance(payload, str) else payload
+                logger.info(f"Parsed payload response")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse payload: {e}")
+                raise AirflowException(f"Invalid JSON payload from Lambda: {payload}")
+        else:
+            response_body = lambda_response
+            logger.info(f"Using full response without payload")
+    else:
+        logger.error(f"Unexpected response type: {type(lambda_response)}")
+        raise AirflowException(f"Unexpected Lambda response format: {type(lambda_response)}")
+
+    logger.info(f"Parsed response body: {json.dumps(response_body, indent=2, default=str)}")
+
+    # Check for Lambda execution errors (statusCode from the Lambda response)
+    status_code = response_body.get('statusCode', 200)
+    if status_code != 200:
+        error_body = response_body.get('body', 'Unknown error')
+        if isinstance(error_body, str):
+            try:
+                error_data = json.loads(error_body)
+                error_msg = error_data.get('error', error_body)
+            except json.JSONDecodeError:
+                error_msg = error_body
+        else:
+            error_msg = str(error_body)
+
+        logger.error(f"Catalog Initializer Lambda failed with status {status_code}: {error_msg}")
+        raise AirflowException(f"Catalog initialization failed: {error_msg}")
+
+    # Parse successful response body
+    body = response_body.get('body', '{}')
+    if isinstance(body, str):
+        try:
+            catalog_data = json.loads(body)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse response body: {e}")
+            raise AirflowException(f"Invalid JSON in response body: {body}")
+    else:
+        catalog_data = body
+
+    # Enhanced logging for monitoring and debugging
+    logger.info(f"✅ Catalog initialization completed successfully:")
+    logger.info(f"   - Environment: {ENVIRONMENT}")
+    logger.info(f"   - Function: {config['catalog_initializer_function']}")
+    logger.info(f"   - Table name: {catalog_data.get('table_name', 'N/A')}")
+    logger.info(f"   - Records processed: {catalog_data.get('record_count', 'N/A')}")
+    logger.info(f"   - S3 location: {catalog_data.get('s3_location', 'N/A')}")
+    logger.info(f"   - Created at: {catalog_data.get('created_at', 'N/A')}")
+
+    # Store catalog data for potential downstream tasks
+    task_instance.xcom_push(key='catalog_metadata', value=catalog_data)
+
+    return catalog_data
+
+def validate_catalog_results(**context) -> str:
+    """
+    Validate catalog initialization results and apply business rules.
+    Pure coordination logic - no heavy processing.
+    """
+    task_instance = context['task_instance']
+
+    # Get catalog metadata from previous task
+    catalog_data = task_instance.xcom_pull(task_ids='parse_catalog_response', key='catalog_metadata')
+
+    if not catalog_data:
+        logger.error("catalog_data is None or empty")
+        # Try alternative approach - get the return value of parse_catalog_response
+        catalog_data = task_instance.xcom_pull(task_ids='parse_catalog_response')
+        logger.info(f"Trying return value instead: {catalog_data}")
+
+        if not catalog_data:
+            raise AirflowException("No catalog metadata found - previous task may have failed")
+
+    # Business validation rules
+    table_name = catalog_data.get('table_name', 'unknown')
+    record_count = catalog_data.get('record_count', 0)
+    s3_location = catalog_data.get('s3_location', '')
+    created_at = catalog_data.get('created_at', '')
+
+    logger.info(f"🔍 Validating catalog initialization results:")
+    logger.info(f"   - Environment: {ENVIRONMENT} ({'LocalStack' if config.get('use_localstack') else 'AWS'})")
+    logger.info(f"   - Table name: {table_name}")
+    logger.info(f"   - Record count: {record_count}")
+    logger.info(f"   - S3 location: {s3_location}")
+    logger.info(f"   - Created at: {created_at}")
+
+    # Critical validation checks
+    if not table_name or table_name == 'unknown':
+        raise AirflowException(f"Invalid table name: {table_name}")
+
+    if record_count <= 0:
+        raise AirflowException(f"No records were processed (record_count: {record_count})")
+
+    if not s3_location or not s3_location.startswith('s3://'):
+        raise AirflowException(f"Invalid S3 location: {s3_location}")
+
+    if not created_at:
+        logger.warning("⚠️  No creation timestamp found in response")
+
+    logger.info("✅ Catalog initialization validation passed")
+    return "validation_passed"
+
+# =============================================================================
+# DAG DEFINITION
+# =============================================================================
+
+dag = DAG(
+    'catalunya_catalog_initializer',
+    default_args={
+        'owner': 'catalunya-data-team',
+        'depends_on_past': False,
+        'start_date': datetime(2024, 1, 1),
+        'email_on_failure': True,
+        'email_on_retry': False,
+        'retries': config['retry_attempts'],
+        'retry_delay': config['retry_delay'],
+        'execution_timeout': timedelta(minutes=config['timeout_minutes'])
+    },
+    description=f'Catalunya Catalog Initializer - {ENVIRONMENT} environment',
+    schedule=None,  # Manual trigger only - no scheduling
+    catchup=False,
+    max_active_runs=1,
+    is_paused_upon_creation=True,  # Disabled by default
+    tags=['catalunya', 'catalog', 'initializer', 'manual', f'env:{ENVIRONMENT}']
+)
+
+# =============================================================================
+# TASK CREATION - LOCALSTACK AND AWS COMPATIBLE
+# =============================================================================
+
+logger.info(f"🏗️  Creating catalog initializer tasks for {ENVIRONMENT} environment")
+logger.info(f"   - LocalStack mode: {config.get('use_localstack', False)}")
+logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
+logger.info(f"   - Catalog Initializer function: {config['catalog_initializer_function']}")
+
+# Task 1: Invoke Catalog Initializer Lambda (LocalStack or AWS)
+invoke_catalog_initializer = LambdaInvokeFunctionOperator(
+    task_id='invoke_catalog_initializer',
+    function_name=config['catalog_initializer_function'],
+    aws_conn_id=config['aws_conn_id'],
+    invocation_type='RequestResponse',  # Synchronous invocation
+    payload=json.dumps({
+        'source': 'airflow.catalog_initializer',
+        'environment': ENVIRONMENT,
+        'trigger_time': '{{ ts }}',
+        'dag_run_id': '{{ dag_run.run_id }}',
+        'task_instance_key_str': '{{ task_instance_key_str }}',
+        'use_localstack': config.get('use_localstack', False),
+        'bucket_name': config['bucket_name'],
+        # Default catalog initialization payload - can be customized via DAG run conf
+        'table_name': '{{ dag_run.conf.get("table_name", "default_dimension_table") }}',
+        'data': '{{ dag_run.conf.get("data", [{"id": 1, "name": "Sample", "category": "test"}]) }}'
+    }),
+    dag=dag
+)
+
+# Task 2: Parse and validate catalog initializer response
+parse_catalog_response = PythonOperator(
+    task_id='parse_catalog_response',
+    python_callable=parse_catalog_initializer_response,
+    dag=dag
+)
+
+# Task 3: Validate catalog initialization results
+validate_catalog_results = PythonOperator(
+    task_id='validate_catalog_results',
+    python_callable=validate_catalog_results,
+    dag=dag
+)
+
+# =============================================================================
+# TASK DEPENDENCIES
+# =============================================================================
+
+# Simple linear pipeline for catalog initialization
+invoke_catalog_initializer >> parse_catalog_response >> validate_catalog_results
