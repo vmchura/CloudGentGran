@@ -42,7 +42,7 @@ ENV_CONFIG = {
     "local": {
         "use_localstack": True,
         "aws_conn_id": "localstack_default",
-        "catalog_initializer_function": "catalunya-dev-catalog-initializer",
+        "catalog_initializer_function": "catalunya-dev-simple-catalog",
         "timeout_minutes": 10,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 1,
@@ -51,7 +51,7 @@ ENV_CONFIG = {
     "dev": {
         "use_localstack": False,
         "aws_conn_id": "aws_default",
-        "catalog_initializer_function": "catalunya-dev-catalog-initializer",
+        "catalog_initializer_function": "catalunya-dev-simple-catalog",
         "timeout_minutes": 15,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 2,
@@ -60,7 +60,7 @@ ENV_CONFIG = {
     "prod": {
         "use_localstack": False,
         "aws_conn_id": "aws_default",
-        "catalog_initializer_function": "catalunya-prod-catalog-initializer",
+        "catalog_initializer_function": "catalunya-prod-simple-catalog",
         "timeout_minutes": 20,
         "bucket_name": "catalunya-catalog-prod",
         "retry_attempts": 2,
@@ -69,6 +69,36 @@ ENV_CONFIG = {
 }
 
 config = ENV_CONFIG.get(ENVIRONMENT, ENV_CONFIG["local"])
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def create_catalog_payload(**context):
+    """
+    Create the payload for the catalog initializer Lambda function.
+    """
+    dag_run = context.get('dag_run')
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+
+    # Default values
+    default_table_name = "default_dimension_table"
+    default_data = [{"id": 1, "name": "Sample", "category": "test"}]
+
+    payload = {
+        'source': 'airflow.catalog_initializer',
+        'environment': ENVIRONMENT,
+        'trigger_time': context.get('ts'),
+        'dag_run_id': context.get('dag_run').run_id if context.get('dag_run') else None,
+        'task_instance_key_str': context.get('task_instance_key_str'),
+        'use_localstack': config.get('use_localstack', False),
+        'bucket_name': config['bucket_name'],
+        'table_name': conf.get('table_name', default_table_name),
+        'data': conf.get('data', default_data)
+    }
+
+    logger.info(f"Created payload for catalog initializer: {json.dumps(payload, indent=2, default=str)}")
+    return json.dumps(payload)
 
 # =============================================================================
 # RESPONSE PARSING FUNCTIONS
@@ -242,35 +272,31 @@ logger.info(f"   - LocalStack mode: {config.get('use_localstack', False)}")
 logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
 logger.info(f"   - Catalog Initializer function: {config['catalog_initializer_function']}")
 
-# Task 1: Invoke Catalog Initializer Lambda (LocalStack or AWS)
+# Task 1: Create payload for Lambda invocation
+create_payload_task = PythonOperator(
+    task_id='create_payload',
+    python_callable=create_catalog_payload,
+    dag=dag
+)
+
+# Task 2: Invoke Catalog Initializer Lambda (LocalStack or AWS)
 invoke_catalog_initializer = LambdaInvokeFunctionOperator(
     task_id='invoke_catalog_initializer',
     function_name=config['catalog_initializer_function'],
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
-    payload=json.dumps({
-        'source': 'airflow.catalog_initializer',
-        'environment': ENVIRONMENT,
-        'trigger_time': '{{ ts }}',
-        'dag_run_id': '{{ dag_run.run_id }}',
-        'task_instance_key_str': '{{ task_instance_key_str }}',
-        'use_localstack': config.get('use_localstack', False),
-        'bucket_name': config['bucket_name'],
-        # Default catalog initialization payload - can be customized via DAG run conf
-        'table_name': '{{ dag_run.conf.get("table_name", "default_dimension_table") }}',
-        'data': '{{ dag_run.conf.get("data", [{"id": 1, "name": "Sample", "category": "test"}]) }}'
-    }),
+    payload='{{ task_instance.xcom_pull(task_ids="create_payload") }}',
     dag=dag
 )
 
-# Task 2: Parse and validate catalog initializer response
+# Task 3: Parse and validate catalog initializer response
 parse_catalog_response = PythonOperator(
     task_id='parse_catalog_response',
     python_callable=parse_catalog_initializer_response,
     dag=dag
 )
 
-# Task 3: Validate catalog initialization results
+# Task 4: Validate catalog initialization results
 validate_catalog_results = PythonOperator(
     task_id='validate_catalog_results',
     python_callable=validate_catalog_results,
@@ -282,4 +308,4 @@ validate_catalog_results = PythonOperator(
 # =============================================================================
 
 # Simple linear pipeline for catalog initialization
-invoke_catalog_initializer >> parse_catalog_response >> validate_catalog_results
+create_payload_task >> invoke_catalog_initializer >> parse_catalog_response >> validate_catalog_results

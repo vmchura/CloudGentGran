@@ -168,6 +168,7 @@ services:
     volumes:
       - ./localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:shared
       - ./localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:shared
+      - ./localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:shared
     entrypoint: /bin/sh
     command:
       - -c
@@ -195,7 +196,7 @@ services:
         echo '✅ catalunya-athena-results-dev bucket found!'
         
         echo '📁 Creating mount points...'
-        mkdir -p /mnt/s3-data /mnt/s3-results
+        mkdir -p /mnt/s3-data /mnt/s3-results /mnt/s3-catalog
         
         echo '🔧 Setting up credentials...'
         echo 'test:test' > /etc/passwd-s3fs
