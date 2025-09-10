@@ -175,7 +175,7 @@ def lambda_handler(event, context):
 
 
 def create_parquet_file(s3_client, bucket_name: str, table_name: str,
-                        data: List[Dict], environment: str) -> Dict:
+                        data: List[Dict]) -> Dict:
     """
     Create a parquet file from the input data and upload it to S3.
     """
@@ -190,7 +190,6 @@ def create_parquet_file(s3_client, bucket_name: str, table_name: str,
         # Add metadata columns
         current_time = datetime.utcnow().isoformat()
         df['created_at'] = current_time
-        df['environment'] = environment
 
         # Create S3 key with timestamp for uniqueness
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
@@ -209,7 +208,6 @@ def create_parquet_file(s3_client, bucket_name: str, table_name: str,
             ContentType='application/octet-stream',
             Metadata={
                 'table_name': table_name,
-                'environment': environment,
                 'record_count': str(len(df)),
                 'created_at': current_time,
                 'original_columns': json.dumps(list(data[0].keys()) if data else [])
