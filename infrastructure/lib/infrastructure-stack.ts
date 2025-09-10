@@ -233,7 +233,10 @@ export class CatalunyaDataStack extends cdk.Stack {
   /**
    * Access to the catalog initializer Lambda function
    */
-  public get catalogInitializerLambda() {
-    return this.catalogInfrastructure.catalogInitializerLambda;
+  public get serviceTypeCatalogLambda() {
+    return this.catalogInfrastructure.serviceTypeCatalogLambda;
+  }
+  public get municipalsCatalogLambda() {
+    return this.catalogInfrastructure.municipalsCatalogLambda;
   }
 }

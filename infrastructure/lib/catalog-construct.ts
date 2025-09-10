@@ -19,7 +19,8 @@ export interface CatalogConstructProps {
 export class CatalogConstruct extends Construct {
   public readonly catalogBucket: s3.Bucket;
   public readonly catalogBucketName: string;
-  public readonly catalogInitializerLambda: lambda.Function;
+  public readonly serviceTypeCatalogLambda: lambda.Function;
+  public readonly municipalsCatalogLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: CatalogConstructProps) {
     super(scope, id);
@@ -38,7 +39,17 @@ export class CatalogConstruct extends Construct {
 
     // Create simplified catalog infrastructure
     this.catalogBucket = this.createCatalogBucket(environmentName, projectName);
-    this.catalogInitializerLambda = this.createSimpleCatalogLambda({
+    this.serviceTypeCatalogLambda = this.createServiceTypeCatalogLambda({
+          environmentName,
+          projectName,
+          config,
+          dataBucketName: props.dataBucketName,
+          athenaDatabaseName: props.athenaDatabaseName,
+          lambdaPrefix,
+          account,
+          region
+        });
+    this.municipalsCatalogLambda = this.createMunicipalsCatalogLambda({
       environmentName,
       projectName,
       config,
@@ -120,7 +131,7 @@ export class CatalogConstruct extends Construct {
   /**
    * Creates a simplified Lambda function for creating raw parquet files
    */
-  private createSimpleCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
+  private createServiceTypeCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
     const {
       environmentName,
       projectName,
@@ -176,7 +187,7 @@ export class CatalogConstruct extends Construct {
     // ========================================
     // Simple Catalog Lambda
     // ========================================
-    const catalogLambda = new lambda.Function(this, 'ServiceTypeCatalogLambda', {
+    const serviceTypeCatalogLambda = new lambda.Function(this, 'ServiceTypeCatalogLambda', {
       functionName: `${lambdaPrefix}-service-type-catalog`,
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'service_type_initializer.lambda_handler',
@@ -203,7 +214,92 @@ export class CatalogConstruct extends Construct {
       description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
     });
 
-    const catalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
+    // ========================================
+    // Tags and Outputs
+    // ========================================
+    const commonTags = ConfigHelper.getCommonTags(environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(serviceTypeCatalogLambda).add(key, value);
+    });
+
+    // Simplified tags
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Purpose', 'ParquetGeneration');
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Layer', 'DataProcessing');
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Complexity', 'Simple');
+
+    // Lambda outputs
+    new cdk.CfnOutput(this, 'SimpleCatalogLambdaArn', {
+      value: serviceTypeCatalogLambda.functionArn,
+      description: 'ARN of the Simple Catalog Lambda function',
+      exportName: `${projectName}-SimpleCatalogLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SimpleCatalogLambdaName', {
+      value: serviceTypeCatalogLambda.functionName,
+      description: 'Name of the Simple Catalog Lambda function',
+      exportName: `${projectName}-SimpleCatalogLambdaName`,
+    });
+
+    return serviceTypeCatalogLambda;
+  }
+private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
+    const {
+      environmentName,
+      projectName,
+      config,
+      lambdaPrefix,
+      account,
+      region
+    } = props;
+
+    // ========================================
+    // IAM Role for Simple Catalog Lambda
+    // ========================================
+    let catalogRole: iam.IRole;
+
+    // For LocalStack (account 000000000000), create the role inline
+    // For real AWS, use existing IAM role or create simplified one
+    if (account === '000000000000') {
+      console.log('🔧 Creating simplified Lambda catalog role for LocalStack');
+      catalogRole = new iam.Role(this, 'SimpleCatalogRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        ],
+        inlinePolicies: {
+          S3Access: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  's3:GetObject',
+                  's3:PutObject',
+                  's3:DeleteObject',
+                  's3:ListBucket'
+                ],
+                resources: [
+                  `arn:aws:s3:::${this.catalogBucketName}`,
+                  `arn:aws:s3:::${this.catalogBucketName}/*`
+                ]
+              })
+            ]
+          })
+        }
+      });
+    } else {
+      // Use existing IAM role for real AWS environments (without Glue permissions)
+      catalogRole = iam.Role.fromRoleArn(
+        this,
+        'SimpleCatalogRole',
+        `arn:aws:iam::${account}:role/catalunya-lambda-simple-catalog-role-${environmentName}`
+      );
+    }
+
+    // ========================================
+    // Simple Catalog Lambda
+    // ========================================
+
+    const municipalsCatalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
           functionName: `${lambdaPrefix}-municipals-catalog`,
           runtime: lambda.Runtime.PYTHON_3_9,
           handler: 'municipals_initializer.lambda_handler',
@@ -237,27 +333,27 @@ export class CatalogConstruct extends Construct {
     // ========================================
     const commonTags = ConfigHelper.getCommonTags(environmentName);
     Object.entries(commonTags).forEach(([key, value]) => {
-      cdk.Tags.of(catalogLambda).add(key, value);
+      cdk.Tags.of(municipalsCatalogLambda).add(key, value);
     });
 
     // Simplified tags
-    cdk.Tags.of(catalogLambda).add('Purpose', 'ParquetGeneration');
-    cdk.Tags.of(catalogLambda).add('Layer', 'DataProcessing');
-    cdk.Tags.of(catalogLambda).add('Complexity', 'Simple');
+    cdk.Tags.of(municipalsCatalogLambda).add('Purpose', 'ParquetGeneration');
+    cdk.Tags.of(municipalsCatalogLambda).add('Layer', 'DataProcessing');
+    cdk.Tags.of(municipalsCatalogLambda).add('Complexity', 'Simple');
 
     // Lambda outputs
     new cdk.CfnOutput(this, 'SimpleCatalogLambdaArn', {
-      value: catalogLambda.functionArn,
+      value: municipalsCatalogLambda.functionArn,
       description: 'ARN of the Simple Catalog Lambda function',
       exportName: `${projectName}-SimpleCatalogLambdaArn`,
     });
 
     new cdk.CfnOutput(this, 'SimpleCatalogLambdaName', {
-      value: catalogLambda.functionName,
+      value: municipalsCatalogLambda.functionName,
       description: 'Name of the Simple Catalog Lambda function',
       exportName: `${projectName}-SimpleCatalogLambdaName`,
     });
 
-    return catalogLambda;
+    return municipalsCatalogLambda;
   }
 }
