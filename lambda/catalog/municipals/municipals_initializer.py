@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Dict, Any, List
 import os
 import pandas as pd
+from io import BytesIO
+
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -41,7 +43,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         logger.info(f"Starting API extraction process at {datetime.utcnow()}")
-        
+
         # Get configuration from environment variables
         bucket_name = os.environ['BUCKET_NAME']
         dataset_identifier = os.environ['DATASET_IDENTIFIER']
@@ -61,7 +63,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 offset = i * 1000
                 url = f"{api_endpoint_institution}?$offset={offset}"
                 logger.info(f"Fetching data from: {url}")
-                
+
                 with urllib.request.urlopen(url) as http_response:
                     raw_json_bytes = http_response.read()
                     raw_json_str = raw_json_bytes.decode("utf-8")
@@ -70,11 +72,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         logger.info(f"No more data available. Finished at iteration {i + 1}")
                         break
                     else:
-                        list_json.append(temporal_result)
+                        list_json.extend(temporal_result)
                         logger.info(f"Iteration {i + 1}: Processing {len(temporal_result)} records")
-
                         total_records += len(temporal_result)
-                        
+
             except Exception as e:
                 logger.error(f"Error in iteration {i + 1}: {str(e)}")
                 return create_response(False, f"Critical error in iteration {i + 1}: {str(e)}")
@@ -83,12 +84,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.error("No data extracted from API")
             return create_response(False, "No data extracted from API")
 
-        logger.info(f"Successfully extracted {total_records} total records in {len(s3_keys)} files")
+        # Upload to S3
         s3_key = upload_to_s3(bucket_name, list_json, semantic_identifier, downloaded_date)
+
+        logger.info(f"Successfully extracted {total_records} total records")
+
         # Return enhanced data for Airflow coordination
         logger.info("Successfully completed extraction - returning metadata for Airflow coordination")
 
-        return create_response(True, f"Successfully processed {len(s3_keys)} blocks with {total_records} total records", {
+        return create_response(True, f"Successfully processed {total_records} records", {
             'bucket': bucket_name,
             'semantic_identifier': semantic_identifier,
             'downloaded_date': downloaded_date,
@@ -114,22 +118,28 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 def upload_to_s3(bucket_name: str, json_data: list, table_name: str, downloaded_date: str) -> str:
     """
     Upload extracted data to S3 landing bucket
-    
+
     Args:
         bucket_name: S3 bucket name
-        json_data: Raw JSON data as bytes
+        json_data: List of JSON records
         table_name: Semantic identifier for the dataset
         downloaded_date: Date string (YYYYMMDD)
-    
+
     Returns:
         S3 key of the uploaded file
     """
     try:
         s3_client = get_s3_client()
 
-        # Generate S3 key with partitioning by download date
-        s3_key = f"catalog/municipals/{downloaded_date}.parquet"
-        df = pd.DataFrame(json_data)['codi', 'nom', 'codi_comarca', 'nom_comarca']
+        # Create DataFrame from the flattened JSON data
+        df = pd.DataFrame(json_data)
+
+        # Filter columns if they exist (made optional to handle different data structures)
+        available_columns = ['codi', 'nom', 'codi_comarca', 'nom_comarca']
+        existing_columns = [col for col in available_columns if col in df.columns]
+        if existing_columns:
+            df = df[existing_columns]
+
         current_time = datetime.utcnow().isoformat()
         df['created_at'] = current_time
 
@@ -152,7 +162,7 @@ def upload_to_s3(bucket_name: str, json_data: list, table_name: str, downloaded_
                 'table_name': table_name,
                 'record_count': str(len(df)),
                 'created_at': current_time,
-                'original_columns': json.dumps(list(data[0].keys()) if data else [])
+                'original_columns': json.dumps(list(json_data[0].keys()) if json_data else [])
             }
         )
 
