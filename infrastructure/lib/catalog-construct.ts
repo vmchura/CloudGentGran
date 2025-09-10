@@ -316,7 +316,7 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
             },
           }),
           timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
-          memorySize: 256, // Reduced memory for simple parquet creation
+          memorySize: 512, // Reduced memory for simple parquet creation
           role: catalogRole,
           environment: {
             CATALOG_BUCKET_NAME: this.catalogBucketName,
