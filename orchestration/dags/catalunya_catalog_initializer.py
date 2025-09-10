@@ -42,7 +42,7 @@ ENV_CONFIG = {
     "local": {
         "use_localstack": True,
         "aws_conn_id": "localstack_default",
-        "catalog_initializer_function": "catalunya-dev-simple-catalog",
+        "catalog_initializer_function": "catalunya-dev-service-type-catalog",
         "timeout_minutes": 10,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 1,
@@ -51,7 +51,7 @@ ENV_CONFIG = {
     "dev": {
         "use_localstack": False,
         "aws_conn_id": "aws_default",
-        "catalog_initializer_function": "catalunya-dev-simple-catalog",
+        "catalog_initializer_function": "catalunya-dev-service-type-catalog",
         "timeout_minutes": 15,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 2,
@@ -60,7 +60,7 @@ ENV_CONFIG = {
     "prod": {
         "use_localstack": False,
         "aws_conn_id": "aws_default",
-        "catalog_initializer_function": "catalunya-prod-simple-catalog",
+        "catalog_initializer_function": "catalunya-prod-service-type-catalog",
         "timeout_minutes": 20,
         "bucket_name": "catalunya-catalog-prod",
         "retry_attempts": 2,
@@ -81,10 +81,6 @@ def create_catalog_payload(**context):
     dag_run = context.get('dag_run')
     conf = dag_run.conf if dag_run and dag_run.conf else {}
 
-    # Default values
-    default_table_name = "default_dimension_table"
-    default_data = [{"id": 1, "name": "Sample", "category": "test"}]
-
     payload = {
         'source': 'airflow.catalog_initializer',
         'environment': ENVIRONMENT,
@@ -93,8 +89,7 @@ def create_catalog_payload(**context):
         'task_instance_key_str': context.get('task_instance_key_str'),
         'use_localstack': config.get('use_localstack', False),
         'bucket_name': config['bucket_name'],
-        'table_name': conf.get('table_name', default_table_name),
-        'data': conf.get('data', default_data)
+        'table_name': 'service_type'
     }
 
     logger.info(f"Created payload for catalog initializer: {json.dumps(payload, indent=2, default=str)}")

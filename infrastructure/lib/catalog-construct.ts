@@ -63,7 +63,6 @@ export class CatalogConstruct extends Construct {
       lifecycleRules: [
         {
           id: 'RawParquetRetention',
-          prefix: 'raw_parquet/',
           enabled: true,
           transitions: [
             {
@@ -71,13 +70,7 @@ export class CatalogConstruct extends Construct {
               transitionAfter: cdk.Duration.days(30),
             },
           ],
-        },
-        {
-          id: 'TempFilesCleanup',
-          prefix: 'temp/',
-          enabled: true,
-          expiration: cdk.Duration.days(7),
-        },
+        }
       ],
 
       // Basic CORS for potential access
@@ -183,11 +176,11 @@ export class CatalogConstruct extends Construct {
     // ========================================
     // Simple Catalog Lambda
     // ========================================
-    const catalogLambda = new lambda.Function(this, 'SimpleCatalogLambda', {
-      functionName: `${lambdaPrefix}-simple-catalog`,
+    const catalogLambda = new lambda.Function(this, 'ServiceTypeCatalogLambda', {
+      functionName: `${lambdaPrefix}-service-type-catalog`,
       runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'catalog_initializer.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/catalog', {
+      handler: 'service_type_initializer.lambda_handler',
+      code: lambda.Code.fromAsset('../lambda/catalog/service_type', {
         bundling: {
           image: lambda.Runtime.PYTHON_3_9.bundlingImage,
           command: [
