@@ -45,7 +45,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Starting API extraction process at {datetime.utcnow()}")
 
         # Get configuration from environment variables
-        bucket_name = os.environ['BUCKET_NAME']
+        bucket_name = os.environ['CATALOG_BUCKET_NAME']
         dataset_identifier = os.environ['DATASET_IDENTIFIER']
         semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
         api_endpoint_institution = f'https://analisi.transparenciacatalunya.cat/resource/{dataset_identifier}.json'

@@ -1,20 +1,21 @@
 """
 Catalog Initializer DAG
 =======================
-Orchestrates the execution of the Catalog Initializer Lambda function,
+Orchestrates the execution of the Catalog Initializer Lambda functions,
 which manages dimension tables stored as Parquet in S3 and registers them
 in the AWS Glue Data Catalog.
 
 Environment Configuration:
-- local: Triggers a LocalStack-deployed Lambda (via CDK)
-- dev:   Triggers the AWS Lambda deployed in the development account
-- prod:  Triggers the AWS Lambda deployed in the production account
+- local: Triggers LocalStack-deployed Lambdas (via CDK)
+- dev:   Triggers the AWS Lambdas deployed in the development account
+- prod:  Triggers the AWS Lambdas deployed in the production account
 
 Details:
-- Single-task DAG invoking the Lambda function
-- Payload can be customized to specify environment and actions
+- Parallel execution of Service Type and Municipals catalog initializers
+- Each pipeline creates payloads, invokes Lambda functions, and validates results
+- Both initializers write parquet files directly to the catalog bucket
 - Is disabled by default and triggered manually
-Last updated: 2025-09-08
+Last updated: 2025-09-11
 """
 
 import json
@@ -77,9 +78,9 @@ config = ENV_CONFIG.get(ENVIRONMENT, ENV_CONFIG["local"])
 # HELPER FUNCTIONS
 # =============================================================================
 
-def create_catalog_payload(**context):
+def create_service_type_payload(**context):
     """
-    Create the payload for the catalog initializer Lambda function.
+    Create the payload for the service type catalog initializer Lambda function.
     """
     dag_run = context.get('dag_run')
     conf = dag_run.conf if dag_run and dag_run.conf else {}
@@ -95,27 +96,48 @@ def create_catalog_payload(**context):
         'table_name': 'service_type'
     }
 
-    logger.info(f"Created payload for catalog initializer: {json.dumps(payload, indent=2, default=str)}")
+    logger.info(f"Created payload for service type catalog initializer: {json.dumps(payload, indent=2, default=str)}")
+    return json.dumps(payload)
+
+def create_municipals_payload(**context):
+    """
+    Create the payload for the municipals catalog initializer Lambda function.
+    """
+    dag_run = context.get('dag_run')
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+
+    payload = {
+        'source': 'airflow.catalog_initializer',
+        'environment': ENVIRONMENT,
+        'trigger_time': context.get('ts'),
+        'dag_run_id': context.get('dag_run').run_id if context.get('dag_run') else None,
+        'task_instance_key_str': context.get('task_instance_key_str'),
+        'use_localstack': config.get('use_localstack', False),
+        'bucket_name': config['bucket_name'],
+        'table_name': 'municipals'
+    }
+
+    logger.info(f"Created payload for municipals catalog initializer: {json.dumps(payload, indent=2, default=str)}")
     return json.dumps(payload)
 
 # =============================================================================
 # RESPONSE PARSING FUNCTIONS
 # =============================================================================
 
-def parse_catalog_initializer_response(**context) -> Dict[str, Any]:
+def parse_service_type_response(**context) -> Dict[str, Any]:
     """
-    Parse Catalog Initializer Lambda response and validate execution.
+    Parse Service Type Catalog Initializer Lambda response and validate execution.
     Works with both LocalStack and real Lambda responses.
     """
     task_instance = context['task_instance']
 
     # Get the Lambda response from the invoke task
-    lambda_response = task_instance.xcom_pull(task_ids='invoke_catalog_initializer')
-    logger.info(f"Raw Lambda response received: {type(lambda_response)}")
+    lambda_response = task_instance.xcom_pull(task_ids='invoke_service_type_initializer')
+    logger.info(f"Raw Service Type Lambda response received: {type(lambda_response)}")
 
     # Parse Lambda response - handle different response formats
     if lambda_response is None:
-        logger.error("Lambda response is None - this means the invoke_catalog_initializer task didn't run or failed")
+        logger.error("Lambda response is None - this means the invoke_service_type_initializer task didn't run or failed")
         raise AirflowException("No Lambda response found - previous task may have failed")
     elif isinstance(lambda_response, dict):
         # Direct response dict
@@ -161,8 +183,8 @@ def parse_catalog_initializer_response(**context) -> Dict[str, Any]:
         else:
             error_msg = str(error_body)
 
-        logger.error(f"Catalog Initializer Lambda failed with status {status_code}: {error_msg}")
-        raise AirflowException(f"Catalog initialization failed: {error_msg}")
+        logger.error(f"Service Type Catalog Initializer Lambda failed with status {status_code}: {error_msg}")
+        raise AirflowException(f"Service type catalog initialization failed: {error_msg}")
 
     # Parse successful response body
     body = response_body.get('body', '{}')
@@ -176,7 +198,7 @@ def parse_catalog_initializer_response(**context) -> Dict[str, Any]:
         catalog_data = body
 
     # Enhanced logging for monitoring and debugging
-    logger.info(f"✅ Catalog initialization completed successfully:")
+    logger.info(f"✅ Service Type catalog initialization completed successfully:")
     logger.info(f"   - Environment: {ENVIRONMENT}")
     logger.info(f"   - Function: {config['service_type_initializer_function']}")
     logger.info(f"   - Table name: {catalog_data.get('table_name', 'N/A')}")
@@ -185,28 +207,97 @@ def parse_catalog_initializer_response(**context) -> Dict[str, Any]:
     logger.info(f"   - Created at: {catalog_data.get('created_at', 'N/A')}")
 
     # Store catalog data for potential downstream tasks
-    task_instance.xcom_push(key='catalog_metadata', value=catalog_data)
+    task_instance.xcom_push(key='service_type_metadata', value=catalog_data)
 
     return catalog_data
 
-def validate_catalog_results(**context) -> str:
+def parse_municipals_response(**context) -> Dict[str, Any]:
     """
-    Validate catalog initialization results and apply business rules.
+    Parse Municipals Catalog Initializer Lambda response and validate execution.
+    Works with both LocalStack and real Lambda responses.
+    """
+    task_instance = context['task_instance']
+
+    # Get the Lambda response from the invoke task
+    lambda_response = task_instance.xcom_pull(task_ids='invoke_municipals_initializer')
+    logger.info(f"Raw Municipals Lambda response received: {type(lambda_response)}")
+
+    # Parse Lambda response - handle different response formats
+    if lambda_response is None:
+        logger.error("Lambda response is None - this means the invoke_municipals_initializer task didn't run or failed")
+        raise AirflowException("No Lambda response found - previous task may have failed")
+    elif isinstance(lambda_response, dict):
+        # Direct response dict
+        response_body = lambda_response
+        logger.info(f"Using direct response dict")
+    elif isinstance(lambda_response, str):
+        # JSON string response (common with LocalStack)
+        try:
+            response_body = json.loads(lambda_response)
+            logger.info(f"Parsed JSON string response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            raise AirflowException(f"Invalid JSON response from Lambda: {lambda_response}")
+    elif hasattr(lambda_response, 'get'):
+        # Response with Payload
+        payload = lambda_response.get('Payload')
+        if payload:
+            try:
+                response_body = json.loads(payload) if isinstance(payload, str) else payload
+                logger.info(f"Parsed payload response")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse payload: {e}")
+                raise AirflowException(f"Invalid JSON payload from Lambda: {payload}")
+        else:
+            response_body = lambda_response
+            logger.info(f"Using full response without payload")
+    else:
+        logger.error(f"Unexpected response type: {type(lambda_response)}")
+        raise AirflowException(f"Unexpected Lambda response format: {type(lambda_response)}")
+
+    logger.info(f"Parsed response body: {json.dumps(response_body, indent=2, default=str)}")
+
+    # Validate successful execution based on municipals lambda response format
+    if not response_body.get('success', False):
+        error_msg = response_body.get('message', 'Unknown municipals extraction error')
+        logger.error(f"Municipals extraction failed: {error_msg}")
+        raise AirflowException(f"Municipals catalog extraction failed: {error_msg}")
+
+    # Extract municipals data
+    municipals_data = response_body.get('data', {})
+
+    # Enhanced logging for monitoring and debugging
+    logger.info(f"✅ Municipals catalog initialization completed successfully:")
+    logger.info(f"   - Environment: {ENVIRONMENT}")
+    logger.info(f"   - Function: {config['municipals_initializer_function']}")
+    logger.info(f"   - Total records: {municipals_data.get('total_records', 'N/A')}")
+    logger.info(f"   - S3 key: {municipals_data.get('s3_key', 'N/A')}")
+    logger.info(f"   - Bucket: {municipals_data.get('bucket', 'N/A')}")
+    logger.info(f"   - Extraction completed at: {municipals_data.get('extraction_completed_at', 'N/A')}")
+
+    # Store catalog data for potential downstream tasks
+    task_instance.xcom_push(key='municipals_metadata', value=municipals_data)
+
+    return municipals_data
+
+def validate_service_type_results(**context) -> str:
+    """
+    Validate service type catalog initialization results and apply business rules.
     Pure coordination logic - no heavy processing.
     """
     task_instance = context['task_instance']
 
     # Get catalog metadata from previous task
-    catalog_data = task_instance.xcom_pull(task_ids='parse_catalog_response', key='catalog_metadata')
+    catalog_data = task_instance.xcom_pull(task_ids='parse_service_type_response', key='service_type_metadata')
 
     if not catalog_data:
-        logger.error("catalog_data is None or empty")
-        # Try alternative approach - get the return value of parse_catalog_response
-        catalog_data = task_instance.xcom_pull(task_ids='parse_catalog_response')
+        logger.error("service_type catalog_data is None or empty")
+        # Try alternative approach - get the return value of parse_service_type_response
+        catalog_data = task_instance.xcom_pull(task_ids='parse_service_type_response')
         logger.info(f"Trying return value instead: {catalog_data}")
 
         if not catalog_data:
-            raise AirflowException("No catalog metadata found - previous task may have failed")
+            raise AirflowException("No service type catalog metadata found - previous task may have failed")
 
     # Business validation rules
     table_name = catalog_data.get('table_name', 'unknown')
@@ -214,7 +305,7 @@ def validate_catalog_results(**context) -> str:
     s3_location = catalog_data.get('s3_location', '')
     created_at = catalog_data.get('created_at', '')
 
-    logger.info(f"🔍 Validating catalog initialization results:")
+    logger.info(f"🔍 Validating service type catalog initialization results:")
     logger.info(f"   - Environment: {ENVIRONMENT} ({'LocalStack' if config.get('use_localstack') else 'AWS'})")
     logger.info(f"   - Table name: {table_name}")
     logger.info(f"   - Record count: {record_count}")
@@ -234,8 +325,63 @@ def validate_catalog_results(**context) -> str:
     if not created_at:
         logger.warning("⚠️  No creation timestamp found in response")
 
-    logger.info("✅ Catalog initialization validation passed")
-    return "validation_passed"
+    logger.info("✅ Service type catalog initialization validation passed")
+    return "service_type_validation_passed"
+
+def validate_municipals_results(**context) -> str:
+    """
+    Validate municipals catalog initialization results and apply business rules.
+    Pure coordination logic - no heavy processing.
+    """
+    task_instance = context['task_instance']
+
+    # Get municipals metadata from previous task
+    municipals_data = task_instance.xcom_pull(task_ids='parse_municipals_response', key='municipals_metadata')
+
+    if not municipals_data:
+        logger.error("municipals_data is None or empty")
+        # Try alternative approach - get the return value of parse_municipals_response
+        municipals_data = task_instance.xcom_pull(task_ids='parse_municipals_response')
+        logger.info(f"Trying return value instead: {municipals_data}")
+
+        if not municipals_data:
+            raise AirflowException("No municipals metadata found - previous task may have failed")
+
+    # Business validation rules
+    total_records = municipals_data.get('total_records', 0)
+    s3_key = municipals_data.get('s3_key', '')
+    bucket = municipals_data.get('bucket', '')
+    extraction_completed_at = municipals_data.get('extraction_completed_at', '')
+    min_expected_records = 100  # Minimum expected for municipals data
+
+    logger.info(f"🔍 Validating municipals catalog initialization results:")
+    logger.info(f"   - Environment: {ENVIRONMENT} ({'LocalStack' if config.get('use_localstack') else 'AWS'})")
+    logger.info(f"   - Total records: {total_records}")
+    logger.info(f"   - S3 key: {s3_key}")
+    logger.info(f"   - Bucket: {bucket}")
+    logger.info(f"   - Extraction completed at: {extraction_completed_at}")
+
+    # Critical validation checks
+    if total_records <= 0:
+        raise AirflowException(f"No records were extracted (total_records: {total_records})")
+
+    if not s3_key:
+        raise AirflowException(f"No S3 key provided: {s3_key}")
+
+    if not bucket:
+        raise AirflowException(f"No bucket provided: {bucket}")
+
+    # Warning checks (don't fail the pipeline)
+    if total_records < min_expected_records:
+        logger.warning(f"⚠️  Low record count detected for municipals: {total_records} < {min_expected_records}")
+        logger.warning(f"   This may indicate an issue with the data source or extraction logic")
+        # Continue processing but flag for investigation
+
+    if not extraction_completed_at:
+        logger.warning("⚠️  No extraction completion timestamp found in response")
+
+    logger.info("✅ Municipals catalog initialization validation passed")
+    return "municipals_validation_passed"
 
 # =============================================================================
 # DAG DEFINITION
@@ -268,36 +414,76 @@ dag = DAG(
 logger.info(f"🏗️  Creating catalog initializer tasks for {ENVIRONMENT} environment")
 logger.info(f"   - LocalStack mode: {config.get('use_localstack', False)}")
 logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
-logger.info(f"   - Catalog Initializer function: {config['service_type_initializer_function']}")
+logger.info(f"   - Service Type Initializer function: {config['service_type_initializer_function']}")
+logger.info(f"   - Municipals Initializer function: {config['municipals_initializer_function']}")
 
-# Task 1: Create payload for Lambda invocation
-create_payload_task = PythonOperator(
-    task_id='create_payload',
-    python_callable=create_catalog_payload,
+# =============================================================================
+# SERVICE TYPE CATALOG TASKS
+# =============================================================================
+
+# Task 1a: Create payload for Service Type Lambda invocation
+create_service_type_payload_task = PythonOperator(
+    task_id='create_service_type_payload',
+    python_callable=create_service_type_payload,
     dag=dag
 )
 
-# Task 2: Invoke Catalog Initializer Lambda (LocalStack or AWS)
-invoke_catalog_initializer = LambdaInvokeFunctionOperator(
-    task_id='invoke_catalog_initializer',
+# Task 2a: Invoke Service Type Catalog Initializer Lambda (LocalStack or AWS)
+invoke_service_type_initializer = LambdaInvokeFunctionOperator(
+    task_id='invoke_service_type_initializer',
     function_name=config['service_type_initializer_function'],
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
-    payload='{{ task_instance.xcom_pull(task_ids="create_payload") }}',
+    payload='{{ task_instance.xcom_pull(task_ids="create_service_type_payload") }}',
     dag=dag
 )
 
-# Task 3: Parse and validate catalog initializer response
-parse_catalog_response = PythonOperator(
-    task_id='parse_catalog_response',
-    python_callable=parse_catalog_initializer_response,
+# Task 3a: Parse and validate service type catalog initializer response
+parse_service_type_response = PythonOperator(
+    task_id='parse_service_type_response',
+    python_callable=parse_service_type_response,
     dag=dag
 )
 
-# Task 4: Validate catalog initialization results
-validate_catalog_results = PythonOperator(
-    task_id='validate_catalog_results',
-    python_callable=validate_catalog_results,
+# Task 4a: Validate service type catalog initialization results
+validate_service_type_results = PythonOperator(
+    task_id='validate_service_type_results',
+    python_callable=validate_service_type_results,
+    dag=dag
+)
+
+# =============================================================================
+# MUNICIPALS CATALOG TASKS
+# =============================================================================
+
+# Task 1b: Create payload for Municipals Lambda invocation
+create_municipals_payload_task = PythonOperator(
+    task_id='create_municipals_payload',
+    python_callable=create_municipals_payload,
+    dag=dag
+)
+
+# Task 2b: Invoke Municipals Catalog Initializer Lambda (LocalStack or AWS)
+invoke_municipals_initializer = LambdaInvokeFunctionOperator(
+    task_id='invoke_municipals_initializer',
+    function_name=config['municipals_initializer_function'],
+    aws_conn_id=config['aws_conn_id'],
+    invocation_type='RequestResponse',  # Synchronous invocation
+    payload='{{ task_instance.xcom_pull(task_ids="create_municipals_payload") }}',
+    dag=dag
+)
+
+# Task 3b: Parse and validate municipals catalog initializer response
+parse_municipals_response = PythonOperator(
+    task_id='parse_municipals_response',
+    python_callable=parse_municipals_response,
+    dag=dag
+)
+
+# Task 4b: Validate municipals catalog initialization results
+validate_municipals_results = PythonOperator(
+    task_id='validate_municipals_results',
+    python_callable=validate_municipals_results,
     dag=dag
 )
 
@@ -305,5 +491,9 @@ validate_catalog_results = PythonOperator(
 # TASK DEPENDENCIES
 # =============================================================================
 
-# Simple linear pipeline for catalog initialization
-create_payload_task >> invoke_catalog_initializer >> parse_catalog_response >> validate_catalog_results
+# Parallel execution of both catalog initializers
+# Service Type pipeline
+create_service_type_payload_task >> invoke_service_type_initializer >> parse_service_type_response >> validate_service_type_results
+
+# Municipals pipeline (runs in parallel)
+create_municipals_payload_task >> invoke_municipals_initializer >> parse_municipals_response >> validate_municipals_results

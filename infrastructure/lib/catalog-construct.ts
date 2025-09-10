@@ -224,6 +224,8 @@ export class CatalogConstruct extends Construct {
           role: catalogRole,
           environment: {
             CATALOG_BUCKET_NAME: this.catalogBucketName,
+            SEMANTIC_IDENTIFIER: 'municipals',
+            DATASET_IDENTIFIER: '9aju-tpwc',
             ENVIRONMENT: environmentName,
             REGION: region
           },
