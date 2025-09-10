@@ -161,7 +161,7 @@ def lambda_handler(event, context):
         logger.info(f"Creating parquet file for table: {table_name} with {len(table_data)} records")
 
         # Create parquet file
-        response = create_parquet_file(s3_client, catalog_bucket, table_name, table_data, environment)
+        response = create_parquet_file(s3_client, catalog_bucket, table_name, table_data)
 
         logger.info(f"Successfully created parquet file for table: {table_name}")
         return response
