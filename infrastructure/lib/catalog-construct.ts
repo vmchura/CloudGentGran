@@ -150,7 +150,7 @@ export class CatalogConstruct extends Construct {
     // For real AWS, use existing IAM role or create simplified one
     if (account === '000000000000') {
       console.log('🔧 Creating simplified Lambda catalog role for LocalStack');
-      catalogRole = new iam.Role(this, 'SimpleCatalogRole', {
+      catalogRole = new iam.Role(this, 'ServiceTypeCatalogRole', {
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
@@ -179,7 +179,7 @@ export class CatalogConstruct extends Construct {
       // Use existing IAM role for real AWS environments (without Glue permissions)
       catalogRole = iam.Role.fromRoleArn(
         this,
-        'SimpleCatalogRole',
+        'ServiceTypeCatalogRole',
         `arn:aws:iam::${account}:role/catalunya-lambda-simple-catalog-role-${environmentName}`
       );
     }
@@ -228,16 +228,16 @@ export class CatalogConstruct extends Construct {
     cdk.Tags.of(serviceTypeCatalogLambda).add('Complexity', 'Simple');
 
     // Lambda outputs
-    new cdk.CfnOutput(this, 'SimpleCatalogLambdaArn', {
+    new cdk.CfnOutput(this, 'ServiceTypeCatalogLambdaArn', {
       value: serviceTypeCatalogLambda.functionArn,
-      description: 'ARN of the Simple Catalog Lambda function',
-      exportName: `${projectName}-SimpleCatalogLambdaArn`,
+      description: 'ARN of the ServiceType Catalog Lambda function',
+      exportName: `${projectName}-ServiceTypeCatalogLambdaArn`,
     });
 
-    new cdk.CfnOutput(this, 'SimpleCatalogLambdaName', {
+    new cdk.CfnOutput(this, 'ServiceTypeCatalogLambdaName', {
       value: serviceTypeCatalogLambda.functionName,
-      description: 'Name of the Simple Catalog Lambda function',
-      exportName: `${projectName}-SimpleCatalogLambdaName`,
+      description: 'Name of the ServiceType Catalog Lambda function',
+      exportName: `${projectName}-ServiceTypeCatalogLambdaName`,
     });
 
     return serviceTypeCatalogLambda;
@@ -261,7 +261,7 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
     // For real AWS, use existing IAM role or create simplified one
     if (account === '000000000000') {
       console.log('🔧 Creating simplified Lambda catalog role for LocalStack');
-      catalogRole = new iam.Role(this, 'SimpleCatalogRole', {
+      catalogRole = new iam.Role(this, 'MunicipalsCatalogRole', {
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
@@ -290,7 +290,7 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
       // Use existing IAM role for real AWS environments (without Glue permissions)
       catalogRole = iam.Role.fromRoleArn(
         this,
-        'SimpleCatalogRole',
+        'MunicipalsCatalogRole',
         `arn:aws:iam::${account}:role/catalunya-lambda-simple-catalog-role-${environmentName}`
       );
     }
@@ -342,16 +342,16 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
     cdk.Tags.of(municipalsCatalogLambda).add('Complexity', 'Simple');
 
     // Lambda outputs
-    new cdk.CfnOutput(this, 'SimpleCatalogLambdaArn', {
+    new cdk.CfnOutput(this, 'MunicipalsCatalogLambdaArn', {
       value: municipalsCatalogLambda.functionArn,
       description: 'ARN of the Simple Catalog Lambda function',
-      exportName: `${projectName}-SimpleCatalogLambdaArn`,
+      exportName: `${projectName}-MunicipalsCatalogLambdaArn`,
     });
 
-    new cdk.CfnOutput(this, 'SimpleCatalogLambdaName', {
+    new cdk.CfnOutput(this, 'MunicipalsCatalogLambdaName', {
       value: municipalsCatalogLambda.functionName,
-      description: 'Name of the Simple Catalog Lambda function',
-      exportName: `${projectName}-SimpleCatalogLambdaName`,
+      description: 'Name of the Municipals Catalog Lambda function',
+      exportName: `${projectName}-MunicipalsCatalogLambdaName`,
     });
 
     return municipalsCatalogLambda;
