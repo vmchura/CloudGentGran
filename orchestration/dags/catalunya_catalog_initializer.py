@@ -42,7 +42,8 @@ ENV_CONFIG = {
     "local": {
         "use_localstack": True,
         "aws_conn_id": "localstack_default",
-        "catalog_initializer_function": "catalunya-dev-service-type-catalog",
+        "service_type_initializer_function": "catalunya-dev-service-type-catalog",
+        "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 10,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 1,
@@ -51,7 +52,8 @@ ENV_CONFIG = {
     "dev": {
         "use_localstack": False,
         "aws_conn_id": "aws_default",
-        "catalog_initializer_function": "catalunya-dev-service-type-catalog",
+        "service_type_initializer_function": "catalunya-dev-service-type-catalog",
+        "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 15,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 2,
@@ -60,7 +62,8 @@ ENV_CONFIG = {
     "prod": {
         "use_localstack": False,
         "aws_conn_id": "aws_default",
-        "catalog_initializer_function": "catalunya-prod-service-type-catalog",
+        "service_type_initializer_function": "catalunya-prod-service-type-catalog",
+        "municipals_initializer_function": "catalunya-prod-municipals-catalog",
         "timeout_minutes": 20,
         "bucket_name": "catalunya-catalog-prod",
         "retry_attempts": 2,
@@ -175,7 +178,7 @@ def parse_catalog_initializer_response(**context) -> Dict[str, Any]:
     # Enhanced logging for monitoring and debugging
     logger.info(f"✅ Catalog initialization completed successfully:")
     logger.info(f"   - Environment: {ENVIRONMENT}")
-    logger.info(f"   - Function: {config['catalog_initializer_function']}")
+    logger.info(f"   - Function: {config['service_type_initializer_function']}")
     logger.info(f"   - Table name: {catalog_data.get('table_name', 'N/A')}")
     logger.info(f"   - Records processed: {catalog_data.get('record_count', 'N/A')}")
     logger.info(f"   - S3 location: {catalog_data.get('s3_location', 'N/A')}")
@@ -265,7 +268,7 @@ dag = DAG(
 logger.info(f"🏗️  Creating catalog initializer tasks for {ENVIRONMENT} environment")
 logger.info(f"   - LocalStack mode: {config.get('use_localstack', False)}")
 logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
-logger.info(f"   - Catalog Initializer function: {config['catalog_initializer_function']}")
+logger.info(f"   - Catalog Initializer function: {config['service_type_initializer_function']}")
 
 # Task 1: Create payload for Lambda invocation
 create_payload_task = PythonOperator(
@@ -277,7 +280,7 @@ create_payload_task = PythonOperator(
 # Task 2: Invoke Catalog Initializer Lambda (LocalStack or AWS)
 invoke_catalog_initializer = LambdaInvokeFunctionOperator(
     task_id='invoke_catalog_initializer',
-    function_name=config['catalog_initializer_function'],
+    function_name=config['service_type_initializer_function'],
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_payload") }}',

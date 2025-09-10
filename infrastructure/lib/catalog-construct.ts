@@ -203,6 +203,33 @@ export class CatalogConstruct extends Construct {
       description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
     });
 
+    const catalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
+          functionName: `${lambdaPrefix}-municipals-catalog`,
+          runtime: lambda.Runtime.PYTHON_3_9,
+          handler: 'municipals_initializer.lambda_handler',
+          code: lambda.Code.fromAsset('../lambda/catalog/municipals', {
+            bundling: {
+              image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+              command: [
+                'bash', '-c', [
+                  // Install minimal dependencies for parquet creation
+                  'pip install pandas fastparquet -t /asset-output',
+                  'cp -au . /asset-output'
+                ].join(' && ')
+              ],
+            },
+          }),
+          timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
+          memorySize: 256, // Reduced memory for simple parquet creation
+          role: catalogRole,
+          environment: {
+            CATALOG_BUCKET_NAME: this.catalogBucketName,
+            ENVIRONMENT: environmentName,
+            REGION: region
+          },
+          description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
+        });
+
     // ========================================
     // Tags and Outputs
     // ========================================
