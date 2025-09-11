@@ -3,7 +3,7 @@
 # Deploy CDK Stack to LocalStack using cdklocal
 set -e
 set -o pipefail  # Ensure pipe failures are caught
-
+export AWS_PAGER=""
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -131,3 +131,19 @@ else
 fi
 
 echo -e "${GREEN}🎉 LocalStack deployment verification complete!${NC}"
+
+echo -e "${BLUE}🔐 Verifying IAM Roles and Permissions in LocalStack:${NC}"
+
+echo -e "${YELLOW}IAM Roles:${NC}"
+if aws --endpoint-url=$LOCALSTACK_ENDPOINT iam list-roles --query 'Roles[?contains(RoleName, `catalunya`)].{RoleName:RoleName,Description:Description}' --output table 2>&1; then
+    echo -e "${GREEN}✅ IAM roles listed successfully${NC}"
+else
+    echo -e "${YELLOW}⚠️  Could not list IAM roles${NC}"
+fi
+
+echo -e "${YELLOW}IAM Managed Policies:${NC}"
+if aws --endpoint-url=$LOCALSTACK_ENDPOINT iam list-policies --scope Local --query 'Policies[?contains(PolicyName, `Catalunya`)].{PolicyName:PolicyName,Description:Description}' --output table 2>&1; then
+    echo -e "${GREEN}✅ IAM policies listed successfully${NC}"
+else
+    echo -e "${YELLOW}⚠️  Could not list IAM policies${NC}"
+fi
