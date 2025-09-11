@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ConfigHelper, EnvironmentConfig } from './config';
+import { IamConstruct } from './iam-construct';
 import { S3Construct } from './s3-construct';
 import { LambdaConstruct } from './lambda-construct';
 import { AnalyticsConstruct } from './analytics-construct';
@@ -21,12 +22,13 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly athenaWorkgroupName: string;
   public readonly athenaDatabaseName: string;
   public readonly athenaResultsBucketName: string;
-  public readonly catalogInfrastructure: CatalogConstruct;
 
   // Construct references
+  public readonly iamInfrastructure: IamConstruct;
   public readonly s3Infrastructure: S3Construct;
   public readonly lambdaInfrastructure: LambdaConstruct;
   public readonly analyticsInfrastructure: AnalyticsConstruct;
+  public readonly catalogInfrastructure: CatalogConstruct;
 
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -54,6 +56,22 @@ export class CatalunyaDataStack extends cdk.Stack {
     });
 
     // ========================================
+    // IAM Infrastructure (Security Layer) - FIRST!
+    // ========================================
+    this.iamInfrastructure = new IamConstruct(this, 'IamInfrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      account: this.account,
+      region: this.region,
+      bucketName: this.bucketName,
+      athenaResultsBucketName: this.athenaResultsBucketName,
+      athenaDatabaseName: this.athenaDatabaseName,
+      athenaWorkgroupName: this.athenaWorkgroupName,
+      githubRepo: this.config.githubRepo,
+    });
+
+    // ========================================
     // S3 Infrastructure (Storage Layer)
     // ========================================
     this.s3Infrastructure = new S3Construct(this, 'S3Infrastructure', {
@@ -75,6 +93,10 @@ export class CatalunyaDataStack extends cdk.Stack {
       lambdaPrefix: this.lambdaPrefix,
       account: this.account,
       region: this.region,
+      extractorExecutionRole: this.iamInfrastructure.extractorExecutionRole,
+      transformerExecutionRole: this.iamInfrastructure.transformerExecutionRole,
+      martExecutionRole: this.iamInfrastructure.martExecutionRole,
+      monitoringExecutionRole: this.iamInfrastructure.monitoringExecutionRole,
     });
 
     // ========================================
@@ -103,22 +125,29 @@ export class CatalunyaDataStack extends cdk.Stack {
       lambdaPrefix: this.lambdaPrefix,
       account: this.account,
       region: this.region,
+      // Pass IAM roles for catalog functions if needed
+      executionRole: this.iamInfrastructure.extractorExecutionRole, // Catalog functions can use extractor role
     });
 
     // ========================================
     // Cross-Construct Dependencies
     // ========================================
 
-    // Lambda depends on S3 buckets
+    // S3 depends on IAM (for bucket policies if needed)
+    this.s3Infrastructure.node.addDependency(this.iamInfrastructure);
+
+    // Lambda depends on both IAM and S3
+    this.lambdaInfrastructure.node.addDependency(this.iamInfrastructure);
     this.lambdaInfrastructure.node.addDependency(this.s3Infrastructure);
 
-    // Catalog depends on S3 and Analytics (for Glue database)
+    // Analytics depends on IAM and S3
+    this.analyticsInfrastructure.node.addDependency(this.iamInfrastructure);
+    this.analyticsInfrastructure.node.addDependency(this.s3Infrastructure);
+
+    // Catalog depends on all previous layers
+    this.catalogInfrastructure.node.addDependency(this.iamInfrastructure);
     this.catalogInfrastructure.node.addDependency(this.s3Infrastructure);
     this.catalogInfrastructure.node.addDependency(this.analyticsInfrastructure);
-
-    // Analytics depends on both S3 and Lambda (for proper resource ordering)
-    this.analyticsInfrastructure.node.addDependency(this.s3Infrastructure);
-    this.analyticsInfrastructure.node.addDependency(this.lambdaInfrastructure);
 
     // ========================================
     // CloudFormation Outputs
@@ -127,7 +156,6 @@ export class CatalunyaDataStack extends cdk.Stack {
 
     // Set stack description
     this.templateOptions.description = props.description;
-
   }
 
   /**
@@ -176,6 +204,37 @@ export class CatalunyaDataStack extends cdk.Stack {
       description: 'AWS region where resources are deployed',
       exportName: `${this.projectName}-Region`,
     });
+
+    // IAM Role Outputs
+    new cdk.CfnOutput(this, 'ExtractorRoleArn', {
+      value: this.iamInfrastructure.extractorExecutionRole.roleArn,
+      description: 'Lambda extractor execution role ARN',
+      exportName: `${this.projectName}-ExtractorRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'TransformerRoleArn', {
+      value: this.iamInfrastructure.transformerExecutionRole.roleArn,
+      description: 'Lambda transformer execution role ARN',
+      exportName: `${this.projectName}-TransformerRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'MartRoleArn', {
+      value: this.iamInfrastructure.martExecutionRole.roleArn,
+      description: 'Mart execution role ARN',
+      exportName: `${this.projectName}-MartRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'GitHubDeploymentRoleArn', {
+      value: this.iamInfrastructure.githubDeploymentRole.roleArn,
+      description: 'GitHub Actions deployment role ARN',
+      exportName: `${this.projectName}-GitHubDeploymentRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'DataEngineerRoleArn', {
+      value: this.iamInfrastructure.dataEngineerRole.roleArn,
+      description: 'Data engineer human role ARN',
+      exportName: `${this.projectName}-DataEngineerRoleArn`,
+    });
   }
 
   // ========================================
@@ -223,6 +282,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public get socialServicesTransformerLambda() {
     return this.lambdaInfrastructure.socialServicesTransformerLambda;
   }
+
   /**
    * Access to the catalog bucket
    */
@@ -236,7 +296,46 @@ export class CatalunyaDataStack extends cdk.Stack {
   public get serviceTypeCatalogLambda() {
     return this.catalogInfrastructure.serviceTypeCatalogLambda;
   }
+
   public get municipalsCatalogLambda() {
     return this.catalogInfrastructure.municipalsCatalogLambda;
+  }
+
+  // ========================================
+  // IAM Accessors
+  // ========================================
+
+  /**
+   * Access to IAM roles
+   */
+  public get extractorExecutionRole() {
+    return this.iamInfrastructure.extractorExecutionRole;
+  }
+
+  public get transformerExecutionRole() {
+    return this.iamInfrastructure.transformerExecutionRole;
+  }
+
+  public get martExecutionRole() {
+    return this.iamInfrastructure.martExecutionRole;
+  }
+
+  public get monitoringExecutionRole() {
+    return this.iamInfrastructure.monitoringExecutionRole;
+  }
+
+  public get githubDeploymentRole() {
+    return this.iamInfrastructure.githubDeploymentRole;
+  }
+
+  public get dataEngineerRole() {
+    return this.iamInfrastructure.dataEngineerRole;
+  }
+
+  /**
+   * Get a Lambda execution role by service type
+   */
+  public getLambdaExecutionRole(serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring') {
+    return this.iamInfrastructure.getLambdaExecutionRole(serviceType);
   }
 }
