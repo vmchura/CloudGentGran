@@ -17,6 +17,18 @@ export interface CatalogConstructProps {
   executionRole: iam.Role;
 }
 
+interface CatalogLambdaProps {
+  environmentName: string;
+  projectName: string;
+  config: EnvironmentConfig;
+  dataBucketName: string;
+  athenaDatabaseName: string;
+  lambdaPrefix: string;
+  account: string;
+  region: string;
+  executionRole: iam.Role;
+}
+
 export class CatalogConstruct extends Construct {
   public readonly catalogBucket: s3.Bucket;
   public readonly catalogBucketName: string;
@@ -48,7 +60,8 @@ export class CatalogConstruct extends Construct {
           athenaDatabaseName: props.athenaDatabaseName,
           lambdaPrefix,
           account,
-          region
+          region,
+          executionRole: props.executionRole
         });
     this.municipalsCatalogLambda = this.createMunicipalsCatalogLambda({
       environmentName,
@@ -58,7 +71,8 @@ export class CatalogConstruct extends Construct {
       athenaDatabaseName: props.athenaDatabaseName,
       lambdaPrefix,
       account,
-      region
+      region,
+      executionRole: props.executionRole
     });
   }
 
@@ -132,7 +146,7 @@ export class CatalogConstruct extends Construct {
   /**
    * Creates a simplified Lambda function for creating raw parquet files
    */
-  private createServiceTypeCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
+  private createServiceTypeCatalogLambda(props: CatalogLambdaProps): lambda.Function {
     const {
       environmentName,
       projectName,
@@ -145,45 +159,8 @@ export class CatalogConstruct extends Construct {
     // ========================================
     // IAM Role for Simple Catalog Lambda
     // ========================================
-    let catalogRole: iam.IRole;
-
-    // For LocalStack (account 000000000000), create the role inline
-    // For real AWS, use existing IAM role or create simplified one
-    if (account === '000000000000') {
-      console.log('🔧 Creating simplified Lambda catalog role for LocalStack');
-      catalogRole = new iam.Role(this, 'ServiceTypeCatalogRole', {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        ],
-        inlinePolicies: {
-          S3Access: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObject',
-                  's3:PutObject',
-                  's3:DeleteObject',
-                  's3:ListBucket'
-                ],
-                resources: [
-                  `arn:aws:s3:::${this.catalogBucketName}`,
-                  `arn:aws:s3:::${this.catalogBucketName}/*`
-                ]
-              })
-            ]
-          })
-        }
-      });
-    } else {
-      // Use existing IAM role for real AWS environments (without Glue permissions)
-      catalogRole = iam.Role.fromRoleArn(
-        this,
-        'ServiceTypeCatalogRole',
-        `arn:aws:iam::${account}:role/catalunya-lambda-simple-catalog-role-${environmentName}`
-      );
-    }
+    // Use the execution role from props
+    const catalogRole = props.executionRole;
 
     // ========================================
     // Simple Catalog Lambda
@@ -292,9 +269,7 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
       catalogRole = iam.Role.fromRoleArn(
         this,
         'MunicipalsCatalogRole',
-        `arn:aws:iam::${account}:role/catalunya-lambda-simple-catalog-role-${environmentName}`
-      );
-    }
+
 
     // ========================================
     // Simple Catalog Lambda

@@ -18,6 +18,17 @@ export interface LambdaConstructProps {
   monitoringExecutionRole: iam.Role;
 }
 
+interface LambdaFunctionProps {
+  environmentName: string;
+  projectName: string;
+  config: EnvironmentConfig;
+  bucketName: string;
+  lambdaPrefix: string;
+  account: string;
+  region: string;
+  executionRole: iam.Role;
+}
+
 export class LambdaConstruct extends Construct {
   public readonly apiExtractorLambda: lambda.Function;
   public readonly socialServicesTransformerLambda: lambda.Function;
@@ -35,7 +46,8 @@ export class LambdaConstruct extends Construct {
       bucketName,
       lambdaPrefix,
       account,
-      region
+      region,
+      executionRole: props.extractorExecutionRole
     });
 
     // Create Social Services Transformer Lambda
@@ -46,7 +58,8 @@ export class LambdaConstruct extends Construct {
       bucketName,
       lambdaPrefix,
       account,
-      region
+      region,
+      executionRole: props.transformerExecutionRole
     });
   }
 
@@ -82,7 +95,7 @@ export class LambdaConstruct extends Construct {
    * Creates Lambda infrastructure including the API extractor function with proper IAM roles.
    * Scheduling and orchestration handled by Airflow.
    */
-  private createApiExtractorLambda(props: LambdaConstructProps): lambda.Function {
+  private createApiExtractorLambda(props: LambdaFunctionProps): lambda.Function {
     const { environmentName, projectName, config, bucketName, lambdaPrefix, account, region } = props;
 
     // ========================================
@@ -90,11 +103,8 @@ export class LambdaConstruct extends Construct {
     // ========================================
 
     // Use existing IAM role or create inline permissions
-    const lambdaRole = iam.Role.fromRoleArn(
-      this,
-      'ApiExtractorRole',
-      `arn:aws:iam::${account}:role/catalunya-lambda-extractor-role-${environmentName}`
-    );
+    // Use the execution role from props
+    const lambdaRole = props.executionRole;
 
     // ========================================
     // Lambda Function
@@ -152,7 +162,7 @@ export class LambdaConstruct extends Construct {
    * Creates Transformer Lambda infrastructure including the social services transformer function
    * with proper IAM roles. Orchestration handled by Airflow.
    */
-  private createSocialServicesTransformerLambda(props: LambdaConstructProps): lambda.Function {
+  private createSocialServicesTransformerLambda(props: LambdaFunctionProps): lambda.Function {
     const { environmentName, projectName, config, bucketName, lambdaPrefix, account, region } = props;
 
     // ========================================
