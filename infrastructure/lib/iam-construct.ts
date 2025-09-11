@@ -640,23 +640,13 @@ export class IamConstruct extends Construct {
     this.dataEngineerRole = new iam.Role(this, 'DataEngineerRole', {
       roleName: 'catalunya-data-engineer-role',
       description: 'Catalunya Data Pipeline - Human Data Engineer Role',
-      assumedBy: new iam.AccountRootPrincipal(),
-      assumeRolePolicy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['sts:AssumeRole'],
-            conditions: {
-              Bool: {
-                'aws:MultiFactorAuthPresent': 'true',
-              },
-              StringEquals: {
-                'aws:RequestedRegion': region,
-              },
-            },
-          }),
-        ],
+      assumedBy: new iam.AccountRootPrincipal().withConditions({
+        Bool: {
+          'aws:MultiFactorAuthPresent': 'true',
+        },
+        StringEquals: {
+          'aws:RequestedRegion': region,
+        },
       }),
       managedPolicies: [
         // Grant broad permissions for data engineering tasks

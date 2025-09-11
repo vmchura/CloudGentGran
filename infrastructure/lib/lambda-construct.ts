@@ -12,6 +12,10 @@ export interface LambdaConstructProps {
   lambdaPrefix: string;
   account: string;
   region: string;
+  extractorExecutionRole: iam.Role;
+  transformerExecutionRole: iam.Role;
+  martExecutionRole: iam.Role;
+  monitoringExecutionRole: iam.Role;
 }
 
 export class LambdaConstruct extends Construct {

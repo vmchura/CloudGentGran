@@ -14,6 +14,7 @@ export interface CatalogConstructProps {
   lambdaPrefix: string;
   account: string;
   region: string;
+  executionRole: iam.Role;
 }
 
 export class CatalogConstruct extends Construct {
