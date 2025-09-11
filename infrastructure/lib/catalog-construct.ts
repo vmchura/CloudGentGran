@@ -231,49 +231,15 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
     } = props;
 
     // ========================================
-    // IAM Role for Simple Catalog Lambda
+    // IAM Role for Municipals Catalog Lambda
     // ========================================
-    let catalogRole: iam.IRole;
+    // Use the execution role from props
+    const catalogRole = props.executionRole;
 
     // For LocalStack (account 000000000000), create the role inline
     // For real AWS, use existing IAM role or create simplified one
-    if (account === '000000000000') {
-      console.log('🔧 Creating simplified Lambda catalog role for LocalStack');
-      catalogRole = new iam.Role(this, 'MunicipalsCatalogRole', {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        ],
-        inlinePolicies: {
-          S3Access: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObject',
-                  's3:PutObject',
-                  's3:DeleteObject',
-                  's3:ListBucket'
-                ],
-                resources: [
-                  `arn:aws:s3:::${this.catalogBucketName}`,
-                  `arn:aws:s3:::${this.catalogBucketName}/*`
-                ]
-              })
-            ]
-          })
-        }
-      });
-    } else {
-      // Use existing IAM role for real AWS environments (without Glue permissions)
-      catalogRole = iam.Role.fromRoleArn(
-        this,
-        'MunicipalsCatalogRole',
 
 
-    // ========================================
-    // Simple Catalog Lambda
-    // ========================================
 
     const municipalsCatalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
           functionName: `${lambdaPrefix}-municipals-catalog`,
