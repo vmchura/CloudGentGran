@@ -14,7 +14,7 @@ export interface CatalogConstructProps {
   lambdaPrefix: string;
   account: string;
   region: string;
-  executionRole: iam.Role;
+  catalogExecutorRole: iam.Role;
 }
 
 interface CatalogLambdaProps {
@@ -26,7 +26,7 @@ interface CatalogLambdaProps {
   lambdaPrefix: string;
   account: string;
   region: string;
-  executionRole: iam.Role;
+  catalogExecutorRole: iam.Role;
 }
 
 export class CatalogConstruct extends Construct {
@@ -61,7 +61,7 @@ export class CatalogConstruct extends Construct {
           lambdaPrefix,
           account,
           region,
-          executionRole: props.executionRole
+          catalogExecutorRole: props.catalogExecutorRole
         });
     this.municipalsCatalogLambda = this.createMunicipalsCatalogLambda({
       environmentName,
@@ -72,7 +72,7 @@ export class CatalogConstruct extends Construct {
       lambdaPrefix,
       account,
       region,
-      executionRole: props.executionRole
+      catalogExecutorRole: props.catalogExecutorRole
     });
   }
 
@@ -160,7 +160,7 @@ export class CatalogConstruct extends Construct {
     // IAM Role for Simple Catalog Lambda
     // ========================================
     // Use the execution role from props
-    const catalogRole = props.executionRole;
+    const catalogRole = props.catalogExecutorRole;
 
     // ========================================
     // Simple Catalog Lambda
@@ -234,7 +234,7 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
     // IAM Role for Municipals Catalog Lambda
     // ========================================
     // Use the execution role from props
-    const catalogRole = props.executionRole;
+    const catalogRole = props.catalogExecutorRole;
 
     // For LocalStack (account 000000000000), create the role inline
     // For real AWS, use existing IAM role or create simplified one

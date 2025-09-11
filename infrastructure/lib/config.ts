@@ -7,6 +7,7 @@ export interface EnvironmentConfig {
   lambdaTimeout: number;
   retentionPeriod: number;
   scheduleCron: string;
+  catalogBucketName: string;
   githubRepo?: string;
   requireMfaForHumanRoles?: boolean;
   allowedGitHubBranches?: string[];
@@ -40,6 +41,7 @@ export class ConfigHelper {
       lambdaTimeout: config.lambdaTimeout || 300,
       retentionPeriod: config.retentionPeriod || 30,
       scheduleCron: config.scheduleCron || 'cron(0 23 ? * MON *)',
+      catalogBucketName: config.catalogBucketName || `catalunya-catalog-${environmentName}`,
       githubRepo: config.githubRepo || 'vmchura/CloudGentGran',
       requireMfaForHumanRoles: config.requireMfaForHumanRoles !== false,
       allowedGitHubBranches: config.allowedGitHubBranches || (environmentName === 'prod' ? ['main'] : ['develop', 'main']),

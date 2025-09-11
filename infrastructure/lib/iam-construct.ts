@@ -13,6 +13,7 @@ export interface IamConstructProps {
   athenaResultsBucketName: string;
   athenaDatabaseName: string;
   athenaWorkgroupName: string;
+  catalogBucketName: string;
   githubRepo?: string;
 }
 
@@ -22,6 +23,7 @@ export class IamConstruct extends Construct {
   public readonly transformerExecutionRole: iam.Role;
   public readonly martExecutionRole: iam.Role;
   public readonly monitoringExecutionRole: iam.Role;
+  public readonly catalogExecutorRole: iam.Role;
 
   // GitHub OIDC roles
   public readonly githubDeploymentRole: iam.Role;
@@ -35,12 +37,14 @@ export class IamConstruct extends Construct {
   public readonly transformerPolicy: iam.ManagedPolicy;
   public readonly martExecutorPolicy: iam.ManagedPolicy;
   public readonly deploymentPolicy: iam.ManagedPolicy;
+  public readonly catalogExecutorPolicy: iam.ManagedPolicy;
 
   constructor(scope: Construct, id: string, props: IamConstructProps) {
     super(scope, id);
 
     const { environmentName, projectName, config, account, region, bucketName,
-            athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName } = props;
+            athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName,
+            catalogBucketName } = props;
 
     const githubRepo = props.githubRepo || 'vmchura/CloudGentGran';
 
@@ -334,6 +338,81 @@ export class IamConstruct extends Construct {
       ],
     });
 
+    // Catalog Executor Policy
+    this.catalogExecutorPolicy = new iam.ManagedPolicy(this, 'CatalogExecutorPolicy', {
+      managedPolicyName: `CatalunyaCatalogExecutorPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `Catalog executor permissions for Catalunya Data Pipeline (${environmentName})`,
+      statements: [
+        // CloudWatch Logs for catalog functions
+        new iam.PolicyStatement({
+          sid: 'CloudWatchLogGroups',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'logs:CreateLogGroup',
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+            'logs:DescribeLogGroups',
+            'logs:DescribeLogStreams',
+          ],
+          resources: [
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*catalog*`,
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*catalog*:*`,
+          ],
+        }),
+        // S3 Catalog Bucket Full Access
+        new iam.PolicyStatement({
+          sid: 'S3CatalogBucketAccess',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+            's3:GetObject',
+            's3:PutObject',
+            's3:PutObjectAcl',
+            's3:DeleteObject',
+          ],
+          resources: [
+            `arn:aws:s3:::${catalogBucketName}`,
+            `arn:aws:s3:::${catalogBucketName}/*`,
+          ],
+        }),
+        // Glue Data Catalog Operations
+        new iam.PolicyStatement({
+          sid: 'GlueDataCatalogOperations',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'glue:CreateTable',
+            'glue:UpdateTable',
+            'glue:GetTable',
+            'glue:GetTables',
+            'glue:DeleteTable',
+            'glue:GetDatabase',
+            'glue:CreateDatabase',
+            'glue:UpdateDatabase',
+          ],
+          resources: [
+            `arn:aws:glue:${region}:${account}:catalog`,
+            `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
+            `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`,
+          ],
+        }),
+        // X-Ray Permissions
+        new iam.PolicyStatement({
+          sid: 'XRayPermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'xray:PutTraceSegments',
+            'xray:PutTelemetryRecords',
+          ],
+          resources: ['*'],
+          conditions: {
+            StringEquals: {
+              'aws:RequestedRegion': region,
+            },
+          },
+        }),
+      ],
+    });
     // Deployment Policy for GitHub Actions
     this.deploymentPolicy = new iam.ManagedPolicy(this, 'DeploymentPolicy', {
       managedPolicyName: 'CatalunyaDeploymentPolicy',
@@ -632,7 +711,25 @@ export class IamConstruct extends Construct {
       ),
       managedPolicies: [this.deploymentPolicy],
     });
+    // ========================================
+    // Catalog Executor Role
+    // ========================================
+    this.catalogExecutorRole = new iam.Role(this, 'CatalogExecutorRole', {
+      roleName: `catalunya-catalog-executor-role-${environmentName}`,
+      description: `Catalog executor role for Catalunya Data Pipeline (${environmentName})`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        this.catalogExecutorPolicy,
+      ],
+    });
 
+    // Apply common tags
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.catalogExecutorRole).add(key, value);
+    });
+
+    cdk.Tags.of(this.catalogExecutorRole).add('ServiceType', 'Catalog');
+    cdk.Tags.of(this.catalogExecutorRole).add('RoleType', 'Lambda');
     // ========================================
     // Human Data Engineer Role
     // ========================================

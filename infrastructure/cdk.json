@@ -62,7 +62,8 @@
         "scheduleCron": "cron(0 23 ? * MON *)",
         "githubRepo": "vmchura/CloudGentGran",
         "requireMfaForHumanRoles": true,
-        "allowedGitHubBranches": ["develop", "main", "feature/*"]
+        "allowedGitHubBranches": ["develop", "main", "feature/*"],
+        "catalogBucketName": "catalunya-catalog-dev"
       },
       "prod": {
         "region": "eu-west-1",
@@ -73,7 +74,8 @@
         "scheduleCron": "cron(0 2 ? * MON *)",
         "githubRepo": "vmchura/CloudGentGran",
         "requireMfaForHumanRoles": true,
-        "allowedGitHubBranches": ["main"]
+        "allowedGitHubBranches": ["main"],
+        "catalogBucketName": "catalunya-catalog-prod"
       }
     }
   }

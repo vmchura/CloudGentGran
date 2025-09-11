@@ -18,6 +18,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly config: EnvironmentConfig;
 
   public readonly bucketName: string;
+  public readonly catalogBucketName: string;
   public readonly lambdaPrefix: string;
   public readonly athenaWorkgroupName: string;
   public readonly athenaDatabaseName: string;
@@ -48,6 +49,7 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.athenaWorkgroupName = ConfigHelper.getResourceName('catalunya-workgroup', this.environmentName);
     this.athenaDatabaseName = `catalunya_data_${this.environmentName}`;
     this.athenaResultsBucketName = ConfigHelper.getResourceName('catalunya-athena-results', this.environmentName);
+    this.catalogBucketName = this.config.catalogBucketName
 
     // Apply common tags to the entire stack
     const commonTags = ConfigHelper.getCommonTags(this.environmentName);
@@ -68,6 +70,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       athenaResultsBucketName: this.athenaResultsBucketName,
       athenaDatabaseName: this.athenaDatabaseName,
       athenaWorkgroupName: this.athenaWorkgroupName,
+      catalogBucketName: this.catalogBucketName,
       githubRepo: this.config.githubRepo,
     });
 
@@ -126,7 +129,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       account: this.account,
       region: this.region,
       // Pass IAM roles for catalog functions if needed
-      executionRole: this.iamInfrastructure.extractorExecutionRole, // Catalog functions can use extractor role
+      catalogExecutorRole: this.iamInfrastructure.catalogExecutorRole, // Catalog functions can use extractor role
     });
 
     // ========================================
