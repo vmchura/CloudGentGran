@@ -24,6 +24,7 @@ export class IamConstruct extends Construct {
   public readonly martExecutionRole: iam.Role;
   public readonly monitoringExecutionRole: iam.Role;
   public readonly catalogExecutorRole: iam.Role;
+  public readonly airflowCrossAccountRole: iam.Role;
 
   // GitHub OIDC roles
   public readonly githubDeploymentRole: iam.Role;
@@ -38,6 +39,7 @@ export class IamConstruct extends Construct {
   public readonly martExecutorPolicy: iam.ManagedPolicy;
   public readonly deploymentPolicy: iam.ManagedPolicy;
   public readonly catalogExecutorPolicy: iam.ManagedPolicy;
+  public readonly airflowCrossAccountPolicy: iam.ManagedPolicy;
 
   constructor(scope: Construct, id: string, props: IamConstructProps) {
     super(scope, id);
@@ -413,6 +415,69 @@ export class IamConstruct extends Construct {
         }),
       ],
     });
+    // Airflow Cross-Account Policy
+    this.airflowCrossAccountPolicy = new iam.ManagedPolicy(this, 'AirflowCrossAccountPolicy', {
+      managedPolicyName: `CatalunyaAirflowCrossAccountPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `Airflow cross-account permissions for Catalunya Data Pipeline (${environmentName})`,
+      statements: [
+        // Assume catalog executor roles
+        new iam.PolicyStatement({
+          sid: 'AssumeRolePermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'sts:AssumeRole',
+          ],
+          resources: [
+            `arn:aws:iam::${account}:role/catalunya-catalog-executor-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-${environmentName}-*-extractor`,
+            `arn:aws:iam::${account}:role/catalunya-${environmentName}-*-transformer`,
+          ],
+        }),
+        // Invoke Lambda functions
+        new iam.PolicyStatement({
+          sid: 'LambdaInvocationPermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'lambda:InvokeFunction',
+            'lambda:GetFunction',
+            'lambda:ListFunctions',
+          ],
+          resources: [
+            `arn:aws:lambda:${region}:${account}:function:catalunya-${environmentName}-*`,
+          ],
+        }),
+        // Monitor pipeline status
+        new iam.PolicyStatement({
+          sid: 'MonitoringPermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'logs:DescribeLogGroups',
+            'logs:DescribeLogStreams',
+            'logs:GetLogEvents',
+            'cloudwatch:GetMetricStatistics',
+            'cloudwatch:ListMetrics',
+          ],
+          resources: [
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*`,
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*:*`,
+          ],
+        }),
+        // S3 bucket monitoring
+        new iam.PolicyStatement({
+          sid: 'S3MonitoringPermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:ListBucket',
+            's3:GetBucketLocation',
+            's3:GetBucketVersioning',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${catalogBucketName}`,
+          ],
+        }),
+      ],
+    });
     // Deployment Policy for GitHub Actions
     this.deploymentPolicy = new iam.ManagedPolicy(this, 'DeploymentPolicy', {
       managedPolicyName: 'CatalunyaDeploymentPolicy',
@@ -730,6 +795,30 @@ export class IamConstruct extends Construct {
 
     cdk.Tags.of(this.catalogExecutorRole).add('ServiceType', 'Catalog');
     cdk.Tags.of(this.catalogExecutorRole).add('RoleType', 'Lambda');
+
+    // ========================================
+    // Airflow Cross-Account Role
+    // ========================================
+    const airflowServerPrincipal = `arn:aws:iam::${account}:role/dokku-airflow-${environmentName}`;
+
+    this.airflowCrossAccountRole = new iam.Role(this, 'AirflowCrossAccountRole', {
+      roleName: `catalunya-airflow-cross-account-role-${environmentName}`,
+      description: `Airflow cross-account role for Catalunya Data Pipeline (${environmentName})`,
+      assumedBy: new iam.ArnPrincipal(airflowServerPrincipal),
+      managedPolicies: [
+        this.airflowCrossAccountPolicy,
+      ],
+      externalIds: [`catalunya-${environmentName}-airflow`], // For additional security
+    });
+
+    // Apply common tags
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.airflowCrossAccountRole).add(key, value);
+    });
+
+    cdk.Tags.of(this.airflowCrossAccountRole).add('ServiceType', 'Orchestration');
+    cdk.Tags.of(this.airflowCrossAccountRole).add('RoleType', 'CrossAccount');
+
     // ========================================
     // Human Data Engineer Role
     // ========================================
