@@ -8,6 +8,11 @@ set -euo pipefail
 echo "🔐 Attaching minimal IAM permissions for infrastructure testing..."
 
 # --- Configuration ---
+ENVIRONMENT=${1:-dev}
+if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
+    echo "❌ Invalid environment. Usage: $0 [dev|prod]"
+    exit 1
+fi
 POLICY_NAME="CatalunyaDeploymentPolicy"
 TMP_POLICY_FILE="/tmp/minimal-catalunyadeployment-policy.json"
 
@@ -40,8 +45,7 @@ cat > "$TMP_POLICY_FILE" << EOF
         "cloudformation:DescribeStackResources"
       ],
       "Resource": [
-        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-dev/*",
-        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-prod/*",
+        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-${ENVIRONMENT}/*",
         "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CDKToolkit/*"
       ]
     },
@@ -78,7 +82,9 @@ cat > "$TMP_POLICY_FILE" << EOF
         "s3:ListBucket"
       ],
       "Resource": [
-        "arn:aws:s3:::catalunya-data-*",
+        "arn:aws:s3:::catalunya-data-${ENVIRONMENT}",
+        "arn:aws:s3:::catalunya-athena-results-${ENVIRONMENT}",
+        "arn:aws:s3:::catalunya-catalog-${ENVIRONMENT}",
         "arn:aws:s3:::cdk-hnb659fds-*"
       ]
     },
@@ -93,7 +99,9 @@ cat > "$TMP_POLICY_FILE" << EOF
         "s3:DeleteObjectVersion"
       ],
       "Resource": [
-        "arn:aws:s3:::catalunya-data-*/*",
+        "arn:aws:s3:::catalunya-data-${ENVIRONMENT}/*",
+        "arn:aws:s3:::catalunya-athena-results-${ENVIRONMENT}/*",
+        "arn:aws:s3:::catalunya-catalog-${ENVIRONMENT}/*",
         "arn:aws:s3:::cdk-hnb659fds-*/*"
       ]
     },
@@ -129,8 +137,8 @@ cat > "$TMP_POLICY_FILE" << EOF
       ],
       "Resource": [
         "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:*S3AutoDeleteObjectsCustomResourceProvider*",
-        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-*",
-        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:catalunya-*"
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-${ENVIRONMENT}-*",
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:catalunya-${ENVIRONMENT}-*"
       ]
     },
     {
@@ -311,12 +319,10 @@ create_or_update_policy
 # Step 2: Attach to roles
 echo ""
 echo "🔗 Attaching policy to GitHub deployment roles..."
-attach_policy_to_role "catalunya-deployment-role-dev"
-attach_policy_to_role "catalunya-deployment-role-prod"
+attach_policy_to_role "catalunya-deployment-role-${ENVIRONMENT}"
 
 echo ""
 echo "✅ Minimal permissions setup complete!"
 echo ""
 echo "📋 Roles with attached policy:"
-echo "  - catalunya-deployment-role-dev (for develop branch deployments)"
-echo "  - catalunya-deployment-role-prod (for production deployments)"
+echo "  - catalunya-deployment-role-${ENVIRONMENT}"
