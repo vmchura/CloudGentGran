@@ -1,0 +1,48 @@
+# Airflow
+airflow.db
+airflow.cfg
+logs/
+airflow_webserver.pid
+standalone_admin_password.txt
+webserver_config.py
+
+# DBT
+profiles.yml
+target/
+dbt_packages/
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+
+# Docker
+.dockerignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local development
+logs/
+temp/
+data/
+
+# Secrets and credentials
+*.pem
+*.key
+credentials.json

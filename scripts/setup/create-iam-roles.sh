@@ -203,6 +203,11 @@ echo "📊 Creating monitoring roles..."
 create_service_role "catalunya-monitoring-role-dev" "lambda"
 create_service_role "catalunya-monitoring-role-prod" "lambda"
 
+echo ""
+echo "🎯 Creating mart processing roles (empty permissions)..."
+create_service_role "catalunya-mart-role-dev" "lambda"
+create_service_role "catalunya-mart-role-prod" "lambda"
+
 # --- Summary ---
 echo ""
 echo "✅ All IAM roles handled successfully!"

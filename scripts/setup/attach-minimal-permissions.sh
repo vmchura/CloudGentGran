@@ -134,20 +134,34 @@ cat > "$TMP_POLICY_FILE" << EOF
       ]
     },
     {
-      "Sid": "EventBridgeRules",
+      "Sid": "GlueDataCatalogMinimal",
       "Effect": "Allow",
       "Action": [
-        "events:PutRule",
-        "events:DeleteRule",
-        "events:DescribeRule",
-        "events:ListTargetsByRule",
-        "events:PutTargets",
-        "events:RemoveTargets",
-        "events:TagResource",
-        "events:UntagResource"
+        "glue:CreateDatabase",
+        "glue:DeleteDatabase",
+        "glue:GetDatabase",
+        "glue:UpdateDatabase",
+        "glue:TagResource",
+        "glue:UntagResource"
       ],
       "Resource": [
-        "arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/catalunya-*"
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:catalog",
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:database/catalunya_data_*"
+      ]
+    },
+    {
+      "Sid": "AthenaWorkgroupMinimal",
+      "Effect": "Allow",
+      "Action": [
+        "athena:CreateWorkGroup",
+        "athena:DeleteWorkGroup",
+        "athena:GetWorkGroup",
+        "athena:UpdateWorkGroup",
+        "athena:TagResource",
+        "athena:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:athena:${REGION}:${ACCOUNT_ID}:workgroup/catalunya-workgroup-*"
       ]
     },
     {

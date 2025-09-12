@@ -1,0 +1,8 @@
+# Airflow Admin User Configuration
+AIRFLOW_ADMIN_USER=admin
+AIRFLOW_ADMIN_PASSWORD=your_secure_password_here
+AIRFLOW_ADMIN_EMAIL=admin@yourdomain.com
+
+# Airflow Security Keys (generate secure random strings)
+AIRFLOW_FERNET_KEY=your_fernet_key_here
+AIRFLOW_SECRET_KEY=your_secret_key_here

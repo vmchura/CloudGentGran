@@ -1,0 +1,4 @@
+dbt-core
+dbt-duckdb
+psycopg2-binary
+apache-airflow-providers-fab

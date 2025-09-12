@@ -1,0 +1,35 @@
+# Catalunya Data Pipeline - DBT Mart Project
+name: 'catalunya_marts'
+version: '1.0.0'
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'catalunya_data'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Variables for different environments
+vars:
+  # Local development paths
+  staging_path: "./local_data/staging"
+  marts_path: "./local_data/marts"
+
+# Configuring models
+models:
+  catalunya_marts:
+    # Staging models - temporary views for data transformation
+    staging:
+      +materialized: view
+      
+    # Marts models - final tables for analytics
+    marts:
+      +materialized: table

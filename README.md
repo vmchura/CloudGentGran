@@ -1,23 +1,50 @@
 # Catalunya Open Data Analysis Pipeline 
 
-A modern, cloud-native data pipeline for collecting, processing, and analyzing open data from Catalunya's Open Data.
+A data pipeline for collecting, processing, and analyzing open data from Catalunya's Open Data.
 The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 🏗️ Architecture Overview
 
-**Data Flow**: Catalunya APIs → AWS Lambda → S3 (3 layers) → GitHub Actions (DBT) → S3
+**Data Flow**: Catalunya APIs → Processing → Storage (3 layers) → Analytics
 
-- **Landing Layer** (`s3://bucket/landing/`): Raw JSON data from APIs
-- **Staging Layer** (`s3://bucket/staging/`): Cleaned and validated Parquet files
-- **Marts Layer** (`s3://bucket/marts/`): Analytics-ready dimensional models
+- **Landing Layer**: Raw JSON data from APIs
+- **Staging Layer**: Cleaned and validated Parquet files
+- **Marts Layer**: Analytics-ready dimensional models
 
 ## 🛠️ Technology Stack
 
-- **Cloud Platform**: AWS (Lambda, S3, Athena, EventBridge)
+### Core Technologies
 - **Data Transformation**: DBT Core
-- **Infrastructure**: AWS CDK (TypeScript)
-- **CI/CD**: GitHub Actions
-- **Languages**: Python (Lambda), SQL (DBT), TypeScript (CDK)
+- **Orchestration**: Apache Airflow
+- **Languages**: Python, SQL, TypeScript
+
+### Environment-Specific Stack
+- **Local**: DuckDB, Docker Compose, Local storage
+- **Development**: AWS Athena/S3, Dokku (on-premise Airflow)
+- **Production**: AWS Athena/S3, Dokku (on-premise Airflow)
+
+## 🌍 Environment Architecture
+
+### Local Environment
+- **Purpose**: Isolated development of individual modules
+- **Storage**: Local folders/volumes, DuckDB
+- **Orchestration**: Apache Airflow (Docker Compose)
+- **Data Processing**: Mocked services for rapid development
+- **Database**: DuckDB for testing and development
+
+### Development Environment  
+- **Purpose**: Production-like testing environment
+- **Storage**: AWS S3, AWS Athena
+- **Orchestration**: Apache Airflow (Dokku on-premise)
+- **Data Processing**: Full AWS integration
+- **Database**: AWS Athena with Glue Data Catalog
+
+### Production Environment
+- **Purpose**: Production workloads
+- **Storage**: AWS S3, AWS Athena  
+- **Orchestration**: Apache Airflow (Dokku on-premise)
+- **Data Processing**: Full AWS integration
+- **Database**: AWS Athena with Glue Data Catalog
 
 ## 📊 Current Datasets
 
@@ -27,85 +54,47 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- AWS CLI configured with appropriate credentials
-- Node.js 18+ (for CDK)
-- Python 3.9+ (for Lambda functions)
-- Git
-
-### Development Setup
+### Local Development Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/vmchura/CloudGentGran.git
 cd CloudGentGran
 
-# Install CDK dependencies and bootstrap AWS
+# Start local Airflow environment
+cd orchestration
+docker-compose up -d
+
+# Access Airflow at http://localhost:8080
+# Login: admin / Password: admin
+```
+
+### Development/Production Environment Setup
+
+```bash
+# Install dependencies
 cd infrastructure
 npm install
-# command used to start the infrastructure: npx cdk init app --language typescript
 
-# Install Lambda dependencies (when developing Lambda functions)
-cd ../lambda
-pip install -r requirements.txt -t .
-
-# Install DBT dependencies (when working with DBT models)
+# Setup AWS credentials and deploy infrastructure
 cd ../dbt
 pip install dbt-core dbt-athena-community
+
+# Deploy to Dokku server (Development/Production)
+# Configure Dokku deployment according to environment
 ```
 
-### 🔐 AWS IAM Roles Setup
+### 🔐 Prerequisites by Environment
 
-You need to create these roles before deploying the infrastructure.
+#### Local Environment
+- Docker and Docker Compose
+- Git
 
-
-#### Manual Setup Options
-
-**Option 1: AWS CloudShell (Browser-based)**
-1. Open AWS Console → Click CloudShell icon in top bar
-2. Upload the script: `Actions` → `Upload file` → select `scripts/setup/create-iam-roles.sh`
-3. Run the script:
-   ```bash
-   chmod +x create-iam-roles.sh
-   ./create-iam-roles.sh
-   ```
-
-
-#### Created Roles Overview
-
-**Human Role** (1):
-- `catalunya-data-engineer-role` - Full pipeline management with MFA requirement
-
-**Service Account Roles** (10):
-- **Lambda Extractor**: `catalunya-lambda-extractor-role-{dev,prod}`
-- **Lambda Transformer**: `catalunya-lambda-transformer-role-{dev,prod}`
-- **GitHub Actions - Deployment**: `catalunya-deployment-role-{dev,prod}` (OIDC)
-- **Monitoring**: `catalunya-monitoring-role-{dev,prod}`
-
-📖 **Detailed Role Descriptions**: See [docs/architecture.md](docs/architecture.md#security-architecture)
-
-### 🔑 GitHub Actions Secrets Setup
-
-Configure GitHub repository secrets for AWS deployment using OIDC authentication:
-
-#### OIDC Setup (Recommended - Current Implementation)
-```bash
-# Required Secret - AWS Account ID
-gh secret set AWS_ACCOUNT_ID --body "123456789012"
-```
-
-**Required Secrets:**
-- `AWS_ACCOUNT_ID` - Your AWS Account ID (12-digit number)
-
-**OIDC IAM Roles Required:**
-The CI/CD pipeline uses OpenID Connect (OIDC) to authenticate with AWS using IAM roles instead of long-term access keys. The following roles must be created with OIDC trust relationships:
-
-- `catalunya-deployment-role-dev` - For development deployments (branch: develop)
-- `catalunya-deployment-role-prod` - For production deployments (branch: main)
-
-
-📖 **Detailed OIDC Setup Instructions**: [docs/aws-secrets-setup.md](docs/aws-secrets-setup.md)
+#### Development/Production Environments
+- AWS CLI configured with appropriate credentials
+- Node.js 18+ (for CDK)
+- Python 3.9+
+- Dokku server configured for Airflow deployment
 
 ## 📁 Project Structure
 
@@ -116,18 +105,21 @@ CloudGentGran/
 │   ├── architecture.md       # System architecture details
 │   ├── deployment.md         # Deployment procedures
 │   └── api-research.md       # Catalunya API research findings
+├── orchestration/            # Apache Airflow setup
+│   ├── dags/                 # Airflow DAGs
+│   ├── docker-compose.yaml   # Local Airflow setup
+│   ├── Dockerfile           # Airflow container
+│   └── Procfile             # Dokku deployment
 ├── infrastructure/           # AWS CDK infrastructure code
 │   ├── lib/                  # CDK stack definitions
 │   ├── bin/                  # CDK app entry points
 │   └── test/                 # Infrastructure tests
-├── lambda/                   # AWS Lambda functions
+├── lambda/                   # AWS Lambda functions (development/production)
 │   ├── extractors/           # Data extraction functions
 │   ├── transformers/         # Data transformation functions
 │   └── utils/                # Shared utilities
 ├── dbt/                      # DBT project
-│   ├── models/               # SQL transformation models
-│   ├── macros/               # Reusable SQL macros
-│   └── tests/                # Data quality tests
+│   └── mart/                 # DBT models and configurations
 ├── .github/
 │   ├── workflows/            # GitHub Actions CI/CD
 │   └── ISSUE_TEMPLATE.md     # Issue templates
@@ -164,45 +156,82 @@ CloudGentGran/
 
 ## 🧪 Testing
 
+### Local Environment
 ```bash
-# Run all tests
-make test
+# Start local services
+cd orchestration
+docker-compose up -d
 
-# Run specific test suites
-make test-lambda      # Lambda function tests
-make test-dbt         # DBT model tests
-make test-infrastructure  # CDK infrastructure tests
+# Run DBT tests with DuckDB
+cd ../dbt/mart
+dbt test --target dev
+```
+
+### Development/Production Environments
+```bash
+# Run infrastructure tests
+cd infrastructure
+npm test
+
+# Run DBT tests with Athena
+cd ../dbt/mart
+dbt test --target dev  # or prod
 ```
 
 ## 🚢 Deployment
 
+### Local Environment
+Local development runs entirely in Docker containers with no external dependencies.
+
 ### Development Environment
 ```bash
-make deploy-dev
+# Deploy AWS infrastructure
+cd infrastructure
+npx cdk deploy --profile dev
+
+# Deploy Airflow to Dokku server
+cd ../orchestration
+git remote add dokku dokku@dev-server:catalunya-airflow
+git push dokku main
 ```
 
 ### Production Environment
 ```bash
-make deploy-prod
-```
+# Deploy AWS infrastructure  
+cd infrastructure
+npx cdk deploy --profile prod
 
-See [docs/deployment.md](docs/deployment.md) for detailed deployment procedures.
+# Deploy Airflow to Dokku server
+cd ../orchestration
+git remote add dokku-prod dokku@prod-server:catalunya-airflow
+git push dokku-prod main
+```
 
 ## 📈 Monitoring & Observability
 
-- **Logs**: CloudWatch Logs for all Lambda functions
-- **Metrics**: Custom CloudWatch metrics for data pipeline health
-- **Alerts**: SNS notifications for pipeline failures
-- **Dashboards**: CloudWatch Dashboard for operational overview
+### Local Environment
+- Airflow Web UI at http://localhost:8080
+- Local logs in orchestration/logs/
+- DuckDB database inspection
+
+### Development/Production Environments
+- Airflow Web UI on Dokku servers
+- AWS CloudWatch for infrastructure monitoring
+- DBT documentation and lineage
+- Custom metrics for data pipeline health
 
 ## 💰 Cost Management
 
-Current monthly costs (development environment):
-- **S3 Storage**: ~$2-5/month
-- **Lambda Executions**: ~$1-3/month
-- **Athena Queries**: ~$1-2/month
-- **CloudWatch**: ~$1-2/month
-- **Total**: <$15/month
+### Local Environment
+- No cloud costs (runs locally)
+- Minimal resource usage with Docker
+
+### Development/Production Environments  
+- **S3 Storage**: Data lake storage
+- **Athena Queries**: Pay per query execution
+- **AWS Lambda**: Processing functions (where applicable)
+- **Dokku Server**: On-premise hosting costs
+- **CloudWatch**: Monitoring and logging
 
 ## 🤝 Contributing
 
