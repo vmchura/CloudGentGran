@@ -52,7 +52,7 @@ ENV_CONFIG = {
     },
     "dev": {
         "use_localstack": False,
-        "aws_conn_id": "aws_default",
+        "aws_conn_id": "aws_lambda_role_conn",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 15,
@@ -62,7 +62,7 @@ ENV_CONFIG = {
     },
     "prod": {
         "use_localstack": False,
-        "aws_conn_id": "aws_default",
+        "aws_conn_id": "aws_lambda_role_conn",
         "service_type_initializer_function": "catalunya-prod-service-type-catalog",
         "municipals_initializer_function": "catalunya-prod-municipals-catalog",
         "timeout_minutes": 20,

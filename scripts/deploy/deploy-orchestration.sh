@@ -279,8 +279,10 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_CONN_AWS_LAMBDA_ROLE_CONN='aws://?region_name=eu-west-1&role_arn=arn:aws:iam::${AWS_ACCOUNT_ID:?Set AWS_ACCOUNT_ID}:role/catalunya-airflow-cross-account-role-prod&external_id=catalunya-prod-airflow'"
 else
     run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=development"
+    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_CONN_AWS_LAMBDA_ROLE_CONN='aws://?region_name=eu-west-1&role_arn=arn:aws:iam::${AWS_ACCOUNT_ID:?Set AWS_ACCOUNT_ID}:role/catalunya-airflow-cross-account-role-dev&external_id=catalunya-dev-airflow'"
 fi
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"

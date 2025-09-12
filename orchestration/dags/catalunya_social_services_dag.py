@@ -45,7 +45,7 @@ ENV_CONFIG = {
     },
     "dev": {
         "use_localstack": False,
-        "aws_conn_id": "aws_default",
+        "aws_conn_id": "aws_lambda_role_conn",
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "schedule": "0 23 * * 1",  # Monday 23:00
@@ -56,7 +56,7 @@ ENV_CONFIG = {
     },
     "prod": {
         "use_localstack": False,
-        "aws_conn_id": "aws_default",
+        "aws_conn_id": "aws_lambda_role_conn",
         "api_extractor_function": "catalunya-prod-social_services",
         "transformer_function": "catalunya-prod-social-services-transformer",
         "schedule": "0 23 * * 5",  # Friday 23:00
