@@ -71,7 +71,6 @@ export class CatalunyaDataStack extends cdk.Stack {
       athenaDatabaseName: this.athenaDatabaseName,
       athenaWorkgroupName: this.athenaWorkgroupName,
       catalogBucketName: this.catalogBucketName,
-      githubRepo: this.config.githubRepo,
     });
 
     // ========================================
@@ -227,17 +226,27 @@ export class CatalunyaDataStack extends cdk.Stack {
       exportName: `${this.projectName}-MartRoleArn`,
     });
 
-    new cdk.CfnOutput(this, 'GitHubDeploymentRoleArn', {
-      value: this.iamInfrastructure.githubDeploymentRole.roleArn,
-      description: 'GitHub Actions deployment role ARN',
-      exportName: `${this.projectName}-GitHubDeploymentRoleArn`,
-    });
-
     new cdk.CfnOutput(this, 'DataEngineerRoleArn', {
       value: this.iamInfrastructure.dataEngineerRole.roleArn,
       description: 'Data engineer human role ARN',
       exportName: `${this.projectName}-DataEngineerRoleArn`,
     });
+
+    new cdk.CfnOutput(this, 'CatalogExecutorRoleArn', {
+      value: this.iamInfrastructure.catalogExecutorRole.roleArn,
+      description: 'Catalog executor role ARN',
+      exportName: `${this.projectName}-CatalogExecutorRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'AirflowCrossAccountRoleArn', {
+      value: this.iamInfrastructure.airflowCrossAccountRole.roleArn,
+      description: 'Airflow cross-account role ARN',
+      exportName: `${this.projectName}-AirflowCrossAccountRoleArn`,
+    });
+
+    // Note: GitHub deployment role ARN output removed as it's now managed by setup scripts
+    // The role ARN can be retrieved via AWS CLI if needed:
+    // aws iam get-role --role-name catalunya-deployment-role-${environmentName} --query 'Role.Arn'
   }
 
   // ========================================
@@ -327,12 +336,16 @@ export class CatalunyaDataStack extends cdk.Stack {
     return this.iamInfrastructure.monitoringExecutionRole;
   }
 
-  public get githubDeploymentRole() {
-    return this.iamInfrastructure.githubDeploymentRole;
-  }
-
   public get dataEngineerRole() {
     return this.iamInfrastructure.dataEngineerRole;
+  }
+
+  public get catalogExecutorRole() {
+    return this.iamInfrastructure.catalogExecutorRole;
+  }
+
+  public get airflowCrossAccountRole() {
+    return this.iamInfrastructure.airflowCrossAccountRole;
   }
 
   /**

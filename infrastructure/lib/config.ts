@@ -8,16 +8,7 @@ export interface EnvironmentConfig {
   retentionPeriod: number;
   scheduleCron: string;
   catalogBucketName: string;
-  githubRepo?: string;
   requireMfaForHumanRoles?: boolean;
-  allowedGitHubBranches?: string[];
-}
-
-export interface IamConfig {
-  githubRepo: string;
-  requireMfaForHumanRoles: boolean;
-  allowedGitHubBranches: string[];
-  githubOidcThumbprint: string;
 }
 
 export class ConfigHelper {
@@ -42,21 +33,7 @@ export class ConfigHelper {
       retentionPeriod: config.retentionPeriod || 30,
       scheduleCron: config.scheduleCron || 'cron(0 23 ? * MON *)',
       catalogBucketName: config.catalogBucketName || `catalunya-catalog-${environmentName}`,
-      githubRepo: config.githubRepo || 'vmchura/CloudGentGran',
       requireMfaForHumanRoles: config.requireMfaForHumanRoles !== false,
-      allowedGitHubBranches: config.allowedGitHubBranches || (environmentName === 'prod' ? ['main'] : ['develop', 'main']),
-    };
-  }
-
-  public static getIamConfig(scope: Construct, environmentName: string): IamConfig {
-    const envConfig = ConfigHelper.getEnvironmentConfig(scope, environmentName);
-    const globalConfig = scope.node.tryGetContext('Catalunya-Data-Pipeline')?.global || {};
-
-    return {
-      githubRepo: envConfig.githubRepo || 'vmchura/CloudGentGran',
-      requireMfaForHumanRoles: envConfig.requireMfaForHumanRoles !== false,
-      allowedGitHubBranches: envConfig.allowedGitHubBranches || (environmentName === 'prod' ? ['main'] : ['develop', 'main']),
-      githubOidcThumbprint: globalConfig.githubOidcThumbprint || '6938fd4d98bab03faadb97b34396831e3780aea1',
     };
   }
 
@@ -89,8 +66,9 @@ export class ConfigHelper {
       transformer: `catalunya-lambda-transformer-role-${environmentName}`,
       mart: `catalunya-mart-role-${environmentName}`,
       monitoring: `catalunya-monitoring-role-${environmentName}`,
-      githubDeployment: `catalunya-deployment-role-${environmentName}`,
-      dataEngineer: 'catalunya-data-engineer-role'
+      dataEngineer: 'catalunya-data-engineer-role',
+      catalogExecutor: `catalunya-catalog-executor-role-${environmentName}`,
+      airflowCrossAccount: `catalunya-airflow-cross-account-role-${environmentName}`,
     };
   }
 
@@ -103,7 +81,8 @@ export class ConfigHelper {
       extractor: `CatalunyaLambdaExtractorPolicy${envCapitalized}`,
       transformer: `CatalunyaLambdaTransformerPolicy${envCapitalized}`,
       mart: `CatalunyaMartExecutorPolicy${envCapitalized}`,
-      deployment: 'CatalunyaDeploymentPolicy'
+      catalogExecutor: `CatalunyaCatalogExecutorPolicy${envCapitalized}`,
+      airflowCrossAccount: `CatalunyaAirflowCrossAccountPolicy${envCapitalized}`,
     };
   }
 }
