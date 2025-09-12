@@ -15,10 +15,57 @@ if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
 fi
 POLICY_NAME="CatalunyaDeploymentPolicy"
 TMP_POLICY_FILE="/tmp/minimal-catalunyadeployment-policy.json"
+GITHUB_REPO="vmchura/CloudGentGran"
 
 # Get account ID for resource ARNs
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="eu-west-1"
+
+# --- Function to create or update a GitHub OIDC role ---
+create_github_role() {
+    local role_name=$1
+
+    echo "⏳ Handling GitHub OIDC role: $role_name"
+
+    cat > /tmp/trust-policy-${role_name}.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringLike": {
+            "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:*"
+          },
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
+EOF
+
+    if aws iam get-role --role-name "$role_name" --no-cli-pager > /dev/null 2>&1; then
+        echo "🔁 Role $role_name already exists. Updating trust policy..."
+        aws iam update-assume-role-policy \
+            --role-name "$role_name" \
+            --policy-document file:///tmp/trust-policy-${role_name}.json \
+            --no-cli-pager
+    else
+        echo "🆕 Creating role: $role_name"
+        aws iam create-role \
+            --role-name "$role_name" \
+            --assume-role-policy-document file:///tmp/trust-policy-${role_name}.json \
+            --description "Catalunya Data Pipeline - GitHub Actions $role_name" \
+            --tags Key=Project,Value=CatalunyaDataPipeline Key=Environment,Value=${role_name##*-} Key=Service,Value=GitHubActions \
+            --no-cli-pager
+    fi
+}
 
 # --- Cleanup on exit ---
 trap "rm -f $TMP_POLICY_FILE" EXIT
@@ -311,7 +358,10 @@ attach_policy_to_role() {
 }
 
 # --- Main execution ---
+create_github_role "catalunya-deployment-role-${ENVIRONMENT}"
+
 echo "🚀 Starting minimal permissions setup..."
+
 
 # Step 1: Create or update the policy
 create_or_update_policy
