@@ -276,12 +276,7 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__BASE_URL=http://$SUBDOMAIN.$DOKKU_DOMAIN:8080"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
 
-# Environment-specific configurations
-if [ "$ENVIRONMENT" = "production" ]; then
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
-else
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=development"
-fi
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$ENVIRONMENT"
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
 

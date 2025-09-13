@@ -32,11 +32,7 @@ from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeF
 logger = logging.getLogger(__name__)
 
 # Environment configuration
-try:
-    ENVIRONMENT = Variable.get("environment", default_var="local")
-except Exception:
-    # Fallback if Variable.get fails during DAG parsing
-    ENVIRONMENT = "local"
+ENVIRONMENT = Variable.get("environment")
 
 # Environment-specific settings
 ENV_CONFIG = {
@@ -50,7 +46,7 @@ ENV_CONFIG = {
         "retry_attempts": 1,
         "retry_delay": timedelta(minutes=2)
     },
-    "dev": {
+    "development": {
         "use_localstack": False,
         "aws_conn_id": "aws_cross_account_role",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
@@ -60,7 +56,7 @@ ENV_CONFIG = {
         "retry_attempts": 2,
         "retry_delay": timedelta(minutes=5)
     },
-    "prod": {
+    "production": {
         "use_localstack": False,
         "aws_conn_id": "aws_lambda_role_conn",
         "service_type_initializer_function": "catalunya-prod-service-type-catalog",
