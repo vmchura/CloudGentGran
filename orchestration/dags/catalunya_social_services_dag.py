@@ -34,8 +34,7 @@ except Exception:
 ENV_CONFIG = {
     "local": {
         "use_localstack": True,
-        "extractor_aws_conn_id": "localstack_default",
-        "transformer_aws_conn_id": "localstack_default",
+        "aws_conn_id": "localstack_default",
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "schedule": timedelta(hours=2),  # More frequent for testing
@@ -46,8 +45,7 @@ ENV_CONFIG = {
     },
     "dev": {
         "use_localstack": False,
-        "extractor_aws_conn_id": "aws_extractor_role_conn",
-        "transformer_aws_conn_id": "aws_transformer_role_conn",
+        "aws_conn_id": "aws_cross_account_role",
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "schedule": "0 23 * * 1",  # Monday 23:00
@@ -359,7 +357,7 @@ logger.info(f"   - Transformer function: {config['transformer_function']}")
 invoke_api_extractor = LambdaInvokeFunctionOperator(
     task_id='invoke_api_extractor',
     function_name=config['api_extractor_function'],
-    aws_conn_id=config['extractor_aws_conn_id'],
+    aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
     payload=json.dumps({
         'source': 'airflow.orchestrator',
@@ -391,7 +389,7 @@ validate_extraction_results = PythonOperator(
 invoke_transformer = LambdaInvokeFunctionOperator(
     task_id='invoke_transformer',
     function_name=config['transformer_function'],
-    aws_conn_id=config['transformer_aws_conn_id'],
+    aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',
     payload='{{ task_instance.xcom_pull(task_ids="parse_extraction_response", key="transformer_payload") | tojson }}',
     execution_timeout=timedelta(minutes=config.get('lambda_timeout_minutes', 15)),  # Configurable timeout
