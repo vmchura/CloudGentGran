@@ -25,6 +25,10 @@ export class IamConstruct extends Construct {
   public readonly catalogExecutorRole: iam.Role;
   public readonly airflowCrossAccountRole: iam.Role;
 
+  // Orchestration roles
+  public readonly airflowUser: iam.User;
+  public readonly airflowAccessKey: iam.AccessKey;
+
   // Human roles
   public readonly dataEngineerRole: iam.Role;
 
@@ -402,7 +406,6 @@ export class IamConstruct extends Construct {
       managedPolicyName: `CatalunyaAirflowCrossAccountPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
       description: `Airflow cross-account permissions for Catalunya Data Pipeline (${environmentName})`,
       statements: [
-        // Assume catalog executor roles
         new iam.PolicyStatement({
           sid: 'AssumeRolePermissions',
           effect: iam.Effect.ALLOW,
@@ -411,8 +414,9 @@ export class IamConstruct extends Construct {
           ],
           resources: [
             `arn:aws:iam::${account}:role/catalunya-catalog-executor-role-${environmentName}`,
-            `arn:aws:iam::${account}:role/catalunya-${environmentName}-*-extractor`,
-            `arn:aws:iam::${account}:role/catalunya-${environmentName}-*-transformer`,
+            `arn:aws:iam::${account}:role/catalunya-lambda-extractor-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-lambda-transformer-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-mart-role-${environmentName}`,
           ],
         }),
         // Invoke Lambda functions
@@ -520,21 +524,56 @@ export class IamConstruct extends Construct {
     cdk.Tags.of(this.catalogExecutorRole).add('RoleType', 'Lambda');
 
     // ========================================
+    // Airflow IAM User (Minimal Assumer User)
+    // ========================================
+
+    this.airflowUser = new iam.User(this, 'AirflowUser', {
+      userName: `service-accounts/dokku-airflow-assumer-${environmentName}`,
+      path: '/service-accounts/',
+    });
+
+    // Create access key for the user
+    this.airflowAccessKey = new iam.AccessKey(this, 'AirflowAccessKey', {
+      user: this.airflowUser,
+    });
+
+    // Add ONLY AssumeRole permission (minimal permissions principle)
+    this.airflowUser.addToPolicy(new iam.PolicyStatement({
+      sid: 'AssumeCrossAccountRole',
+      effect: iam.Effect.ALLOW,
+      actions: ['sts:AssumeRole'],
+      resources: [`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`],
+      conditions: {
+        StringEquals: {
+          'sts:ExternalId': `catalunya-${environmentName}-airflow-exec`,
+        },
+      },
+    }));
+
+    // Apply common tags to user
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.airflowUser).add(key, value);
+    });
+
+    cdk.Tags.of(this.airflowUser).add('ServiceType', 'Orchestration');
+    cdk.Tags.of(this.airflowUser).add('RoleType', 'Assumer');
+
+    // ========================================
     // Airflow Cross-Account Role
     // ========================================
-    const airflowServerPrincipal = `arn:aws:iam::${account}:role/dokku-airflow-${environmentName}`;
 
     this.airflowCrossAccountRole = new iam.Role(this, 'AirflowCrossAccountRole', {
       roleName: `catalunya-airflow-cross-account-role-${environmentName}`,
       description: `Airflow cross-account role for Catalunya Data Pipeline (${environmentName})`,
-      assumedBy: new iam.ArnPrincipal(airflowServerPrincipal),
+      assumedBy: new iam.ArnPrincipal(this.airflowUser.userArn),
+      externalIds: [`catalunya-${environmentName}-airflow-exec`],
+      maxSessionDuration: cdk.Duration.minutes(61),
       managedPolicies: [
         this.airflowCrossAccountPolicy,
       ],
-      externalIds: [`catalunya-${environmentName}-airflow`], // For additional security
     });
 
-    // Apply common tags
+    // Apply common tags to cross-account role
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(this.airflowCrossAccountRole).add(key, value);
     });
@@ -596,50 +635,4 @@ export class IamConstruct extends Construct {
     cdk.Tags.of(this.dataEngineerRole).add('RoleType', 'Human');
   }
 
-  /**
-   * Get the Lambda execution role for a specific service type
-   */
-  public getLambdaExecutionRole(serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring'): iam.Role {
-    switch (serviceType) {
-      case 'extractor':
-        return this.extractorExecutionRole;
-      case 'transformer':
-        return this.transformerExecutionRole;
-      case 'mart':
-        return this.martExecutionRole;
-      case 'monitoring':
-        return this.monitoringExecutionRole;
-      default:
-        throw new Error(`Unknown service type: ${serviceType}`);
-    }
-  }
-
-  /**
-   * Grant additional permissions to a Lambda execution role
-   */
-  public grantAdditionalPermissions(
-    serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring',
-    ...permissions: iam.PolicyStatement[]
-  ): void {
-    const role = this.getLambdaExecutionRole(serviceType);
-
-    permissions.forEach((permission, index) => {
-      role.addToPolicy(permission);
-    });
-  }
-
-  /**
-   * Create a custom managed policy for specific use cases
-   */
-  public createCustomPolicy(
-    policyName: string,
-    description: string,
-    statements: iam.PolicyStatement[]
-  ): iam.ManagedPolicy {
-    return new iam.ManagedPolicy(this, policyName, {
-      managedPolicyName: policyName,
-      description,
-      statements,
-    });
-  }
 }

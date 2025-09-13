@@ -69,6 +69,7 @@ export class ConfigHelper {
       dataEngineer: 'catalunya-data-engineer-role',
       catalogExecutor: `catalunya-catalog-executor-role-${environmentName}`,
       airflowCrossAccount: `catalunya-airflow-cross-account-role-${environmentName}`,
+      airflowAssumer: `dokku-airflow-assumer-${environmentName}`,
     };
   }
 

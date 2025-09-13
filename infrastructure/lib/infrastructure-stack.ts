@@ -244,6 +244,37 @@ export class CatalunyaDataStack extends cdk.Stack {
       exportName: `${this.projectName}-AirflowCrossAccountRoleArn`,
     });
 
+    // Airflow Authentication Outputs (Minimal Assumer User)
+    new cdk.CfnOutput(this, 'AirflowAssumerUserName', {
+      value: this.iamInfrastructure.airflowUser.userName,
+      description: 'Airflow assumer IAM user name (minimal permissions - only AssumeRole)',
+      exportName: `${this.projectName}-AirflowAssumerUserName`,
+    });
+
+    new cdk.CfnOutput(this, 'AirflowAssumerAccessKeyId', {
+      value: this.iamInfrastructure.airflowAccessKey.accessKeyId,
+      description: 'Airflow assumer access key ID (SENSITIVE - only for AssumeRole)',
+      exportName: `${this.projectName}-AirflowAssumerAccessKeyId`,
+    });
+
+    new cdk.CfnOutput(this, 'AirflowAssumerSecretAccessKey', {
+      value: this.iamInfrastructure.airflowAccessKey.secretAccessKey.unsafeUnwrap(),
+      description: 'Airflow assumer secret access key (VERY SENSITIVE - only for AssumeRole)',
+      exportName: `${this.projectName}-AirflowAssumerSecretAccessKey`,
+    });
+
+    new cdk.CfnOutput(this, 'AirflowTargetRoleArn', {
+      value: this.iamInfrastructure.airflowCrossAccountRole.roleArn,
+      description: 'Airflow target role ARN (role to assume for Lambda permissions)',
+      exportName: `${this.projectName}-AirflowTargetRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'AirflowExternalId', {
+      value: `catalunya-${this.environmentName}-airflow-exec`,
+      description: 'External ID required for AssumeRole (additional security)',
+      exportName: `${this.projectName}-AirflowExternalId`,
+    });
+
     // Note: GitHub deployment role ARN output removed as it's now managed by setup scripts
     // The role ARN can be retrieved via AWS CLI if needed:
     // aws iam get-role --role-name catalunya-deployment-role-${environmentName} --query 'Role.Arn'
@@ -348,10 +379,12 @@ export class CatalunyaDataStack extends cdk.Stack {
     return this.iamInfrastructure.airflowCrossAccountRole;
   }
 
-  /**
-   * Get a Lambda execution role by service type
-   */
-  public getLambdaExecutionRole(serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring') {
-    return this.iamInfrastructure.getLambdaExecutionRole(serviceType);
+  public get airflowUser() {
+    return this.iamInfrastructure.airflowUser;
   }
+
+  public get airflowAccessKey() {
+    return this.iamInfrastructure.airflowAccessKey;
+  }
+
 }
