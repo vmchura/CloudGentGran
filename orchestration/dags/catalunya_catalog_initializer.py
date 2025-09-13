@@ -42,7 +42,7 @@ except Exception:
 ENV_CONFIG = {
     "local": {
         "use_localstack": True,
-        "catalog_aws_conn_id": "localstack_default",
+        "aws_conn_id": "localstack_default",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 10,
@@ -52,7 +52,7 @@ ENV_CONFIG = {
     },
     "dev": {
         "use_localstack": False,
-        "catalog_aws_conn_id": "aws_catalog_role_conn",
+        "aws_conn_id": "aws_cross_account_role",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 15,
@@ -432,7 +432,7 @@ create_service_type_payload_task = PythonOperator(
 invoke_service_type_initializer = LambdaInvokeFunctionOperator(
     task_id='invoke_service_type_initializer',
     function_name=config['service_type_initializer_function'],
-    aws_conn_id=config['catalog_aws_conn_id'],
+    aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_service_type_payload") }}',
     dag=dag
@@ -467,7 +467,7 @@ create_municipals_payload_task = PythonOperator(
 invoke_municipals_initializer = LambdaInvokeFunctionOperator(
     task_id='invoke_municipals_initializer',
     function_name=config['municipals_initializer_function'],
-    aws_conn_id=config['catalog_aws_conn_id'],
+    aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_municipals_payload") }}',
     dag=dag
