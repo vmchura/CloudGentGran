@@ -387,10 +387,4 @@ export class CatalunyaDataStack extends cdk.Stack {
     return this.iamInfrastructure.airflowAccessKey;
   }
 
-  /**
-   * Get a Lambda execution role by service type
-   */
-  public getLambdaExecutionRole(serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring') {
-    return this.iamInfrastructure.getLambdaExecutionRole(serviceType);
-  }
 }
