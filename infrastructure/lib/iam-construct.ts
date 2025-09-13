@@ -528,7 +528,7 @@ export class IamConstruct extends Construct {
     // ========================================
 
     this.airflowUser = new iam.User(this, 'AirflowUser', {
-      userName: `service-accounts/dokku-airflow-assumer-${environmentName}`,
+      userName: `dokku-airflow-assumer-${environmentName}`,
       path: '/service-accounts/',
     });
 
