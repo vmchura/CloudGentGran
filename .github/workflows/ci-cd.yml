@@ -155,8 +155,8 @@ jobs:
           echo "☁️ Synthesizing templates for AWS..."
           npx cdk synth --all --require-approval never
         env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
-          CDK_DEFAULT_ACCOUNT: '123456789012'
 
   # ==========================================
   # DEPLOY TO DEVELOPMENT
@@ -250,6 +250,9 @@ jobs:
         run: |
           echo "☁️ Bootstrapping AWS..."
           npx cdk bootstrap --require-approval never || echo "Already bootstrapped or bootstrap not needed"
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: eu-west-1
 
       # Conditional CDK Deploy
       - name: CDK Deploy Development (LocalStack)
@@ -280,6 +283,8 @@ jobs:
             --outputs-file cdk-outputs-dev.json
           echo "✅ AWS deployment complete - used cached Rust binary!"
         env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: eu-west-1
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEPLOY_REGION: eu-west-1
 
@@ -363,6 +368,9 @@ jobs:
         run: |
           # Check if already bootstrapped, bootstrap if not
           npx cdk bootstrap --require-approval never || echo "Already bootstrapped or bootstrap not needed"
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: eu-west-1
 
       - name: CDK Deploy Production
         working-directory: ./infrastructure
@@ -374,6 +382,8 @@ jobs:
             --outputs-file cdk-outputs-prod.json
           echo "✅ Deployment complete - used cached Rust binary!"
         env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: eu-west-1
           # Add deployment metadata
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEPLOY_REGION: eu-west-1
@@ -429,8 +439,8 @@ jobs:
           # Check for security best practices in generated templates
           echo "CloudFormation templates generated successfully - manual security review recommended"
         env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
-          CDK_DEFAULT_ACCOUNT: '123456789012'
 
       - name: Check for sensitive data in code
         run: |
