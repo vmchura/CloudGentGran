@@ -2,3 +2,5 @@ dbt-core
 dbt-duckdb
 psycopg2-binary
 apache-airflow-providers-fab
+boto3>=1.26.0
+botocore>=1.29.0
