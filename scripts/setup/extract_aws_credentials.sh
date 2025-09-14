@@ -34,10 +34,9 @@ echo "EXTERNAL_ID: $EXTERNAL_ID"
 
 
 cat <<EOF
-dokku config:set $DOKKU_APP \
-  AWS_ACCESS_KEY_ID=$ACCESS_KEY \
-  AWS_SECRET_ACCESS_KEY=$SECRET_KEY \
-  AWS_DEFAULT_REGION=eu-west-1 \
-  AIRFLOW_CONN_AWS_CROSS_ACCOUNT_ROLE="aws://$ACCESS_KEY:$SECRET_KEY@/?region_name=eu-west-1&role_arn=arn:aws:iam::$AWS_ACCOUNT:role/catalunya-airflow-cross-account-role-$ENVIRONMENT&external_id=$EXTERNAL_ID"
+  dokku config:set $DOKKU_APP \
+    AWS_ACCESS_KEY_ID=$ACCESS_KEY \
+    AWS_SECRET_ACCESS_KEY=$SECRET_KEY \
+    AWS_DEFAULT_REGION=eu-west-1 \
+    AIRFLOW_CONN_AWS_CROSS_ACCOUNT_ROLE="aws://$ACCESS_KEY:$SECRET_KEY@/?region_name=eu-west-1&role_arn=arn:aws:iam::$AWS_ACCOUNT:role/catalunya-airflow-cross-account-role-$ENVIRONMENT&assume_role_kwargs={\"ExternalId\":\"$EXTERNAL_ID\"}"
 EOF
-
