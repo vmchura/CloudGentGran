@@ -34,10 +34,16 @@ echo "EXTERNAL_ID: $EXTERNAL_ID"
 
 
 cat <<EOF
-  dokku config:set $DOKKU_APP \
+  dokku run cloudgentgran-orchestration-$ENVIRONMENT \
+  airflow connections add aws_cross_account_role  \
+    --conn-type aws \
+    --conn-login $ACCESS_KEY \
+    --conn-password $SECRET_KEY \
+    --conn-extra '{"region_name": "eu-west-1", "role_arn": "arn:aws:iam::$AWS_ACCOUNT:role/catalunya-airflow-cross-account-role-$ENVIRONMENT", "assume_role_kwargs": {"ExternalId": "$EXTERNAL_ID"}}'
+
+  dokku config:set cloudgentgran-orchestration-$ENVIRONMENT \
     AWS_ACCESS_KEY_ID=$ACCESS_KEY \
     AWS_SECRET_ACCESS_KEY=$SECRET_KEY \
-    AWS_DEFAULT_REGION=eu-west-1 \
-    AIRFLOW_CONN_AWS_CROSS_ACCOUNT_ROLE="aws://$ACCESS_KEY:$SECRET_KEY@/?__extra__=%7B%22region_name%22%3A+%22eu-west-1%22%2C+%22role_arn%22%3A+%22arn%3Aaws%3Aiam%3A%$AWS_ACCOUNT%3Arole%2Fcatalunya-airflow-cross-account-role-$ENVIRONMENT%22%2C+%22assume_role_kwargs%22%3A+%7B%22ExternalId%22%3A+%22$EXTERNAL_ID%22%7D%7D"
+    AWS_DEFAULT_REGION=eu-west-1"
 EOF
 
