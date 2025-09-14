@@ -353,3 +353,4 @@ echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT${NC}"
 
 # After the first deployment is very important to add the fernet key:
 # dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY=fernet_key_value
+# as well the output of the script in roles-deployment.sh, which are aws credentials
