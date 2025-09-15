@@ -39,6 +39,7 @@ ENV_CONFIG = {
     "local": {
         "aws_conn_id": "localstack_default",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
+        "service_qualification_initializer_function": "catalunya-dev-service-qualification-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 10,
         "bucket_name": "catalunya-catalog-dev",
@@ -48,6 +49,7 @@ ENV_CONFIG = {
     "development": {
         "aws_conn_id": "aws_cross_account_role",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
+        "service_qualification_initializer_function": "catalunya-dev-service-qualification-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 15,
         "bucket_name": "catalunya-catalog-dev",
@@ -57,6 +59,7 @@ ENV_CONFIG = {
     "production": {
         "aws_conn_id": "aws_lambda_role_conn",
         "service_type_initializer_function": "catalunya-prod-service-type-catalog",
+        "service_qualification_initializer_function": "catalunya-prod-service-qualification-catalog",
         "municipals_initializer_function": "catalunya-prod-municipals-catalog",
         "timeout_minutes": 20,
         "bucket_name": "catalunya-catalog-prod",
