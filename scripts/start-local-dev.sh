@@ -56,6 +56,31 @@ set_environment() {
     echo -e "   - AIRFLOW_UID: ${AIRFLOW_UID}"
 }
 
+# Set up local development structure
+setup_local_structure() {
+    echo -e "${YELLOW}🔗 Setting up local development structure...${NC}"
+
+    # Remove existing dbt symlink/directory in orchestration if it exists
+    if [ -L "orchestration/dbt" ]; then
+        echo -e "${BLUE}🗑️  Removing existing dbt symlink${NC}"
+        rm orchestration/dbt
+    elif [ -d "orchestration/dbt" ]; then
+        echo -e "${BLUE}🗑️  Removing existing dbt directory${NC}"
+        rm -rf orchestration/dbt
+    fi
+
+    # Create symlink to dbt directory for local development
+    echo -e "${BLUE}🔗 Creating symlink: orchestration/dbt -> ../dbt${NC}"
+    ln -sf ../dbt orchestration/dbt
+
+    if [ -L "orchestration/dbt" ]; then
+        echo -e "${GREEN}✅ Local development structure set up${NC}"
+    else
+        echo -e "${RED}❌ Failed to create dbt symlink${NC}"
+        exit 1
+    fi
+}
+
 # Clean up existing containers
 cleanup() {
     echo -e "${YELLOW}🧹 Cleaning up existing containers...${NC}"
@@ -241,6 +266,7 @@ main() {
         "start")
             check_prerequisites
             set_environment
+            setup_local_structure
             cleanup
             start_services
             monitor_startup
