@@ -29,7 +29,6 @@ ENVIRONMENT = Variable.get("environment")
 # Environment-specific settings
 ENV_CONFIG = {
     "local": {
-        "use_localstack": True,
         "aws_conn_id": "localstack_default",
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
@@ -40,7 +39,6 @@ ENV_CONFIG = {
         "retry_delay": timedelta(minutes=2)
     },
     "development": {
-        "use_localstack": False,
         "aws_conn_id": "aws_cross_account_role",
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
@@ -51,7 +49,6 @@ ENV_CONFIG = {
         "retry_delay": timedelta(minutes=5)
     },
     "production": {
-        "use_localstack": False,
         "aws_conn_id": "aws_lambda_role_conn",
         "api_extractor_function": "catalunya-prod-social_services",
         "transformer_function": "catalunya-prod-social-services-transformer",
@@ -195,7 +192,6 @@ def validate_extraction_results(**context) -> str:
     bucket_name = extraction_data.get('bucket', 'unknown')
 
     logger.info(f"🔍 Validating extraction results:")
-    logger.info(f"   - Environment: {ENVIRONMENT} ({'LocalStack' if config.get('use_localstack') else 'AWS'})")
     logger.info(f"   - Bucket: {bucket_name}")
     logger.info(f"   - File count: {file_count}")
     logger.info(f"   - Record count: {total_records}")
@@ -296,15 +292,6 @@ def trigger_dbt_workflow(**context) -> str:
         logger.info(f"   - Transformed records: {transformation_data.get('output_records', 'N/A')}")
         logger.info(f"   - Staging prefix: {transformation_data.get('staging_prefix', 'N/A')}")
 
-    # In LocalStack environment, log that DBT would be triggered
-    if config.get("use_localstack", False):
-        logger.info("📊 LocalStack environment: DBT workflow would be triggered here")
-        logger.info("   - Data is available in LocalStack S3 for DBT processing")
-        logger.info("   - Next: Configure DBT to connect to LocalStack S3")
-    else:
-        logger.info("📊 AWS environment: Triggering DBT workflow")
-        logger.info("   - Staging data ready for marts transformation")
-
     # Store trigger information for potential DAG chaining
     task_instance.xcom_push(key='dbt_trigger_data', value={
         'environment': ENVIRONMENT,
@@ -344,7 +331,6 @@ dag = DAG(
 # =============================================================================
 
 logger.info(f"🏗️  Creating pipeline tasks for {ENVIRONMENT} environment")
-logger.info(f"   - LocalStack mode: {config.get('use_localstack', False)}")
 logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
 logger.info(f"   - Extractor function: {config['api_extractor_function']}")
 logger.info(f"   - Transformer function: {config['transformer_function']}")
@@ -361,7 +347,6 @@ invoke_api_extractor = LambdaInvokeFunctionOperator(
         'trigger_time': '{{ ts }}',
         'dag_run_id': '{{ dag_run.run_id }}',
         'task_instance_key_str': '{{ task_instance_key_str }}',
-        'use_localstack': config.get('use_localstack', False),
         'bucket_name': config['bucket_name']
     }),
     dag=dag
