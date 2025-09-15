@@ -75,7 +75,7 @@ export class CatalogConstruct extends Construct {
       region,
       catalogExecutorRole: props.catalogExecutorRole
     });
-    this.serviceQualificationCatalogLambda = this.createMunicipalsCatalogLambda({
+    this.serviceQualificationCatalogLambda = this.createServiceQualificationCatalogLambda({
      environmentName,
      projectName,
      config,
@@ -233,7 +233,7 @@ export class CatalogConstruct extends Construct {
     return serviceTypeCatalogLambda;
   }
 
-  private createServiceTypeCatalogLambda(props: CatalogLambdaProps): lambda.Function {
+  private createServiceQualificationCatalogLambda(props: CatalogLambdaProps): lambda.Function {
     const {
       environmentName,
       projectName,
@@ -293,16 +293,16 @@ export class CatalogConstruct extends Construct {
     cdk.Tags.of(serviceTypeCatalogLambda).add('Complexity', 'Simple');
 
     // Lambda outputs
-    new cdk.CfnOutput(this, 'ServiceTypeCatalogLambdaArn', {
+    new cdk.CfnOutput(this, 'ServiceQualificationCatalogLambdaArn', {
       value: serviceTypeCatalogLambda.functionArn,
-      description: 'ARN of the ServiceType Catalog Lambda function',
-      exportName: `${projectName}-ServiceTypeCatalogLambdaArn`,
+      description: 'ARN of the ServiceQualification Catalog Lambda function',
+      exportName: `${projectName}-ServiceQualificationCatalogLambdaArn`,
     });
 
-    new cdk.CfnOutput(this, 'ServiceTypeCatalogLambdaName', {
+    new cdk.CfnOutput(this, 'ServiceQualificationCatalogLambdaName', {
       value: serviceTypeCatalogLambda.functionName,
-      description: 'Name of the ServiceType Catalog Lambda function',
-      exportName: `${projectName}-ServiceTypeCatalogLambdaName`,
+      description: 'Name of the ServiceQualification Catalog Lambda function',
+      exportName: `${projectName}-ServiceQualificationCatalogLambdaName`,
     });
 
     return serviceTypeCatalogLambda;
