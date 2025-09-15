@@ -58,25 +58,23 @@ set_environment() {
 
 # Set up local development structure
 setup_local_structure() {
-    echo -e "${YELLOW}🔗 Setting up local development structure...${NC}"
+    echo -e "${YELLOW}📦 Setting up local development structure...${NC}"
 
-    # Remove existing dbt symlink/directory in orchestration if it exists
-    if [ -L "orchestration/dbt" ]; then
-        echo -e "${BLUE}🗑️  Removing existing dbt symlink${NC}"
-        rm orchestration/dbt
-    elif [ -d "orchestration/dbt" ]; then
-        echo -e "${BLUE}🗑️  Removing existing dbt directory${NC}"
+    # Remove existing dbt directory in orchestration if it exists
+    if [ -d "orchestration/dbt" ]; then
+        echo -e "${BLUE}🗑️  Removing existing orchestration/dbt directory${NC}"
         rm -rf orchestration/dbt
     fi
 
-    # Create symlink to dbt directory for local development
-    echo -e "${BLUE}🔗 Creating symlink: orchestration/dbt -> ../dbt${NC}"
-    ln -sf ../dbt orchestration/dbt
+    # Copy dbt directory for local development
+    echo -e "${BLUE}📁 Copying dbt/ -> orchestration/dbt/ for local development${NC}"
+    cp -r dbt orchestration/dbt
 
-    if [ -L "orchestration/dbt" ]; then
+    if [ -d "orchestration/dbt" ]; then
         echo -e "${GREEN}✅ Local development structure set up${NC}"
+        echo -e "   📊 DBT directory size: $(du -sh orchestration/dbt | cut -f1)"
     else
-        echo -e "${RED}❌ Failed to create dbt symlink${NC}"
+        echo -e "${RED}❌ Failed to copy dbt directory${NC}"
         exit 1
     fi
 }
@@ -104,6 +102,12 @@ cleanup() {
 
     # Set proper ownership
     sudo chown -R $USER:$USER ./localstack/s3-mounts/ 2>/dev/null || true
+
+    # Clean up local development dbt copy
+    if [ -d "orchestration/dbt" ]; then
+        echo -e "${BLUE}🗑️  Removing local development dbt copy${NC}"
+        rm -rf orchestration/dbt
+    fi
 
     # Clean up Docker
     docker system prune -f || true
@@ -283,6 +287,11 @@ main() {
         "stop")
             echo -e "${YELLOW}🛑 Stopping Catalunya Data Pipeline...${NC}"
             docker-compose -f docker-compose.local.yaml down --remove-orphans
+            # Clean up local development dbt copy
+            if [ -d "orchestration/dbt" ]; then
+                echo -e "${BLUE}🗑️  Cleaning up local development files${NC}"
+                rm -rf orchestration/dbt
+            fi
             echo -e "${GREEN}✅ Services stopped${NC}"
             ;;
         "restart")
