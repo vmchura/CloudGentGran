@@ -92,6 +92,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       projectName: this.projectName,
       config: this.config,
       bucketName: this.bucketName,
+      catalogBucketName: this.catalogBucketName,
       lambdaPrefix: this.lambdaPrefix,
       account: this.account,
       region: this.region,

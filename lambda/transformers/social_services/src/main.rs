@@ -98,12 +98,8 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
     println!("Processing files: s3://{}/landing/{}/downloaded_date={}", bucket_name, semantic_identifier, downloaded_date);
 
     let source_prefix = format!("landing/{}/downloaded_date={}/", semantic_identifier, downloaded_date);
-    let target_key = format!(
-        "staging/{}/transformed_date={}/social_services_{}.parquet",
-        semantic_identifier,
-        downloaded_date,
-        Utc::now().format("%Y%m%d_%H%M%S")
-    );
+    let target_key = format!("staging/{}/downloaded_date={}/{}.parquet", semantic_identifier,
+    downloaded_date, Utc::now().format("%Y%m%d_%H%M%S"));
 
     match process_files_for_date(&s3_client, bucket_name, &source_prefix, &target_key).await {
         Ok(result) => Ok(create_success_response(

@@ -34,18 +34,14 @@ The social services transformer is located at `lambda/transformers/social_servic
 
 1. **Navigate to the transformer directory**:
    ```bash
+   cd ..
    # From project root
    cd lambda/transformers/social_services
-   ```
-
-2. **Build the Lambda function**:
-   ```bash
+   # 2. **Build the Lambda function**:
    # Build the lambda for production deployment
    cargo lambda build --release --target x86_64-unknown-linux-gnu
-   ```
-
-3. **Prepare deployment artifacts**:
-   ```bash
+   # 3. **Prepare deployment artifacts**:
+   
    # Return to project root
    cd ../../..
    

@@ -9,6 +9,7 @@ export interface LambdaConstructProps {
   projectName: string;
   config: EnvironmentConfig;
   bucketName: string;
+  catalogBucketName: string;
   lambdaPrefix: string;
   account: string;
   region: string;
@@ -23,6 +24,7 @@ interface LambdaFunctionProps {
   projectName: string;
   config: EnvironmentConfig;
   bucketName: string;
+  catalogBucketName: string,
   lambdaPrefix: string;
   account: string;
   region: string;
@@ -36,7 +38,7 @@ export class LambdaConstruct extends Construct {
   constructor(scope: Construct, id: string, props: LambdaConstructProps) {
     super(scope, id);
 
-    const { environmentName, projectName, config, bucketName, lambdaPrefix, account, region } = props;
+    const { environmentName, projectName, config, bucketName, catalogBucketName, lambdaPrefix, account, region } = props;
 
     // Create API Extractor Lambda
     this.apiExtractorLambda = this.createApiExtractorLambda({
@@ -44,6 +46,7 @@ export class LambdaConstruct extends Construct {
       projectName,
       config,
       bucketName,
+      catalogBucketName,
       lambdaPrefix,
       account,
       region,
@@ -56,6 +59,7 @@ export class LambdaConstruct extends Construct {
       projectName,
       config,
       bucketName,
+      catalogBucketName,
       lambdaPrefix,
       account,
       region,
@@ -96,7 +100,7 @@ export class LambdaConstruct extends Construct {
    * Scheduling and orchestration handled by Airflow.
    */
   private createApiExtractorLambda(props: LambdaFunctionProps): lambda.Function {
-    const { environmentName, projectName, config, bucketName, lambdaPrefix, account, region } = props;
+    const { environmentName, projectName, config, bucketName, catalogBucketName, lambdaPrefix, account, region } = props;
 
     // ========================================
     // IAM Role for Lambda
@@ -163,7 +167,7 @@ export class LambdaConstruct extends Construct {
    * with proper IAM roles. Orchestration handled by Airflow.
    */
   private createSocialServicesTransformerLambda(props: LambdaFunctionProps): lambda.Function {
-    const { environmentName, projectName, config, bucketName, lambdaPrefix, account, region } = props;
+    const { environmentName, projectName, config, bucketName, catalogBucketName, lambdaPrefix, account, region } = props;
 
     // ========================================
     // IAM Role for Transformer Lambda
@@ -223,6 +227,7 @@ export class LambdaConstruct extends Construct {
       role: transformerRole,
       environment: {
         BUCKET_NAME: bucketName,
+        CATALOG_BUCKET_NAME: catalogBucketName,
         SEMANTIC_IDENTIFIER: 'social_services',
         ENVIRONMENT: environmentName,
         REGION: region
