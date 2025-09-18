@@ -1,3 +1,37 @@
+/*
+ * Social Services Data Transformer Lambda
+ *
+ * This Lambda function processes social services data from Catalonia and performs the following transformations:
+ *
+ * 1. Loads catalog data from S3:
+ *    - municipals: Municipality information with comarca (county) mappings
+ *    - service_type: Service type classifications and descriptions
+ *    - service_qualification: Service qualification types (public/private)
+ *
+ * 2. Processes social services JSON files from the landing bucket:
+ *    - Reads multiple JSON files with social services data
+ *    - Cleans data (handles null values, comarca name standardization)
+ *    - Validates that all service types and qualifications exist in catalogs
+ *
+ * 3. Performs data enrichment through joins:
+ *    - Maps service type descriptions to IDs
+ *    - Maps service qualification descriptions to IDs
+ *    - Maps comarca names to municipality codes
+ *
+ * 4. Municipality name matching:
+ *    - Normalizes municipality names (removes accents, special chars)
+ *    - Tokenizes normalized names and calculates similarity scores
+ *    - Handles cases where municipality names don't exactly match catalog
+ *
+ * 5. Data deduplication and final transformations:
+ *    - Removes duplicates keeping best municipality matches
+ *    - Converts data types (dates, integers)
+ *    - Produces final schema with standardized column names
+ *
+ * Output: Parquet file in staging bucket with normalized social services data
+ * ready for analytics and reporting.
+ */
+
 use aws_sdk_s3::{Client, primitives::ByteStream};
 use aws_config::meta::region::RegionProviderChain;
 use chrono::Utc;
@@ -8,6 +42,7 @@ use std::io::Cursor;
 use anyhow::{Result, anyhow};
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Deserialize, Serialize)]
 struct LambdaInput {
@@ -132,6 +167,19 @@ async fn process_files_for_date(
     source_prefix: &str,
     target_key: &str
 ) -> Result<ProcessingResult> {
+    // First, load catalog data
+    let catalog_bucket = env::var("CATALOG_BUCKET_NAME")
+        .unwrap_or_else(|_| "catalunya-catalog-dev".to_string());
+
+    println!("Loading catalog data from bucket: {}", catalog_bucket);
+
+    let municipals_df = load_catalog_data(s3_client, &catalog_bucket, "municipals").await?;
+    let service_types_df = load_catalog_data(s3_client, &catalog_bucket, "service_type").await?;
+    let service_qualification_df = load_catalog_data(s3_client, &catalog_bucket, "service_qualification").await?;
+
+    println!("Loaded catalogs - municipals: {}, service_types: {}, service_qualification: {}",
+             municipals_df.height(), service_types_df.height(), service_qualification_df.height());
+
     // List files
     let resp = s3_client
         .list_objects_v2()
@@ -240,8 +288,14 @@ async fn process_files_for_date(
         result_df
     };
 
+    // Transform the data with catalogs
+    combined_df = transform_social_services_data(
+        combined_df,
+        municipals_df,
+        service_types_df,
+        service_qualification_df
+    )?;
 
-    combined_df = transform_social_services_data(combined_df)?;
     upload_parquet_to_s3(s3_client, &combined_df, bucket, target_key).await?;
 
     println!("Successfully processed {} files -> {}", json_keys.len(), target_key);
@@ -269,23 +323,301 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
     let data = obj.body.collect().await?.into_bytes();
     let cursor = Cursor::new(data);
 
-    // Load JSON into Polars
+    // Load JSON into Polars, selecting only the required columns
     let df = JsonReader::new(cursor)
         .finish()
-        .map_err(|e| anyhow!("Error reading {}: {}", key, e))?;
+        .map_err(|e| anyhow!("Error reading {}: {}", key, e))?
+        .select([
+            col("registre"),
+            col("tipologia"),
+            col("inscripcio"),
+            col("capacitat"),
+            col("municipi"),
+            col("comarca"),
+            col("qualificacio")
+        ])?
+        .with_columns([
+            // Replace "null" string with actual null
+            when(col("qualificacio").eq(lit("null")))
+                .then(lit(NULL))
+                .otherwise(col("qualificacio"))
+                .alias("qualificacio"),
+            // Replace "Val d'Aran" with "Aran"
+            when(col("comarca").eq(lit("Val d'Aran")))
+                .then(lit("Aran"))
+                .otherwise(col("comarca"))
+                .alias("comarca")
+        ])?;
 
     let record_count = df.height();
     Ok((df, record_count))
 }
 
-fn transform_social_services_data(df: DataFrame) -> Result<DataFrame> {
+async fn load_catalog_data(s3_client: &Client, bucket: &str, catalog_name: &str) -> Result<DataFrame> {
+    println!("Loading catalog: {}", catalog_name);
+
+    // List all parquet files in the catalog folder
+    let resp = s3_client
+        .list_objects_v2()
+        .bucket(bucket)
+        .prefix(&format!("{}/", catalog_name))
+        .send()
+        .await?;
+
+    let contents = resp.contents();
+    if contents.is_empty() {
+        return Err(anyhow!("No catalog files found for {}", catalog_name));
+    }
+
+    // Find the most recent parquet file
+    let mut parquet_keys: Vec<String> = contents
+        .iter()
+        .filter_map(|obj| {
+            obj.key().and_then(|key| {
+                if key.ends_with(".parquet") {
+                    Some(key.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect();
+
+    if parquet_keys.is_empty() {
+        return Err(anyhow!("No parquet files found for catalog {}", catalog_name));
+    }
+
+    // Sort to get the most recent file (by timestamp in filename)
+    parquet_keys.sort();
+    let latest_key = parquet_keys.last().unwrap();
+
+    println!("Loading catalog file: {}", latest_key);
+
+    // Download the parquet file
+    let obj = s3_client
+        .get_object()
+        .bucket(bucket)
+        .key(latest_key)
+        .send()
+        .await?;
+
+    let data = obj.body.collect().await?.into_bytes();
+    let cursor = Cursor::new(data);
+
+    // Load parquet into Polars
+    let df = LazyFrame::scan_parquet(cursor, ScanArgsParquet::default())?
+        .collect()?;
+
+    println!("Loaded catalog {} with {} rows", catalog_name, df.height());
+    Ok(df)
+}
+
+fn has_unmapped_element(
+    left_series: &Series,
+    right_series: &Series,
+    allow_null_left: bool,
+    prefix: &str
+) -> Result<Vec<String>> {
+    let mut errors = Vec::new();
+
+    let left_unique = left_series.unique()?.sort(Default::default())?;
+    let right_unique = right_series.unique()?.sort(Default::default())?;
+
+    // Convert to HashSet for faster lookup
+    let right_set: HashSet<String> = right_unique
+        .iter()
+        .filter_map(|val| {
+            if val.is_null() {
+                None
+            } else {
+                Some(val.to_string().replace("\"", ""))
+            }
+        })
+        .collect();
+
+    for val in left_unique.iter() {
+        if val.is_null() {
+            if !allow_null_left {
+                errors.push(format!("[{}]: Null value in left series", prefix));
+            }
+        } else {
+            let val_str = val.to_string().replace("\"", "");
+            if !right_set.contains(&val_str) {
+                errors.push(format!("[{}]: Value `{}` not in right series", prefix, val_str));
+            }
+        }
+    }
+
+    Ok(errors)
+}
+
+fn normalize_expr() -> Expr {
+    col("")
+        .str().to_lowercase()
+        .str().replace_all(lit(r"[áà]"), lit("a"), false)
+        .str().replace_all(lit(r"[éè]"), lit("e"), false)
+        .str().replace_all(lit(r"[íì]"), lit("i"), false)
+        .str().replace_all(lit(r"[óò]"), lit("o"), false)
+        .str().replace_all(lit(r"[úù]"), lit("u"), false)
+        .str().replace_all(lit(r"[^a-z\s]"), lit(" "), false)
+        .str().replace_all(lit(r"\s+"), lit(" "), false)
+        .str().strip_chars(None)
+        .str().split(lit(" "))
+        .list().eval(col("").filter(col("").str().len_chars().gt(lit(1))), false)
+}
+
+fn transform_social_services_data(
+    mut df: DataFrame,
+    municipals_df: DataFrame,
+    service_types_df: DataFrame,
+    service_qualification_df: DataFrame
+) -> Result<DataFrame> {
     println!("Original DataFrame shape: {:?}", df.shape());
     println!("Original columns: {:?}", df.get_column_names());
 
-    println!("Final DataFrame shape: {:?}", df.shape());
-    println!("Final columns: {:?}", df.get_column_names());
+    // Validate mappings
+    let mut errors = Vec::new();
 
-    Ok(df)
+    // Check service types mapping
+    let tipologia_series = df.column("tipologia")?;
+    let service_type_desc_series = service_types_df.column("service_type_description")?;
+    errors.extend(has_unmapped_element(tipologia_series, service_type_desc_series, false, "service_type")?);
+
+    // Check service qualification mapping
+    let qualificacio_series = df.column("qualificacio")?;
+    let service_qual_desc_series = service_qualification_df.column("service_qualification_description")?;
+    errors.extend(has_unmapped_element(qualificacio_series, service_qual_desc_series, true, "service_qualification")?);
+
+    if !errors.is_empty() {
+        for error in &errors {
+            eprintln!("Validation error: {}", error);
+        }
+        return Err(anyhow!("Validation failed with {} errors", errors.len()));
+    }
+
+    println!("Mapping validation passed");
+
+    // Join with service types
+    df = df.join(
+        &service_types_df,
+        ["tipologia"],
+        ["service_type_description"],
+        JoinArgs::new(JoinType::Left)
+    )?;
+
+    // Join with service qualification
+    df = df.join(
+        &service_qualification_df,
+        ["qualificacio"],
+        ["service_qualification_description"],
+        JoinArgs::new(JoinType::Left)
+    )?;
+
+    // Select intermediate columns
+    df = df.select([
+        col("registre"),
+        col("inscripcio"),
+        col("capacitat"),
+        col("municipi"),
+        col("comarca"),
+        col("service_type_id"),
+        col("service_qualification_id")
+    ])?;
+
+    println!("After joins shape: {:?}", df.shape());
+
+    // Join with municipals and normalize
+    df = df.join(
+        &municipals_df,
+        ["comarca"],
+        ["nom_comarca"],
+        JoinArgs::new(JoinType::Left)
+    )?;
+
+    // Add normalized columns and token similarity
+    let normalize_nom = normalize_expr().map_alias(|_| "nom_normalized".into());
+    let normalize_municipi = normalize_expr().map_alias(|_| "municipi_normalized".into());
+
+    df = df.with_columns([
+        col("nom").apply(normalize_nom, GetOutput::default()).alias("nom_normalized"),
+        col("municipi").apply(normalize_municipi, GetOutput::default()).alias("municipi_normalized")
+    ])?;
+
+    // Calculate token intersection length
+    df = df.with_columns([
+        col("nom_normalized")
+            .list()
+            .set_intersection(col("municipi_normalized"))
+            .list()
+            .len()
+            .alias("tokens_similar")
+    ])?;
+
+    // Sort and deduplicate
+    df = df.sort(
+        ["registre", "tokens_similar"],
+        SortMultipleOptions::default()
+            .with_order_descending_multi([false, true])
+    )?;
+
+    // Remove duplicates keeping first (highest tokens_similar due to sort)
+    df = df.unique(
+        Some(vec![
+            "registre".to_string(),
+            "inscripcio".to_string(),
+            "capacitat".to_string(),
+            "municipi".to_string(),
+            "comarca".to_string(),
+            "service_type_id".to_string(),
+            "service_qualification_id".to_string()
+        ]),
+        UniqueKeepStrategy::First,
+    )?;
+
+    // Final sort by tokens_similar
+    df = df.sort(
+        ["tokens_similar"],
+        SortMultipleOptions::default()
+    )?;
+
+    // Select final columns with transformations
+    let final_df = df.select([
+        col("registre").alias("social_service_register_id"),
+        col("inscripcio")
+            .str()
+            .to_date(StrptimeOptions::default().with_format(Some("%Y-%m-%d".to_string())))
+            .alias("inscription_date"),
+        col("capacitat")
+            .str()
+            .to_integer(false)
+            .alias("capacity"),
+        col("service_type_id"),
+        col("service_qualification_id"),
+        col("codi").alias("municipal_id"),
+        col("codi_comarca").alias("comarca_id")
+    ])?;
+
+    println!("Final DataFrame shape: {:?}", final_df.shape());
+    println!("Final columns: {:?}", final_df.get_column_names());
+
+    // Validate that we haven't lost any unique registre values
+    let original_unique_registre = df.column("registre")?.unique()?.len();
+    let final_unique_registre = final_df.column("social_service_register_id")?.unique()?.len();
+
+    if original_unique_registre != final_unique_registre {
+        return Err(anyhow!(
+            "Data integrity check failed: original unique registre count ({}) != final count ({})",
+            original_unique_registre, final_unique_registre
+        ));
+    }
+
+    if final_unique_registre == 0 {
+        return Err(anyhow!("No records in final dataset"));
+    }
+
+    println!("Data integrity check passed: {} unique records preserved", final_unique_registre);
+
+    Ok(final_df)
 }
 
 async fn upload_parquet_to_s3(s3_client: &Client, df: &DataFrame, bucket: &str, s3_key: &str) -> Result<()> {

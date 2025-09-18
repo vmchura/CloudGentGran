@@ -23,7 +23,7 @@ aws-config = { version = "1.1", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.17"
 
 # Data processing
-polars = { version = "0.41", features = ["json", "parquet", "temporal", "lazy"] }
+polars = { version = "0.41", features = ["json", "parquet", "temporal", "lazy", "strings", "regex"] }
 
 # Lambda runtime
 lambda_runtime = "0.8"
