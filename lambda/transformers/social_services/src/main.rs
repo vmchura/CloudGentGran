@@ -46,21 +46,9 @@ use std::collections::HashSet;
 
 #[derive(Deserialize, Serialize)]
 struct LambdaInput {
-    detail: Option<EventDetail>,
-    downloaded_date: Option<String>,
-    bucket_name: Option<String>,
-    semantic_identifier: Option<String>,
-    extraction_timestamp: Option<String>,
-    file_count: Option<u32>,
-    source_prefix: Option<String>,
-    total_records: Option<u32>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct EventDetail {
     downloaded_date: String,
-    bucket_name: Option<String>,
-    semantic_identifier: Option<String>,
+    bucket_name: String,
+    semantic_identifier: String,
 }
 
 #[derive(Serialize)]
@@ -102,42 +90,10 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
         .await;
     let s3_client = Client::new(&shared_config);
 
-    // Parse event to get downloaded_date and other parameters
-    let (downloaded_date, bucket_name, semantic_identifier) = match &event.payload {
-        LambdaInput { detail: Some(detail), .. } => {
-            // EventBridge custom event from API extractor
-            let bucket = detail.bucket_name.clone()
-                .or_else(|| env::var("BUCKET_NAME").ok())
-                .ok_or_else(|| anyhow!("BUCKET_NAME not found"))?;
-            let semantic = detail.semantic_identifier.clone()
-                .or_else(|| env::var("SEMANTIC_IDENTIFIER").ok())
-                .ok_or_else(|| anyhow!("SEMANTIC_IDENTIFIER not found"))?;
-            (detail.downloaded_date.clone(), bucket, semantic)
-        }
-        LambdaInput {
-            downloaded_date: Some(date),
-            bucket_name: Some(bucket),
-            semantic_identifier: Some(semantic),
-            ..
-        } => {
-            // Direct invocation from Airflow DAG with full payload
-            (date.clone(), bucket.clone(), semantic.clone())
-        }
-        LambdaInput { downloaded_date: Some(date), .. } => {
-            // Direct invocation from Airflow DAG with minimal payload
-            let bucket = event.payload.bucket_name.clone()
-                .or_else(|| env::var("BUCKET_NAME").ok())
-                .unwrap_or_else(|| "catalunya-data-dev".to_string()); // Default for LocalStack
-            let semantic = event.payload.semantic_identifier.clone()
-                .or_else(|| env::var("SEMANTIC_IDENTIFIER").ok())
-                .unwrap_or_else(|| "social_services".to_string()); // Default semantic identifier
-            (date.clone(), bucket, semantic)
-        }
-        _ => {
-            let msg = "No downloaded_date found in event";
-            return Ok(create_error_response(msg));
-        }
-    };
+    // Get parameters directly from Airflow payload
+    let downloaded_date = &event.payload.downloaded_date;
+    let bucket_name = &event.payload.bucket_name;
+    let semantic_identifier = &event.payload.semantic_identifier;
 
     println!("Processing files: s3://{}/landing/{}/downloaded_date={}", bucket_name, semantic_identifier, downloaded_date);
 
@@ -149,7 +105,7 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
         Utc::now().format("%Y%m%d_%H%M%S")
     );
 
-    match process_files_for_date(&s3_client, &bucket_name, &source_prefix, &target_key).await {
+    match process_files_for_date(&s3_client, bucket_name, &source_prefix, &target_key).await {
         Ok(result) => Ok(create_success_response(
             &format!("Successfully processed files for date {}", downloaded_date),
             Some(result)
@@ -167,9 +123,8 @@ async fn process_files_for_date(
     source_prefix: &str,
     target_key: &str
 ) -> Result<ProcessingResult> {
-    // First, load catalog data
-    let catalog_bucket = env::var("CATALOG_BUCKET_NAME")
-        .unwrap_or_else(|_| "catalunya-catalog-dev".to_string());
+    // Load catalog data - fail if environment variable not found
+    let catalog_bucket = env::var("CATALOG_BUCKET_NAME").unwrap();
 
     println!("Loading catalog data from bucket: {}", catalog_bucket);
 
@@ -204,14 +159,18 @@ async fn process_files_for_date(
 
     // Filter for JSON files with pattern XXXXXXXX.json (8 digits)
     let re = Regex::new(r"/\d{8}\.json$")?;
-    let mut json_keys = Vec::new();
-    for obj in contents {
-        if let Some(key) = obj.key() {
-            if key.ends_with(".json") && re.is_match(key) {
-                json_keys.push(key.to_string());
-            }
-        }
-    }
+    let json_keys: Vec<String> = contents
+        .iter()
+        .filter_map(|obj| {
+            obj.key().and_then(|key| {
+                if key.ends_with(".json") && re.is_match(key) {
+                    Some(key.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect();
 
     if json_keys.is_empty() {
         println!("No matching JSON files found in s3://{}/{}", bucket, source_prefix);
@@ -250,13 +209,13 @@ async fn process_files_for_date(
         return Err(anyhow!("No DataFrames created from JSON files"));
     }
 
-    // Combine all dataframes "softly" like pandas (fill missing columns with nulls)
+    // Combine all dataframes
     println!("Concatenating {} dataframes", dfs.len());
 
-    let mut combined_df = if dfs.len() == 1 {
+    let combined_df = if dfs.len() == 1 {
         dfs.into_iter().next().unwrap()
     } else {
-        // Step 1: collect all unique columns across all dfs
+        // Collect all unique columns across all dfs
         let mut all_columns: Vec<String> = dfs
             .iter()
             .flat_map(|df| df.get_column_names().into_iter().map(|s| s.to_string()))
@@ -264,14 +223,13 @@ async fn process_files_for_date(
         all_columns.sort();
         all_columns.dedup();
 
-        // Step 2: align each df to have all columns
+        // Align each df to have all columns
         let aligned_dfs: Vec<DataFrame> = dfs
             .iter()
             .map(|df| {
                 let mut df = df.clone();
                 for col in &all_columns {
                     if !df.get_column_names().contains(&col.as_str()) {
-                        // Use String type for missing columns
                         let null_series = Series::full_null(col, df.height(), &DataType::String);
                         df.with_column(null_series)?;
                     }
@@ -280,7 +238,7 @@ async fn process_files_for_date(
             })
             .collect::<PolarsResult<Vec<_>>>()?;
 
-        // Step 3: concatenate aligned dfs
+        // Concatenate aligned dfs
         let mut result_df = aligned_dfs[0].clone();
         for df in aligned_dfs.iter().skip(1) {
             result_df.vstack_mut(df)?;
@@ -289,17 +247,17 @@ async fn process_files_for_date(
     };
 
     // Transform the data with catalogs
-    combined_df = transform_social_services_data(
+    let transformed_df = transform_social_services_data(
         combined_df,
         municipals_df,
         service_types_df,
         service_qualification_df
     )?;
 
-    upload_parquet_to_s3(s3_client, &combined_df, bucket, target_key).await?;
+    upload_parquet_to_s3(s3_client, &transformed_df, bucket, target_key).await?;
 
     println!("Successfully processed {} files -> {}", json_keys.len(), target_key);
-    println!("Transformed {} raw records to {} clean records", total_raw_records, combined_df.height());
+    println!("Transformed {} raw records to {} clean records", total_raw_records, transformed_df.height());
 
     Ok(ProcessingResult {
         source_prefix: source_prefix.to_string(),
@@ -307,7 +265,7 @@ async fn process_files_for_date(
         status: "success".to_string(),
         files_processed: json_keys.len(),
         raw_records: total_raw_records,
-        clean_records: combined_df.height(),
+        clean_records: transformed_df.height(),
         target_location: format!("s3://{}/{}", bucket, target_key),
     })
 }
@@ -387,7 +345,7 @@ async fn load_catalog_data(s3_client: &Client, bucket: &str, catalog_name: &str)
         return Err(anyhow!("No parquet files found for catalog {}", catalog_name));
     }
 
-    // Sort to get the most recent file (by timestamp in filename)
+    // Find the most recent parquet file
     parquet_keys.sort();
     let latest_key = parquet_keys.last().unwrap();
 
@@ -574,7 +532,7 @@ fn transform_social_services_data(
         UniqueKeepStrategy::First,
     )?;
 
-    // Final sort by tokens_similar
+    // Sort by tokens_similar
     df = df.sort(
         ["tokens_similar"],
         SortMultipleOptions::default()
@@ -600,7 +558,7 @@ fn transform_social_services_data(
     println!("Final DataFrame shape: {:?}", final_df.shape());
     println!("Final columns: {:?}", final_df.get_column_names());
 
-    // Validate that we haven't lost any unique registre values
+    // Validate data integrity
     let original_unique_registre = df.column("registre")?.unique()?.len();
     let final_unique_registre = final_df.column("social_service_register_id")?.unique()?.len();
 
