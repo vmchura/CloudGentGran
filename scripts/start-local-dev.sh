@@ -270,8 +270,8 @@ main() {
         "start")
             check_prerequisites
             set_environment
-            setup_local_structure
             cleanup
+            setup_local_structure
             start_services
             monitor_startup
             deploy_infrastructure  # CDK deployment after LocalStack is ready

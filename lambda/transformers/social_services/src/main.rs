@@ -195,7 +195,17 @@ async fn process_files_for_date(
         match process_single_file(s3_client, bucket, key).await {
             Ok((df, records)) => {
                 total_raw_records += records;
-                dfs.push(df);
+
+
+                dfs.push(df.select(&[
+                                                   "registre",
+                                                   "tipologia",
+                                                   "inscripcio",
+                                                   "capacitat",
+                                                   "municipi",
+                                                   "comarca",
+                                                   "qualificacio"
+                                               ])?);
                 println!("Read {} records from {}", records, key);
             }
             Err(e) => {
@@ -212,47 +222,18 @@ async fn process_files_for_date(
     // Combine all dataframes
     println!("Concatenating {} dataframes", dfs.len());
 
-    let combined_df = if dfs.len() == 1 {
-        dfs.into_iter().next().unwrap()
-    } else {
-        // Collect all unique columns across all dfs
-        let mut all_columns: Vec<String> = dfs
-            .iter()
-            .flat_map(|df| df.get_column_names().into_iter().map(|s| s.to_string()))
-            .collect();
-        all_columns.sort();
-        all_columns.dedup();
+    // Convert them all to lazy frames
+    let lazy_frames: Vec<LazyFrame> = dfs.into_iter().map(|df| df.lazy()).collect();
 
-        // Align each df to have all columns
-        let aligned_dfs: Vec<DataFrame> = dfs
-            .iter()
-            .map(|df| {
-                let mut df = df.clone();
-                for col in &all_columns {
-                    if !df.get_column_names().contains(&col.as_str()) {
-                        let null_series = Series::full_null(col, df.height(), &DataType::String);
-                        df.with_column(null_series)?;
-                    }
-                }
-                df.select(&all_columns)
-            })
-            .collect::<PolarsResult<Vec<_>>>()?;
+    // Vertical concat (like UNION ALL)
+    let merged_df = concat(lazy_frames, UnionArgs::default())?.collect()?;
 
-        // Concatenate aligned dfs
-        let mut result_df = aligned_dfs[0].clone();
-        for df in aligned_dfs.iter().skip(1) {
-            result_df.vstack_mut(df)?;
-        }
-        result_df
-    };
-
-    // Transform the data with catalogs
     let transformed_df = transform_social_services_data(
-        combined_df,
-        municipals_df,
-        service_types_df,
-        service_qualification_df
-    )?;
+                        merged_df,
+                        municipals_df,
+                        service_types_df,
+                        service_qualification_df
+                    )?;
 
     upload_parquet_to_s3(s3_client, &transformed_df, bucket, target_key).await?;
 
@@ -285,15 +266,16 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
     let df = JsonReader::new(cursor)
         .finish()
         .map_err(|e| anyhow!("Error reading {}: {}", key, e))?
-        .select([
-            col("registre"),
-            col("tipologia"),
-            col("inscripcio"),
-            col("capacitat"),
-            col("municipi"),
-            col("comarca"),
-            col("qualificacio")
+        .select(&[
+            "registre",
+            "tipologia",
+            "inscripcio",
+            "capacitat",
+            "municipi",
+            "comarca",
+            "qualificacio"
         ])?
+        .lazy()
         .with_columns([
             // Replace "null" string with actual null
             when(col("qualificacio").eq(lit("null")))
@@ -305,7 +287,8 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
                 .then(lit("Aran"))
                 .otherwise(col("comarca"))
                 .alias("comarca")
-        ])?;
+        ])
+        .collect()?;
 
     let record_count = df.height();
     Ok((df, record_count))
@@ -360,11 +343,17 @@ async fn load_catalog_data(s3_client: &Client, bucket: &str, catalog_name: &str)
         .await?;
 
     let data = obj.body.collect().await?.into_bytes();
-    let cursor = Cursor::new(data);
+
+    // Create temporary file for parquet reading using std approach
+    let temp_path = format!("/tmp/catalog_{}_{}.parquet", catalog_name, std::process::id());
+    std::fs::write(&temp_path, &data)?;
 
     // Load parquet into Polars
-    let df = LazyFrame::scan_parquet(cursor, ScanArgsParquet::default())?
+    let df = LazyFrame::scan_parquet(&temp_path, ScanArgsParquet::default())?
         .collect()?;
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_path);
 
     println!("Loaded catalog {} with {} rows", catalog_name, df.height());
     Ok(df)
@@ -409,19 +398,33 @@ fn has_unmapped_element(
     Ok(errors)
 }
 
-fn normalize_expr() -> Expr {
-    col("")
-        .str().to_lowercase()
-        .str().replace_all(lit(r"[áà]"), lit("a"), false)
-        .str().replace_all(lit(r"[éè]"), lit("e"), false)
-        .str().replace_all(lit(r"[íì]"), lit("i"), false)
-        .str().replace_all(lit(r"[óò]"), lit("o"), false)
-        .str().replace_all(lit(r"[úù]"), lit("u"), false)
-        .str().replace_all(lit(r"[^a-z\s]"), lit(" "), false)
-        .str().replace_all(lit(r"\s+"), lit(" "), false)
-        .str().strip_chars(None)
-        .str().split(lit(" "))
-        .list().eval(col("").filter(col("").str().len_chars().gt(lit(1))), false)
+fn normalize_text(text: &str) -> Vec<String> {
+    let normalized = text
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' => 'a',
+            'é' | 'è' => 'e',
+            'í' | 'ì' => 'i',
+            'ó' | 'ò' => 'o',
+            'ú' | 'ù' => 'u',
+            c if c.is_alphabetic() || c.is_whitespace() => c,
+            _ => ' ',
+        })
+        .collect::<String>();
+
+    // Split by whitespace and filter out single characters and empty strings
+    normalized
+        .split_whitespace()
+        .filter(|token| token.len() > 1)
+        .map(|s| s.to_string())
+        .collect()
+}
+
+fn calculate_token_similarity(nom_tokens: &[String], municipi_tokens: &[String]) -> usize {
+    let nom_set: HashSet<_> = nom_tokens.iter().collect();
+    let municipi_set: HashSet<_> = municipi_tokens.iter().collect();
+    nom_set.intersection(&municipi_set).count()
 }
 
 fn transform_social_services_data(
@@ -472,14 +475,14 @@ fn transform_social_services_data(
     )?;
 
     // Select intermediate columns
-    df = df.select([
-        col("registre"),
-        col("inscripcio"),
-        col("capacitat"),
-        col("municipi"),
-        col("comarca"),
-        col("service_type_id"),
-        col("service_qualification_id")
+    df = df.select(&[
+        "registre",
+        "inscripcio",
+        "capacitat",
+        "municipi",
+        "comarca",
+        "service_type_id",
+        "service_qualification_id"
     ])?;
 
     println!("After joins shape: {:?}", df.shape());
@@ -492,24 +495,47 @@ fn transform_social_services_data(
         JoinArgs::new(JoinType::Left)
     )?;
 
-    // Add normalized columns and token similarity
-    let normalize_nom = normalize_expr().map_alias(|_| "nom_normalized".into());
-    let normalize_municipi = normalize_expr().map_alias(|_| "municipi_normalized".into());
+    // Calculate normalized strings and similarities using a simpler approach
+    let nom_series = df.column("nom")?;
+    let municipi_series = df.column("municipi")?;
 
-    df = df.with_columns([
-        col("nom").apply(normalize_nom, GetOutput::default()).alias("nom_normalized"),
-        col("municipi").apply(normalize_municipi, GetOutput::default()).alias("municipi_normalized")
+    let mut normalized_nom_strings: Vec<Option<String>> = Vec::new();
+    let mut normalized_municipi_strings: Vec<Option<String>> = Vec::new();
+    let mut similarities: Vec<i32> = Vec::new();
+
+    for (nom_val, municipi_val) in nom_series.iter().zip(municipi_series.iter()) {
+        match (nom_val.get_str(), municipi_val.get_str()) {
+            (Some(nom_str), Some(municipi_str)) => {
+                let nom_tokens = normalize_text(nom_str);
+                let municipi_tokens = normalize_text(municipi_str);
+                let similarity = calculate_token_similarity(&nom_tokens, &municipi_tokens) as i32;
+
+                normalized_nom_strings.push(Some(nom_tokens.join(" ")));
+                normalized_municipi_strings.push(Some(municipi_tokens.join(" ")));
+                similarities.push(similarity);
+            },
+            _ => {
+                normalized_nom_strings.push(None);
+                normalized_municipi_strings.push(None);
+                similarities.push(0);
+            }
+        }
+    }
+
+    // Create Series from the processed data and add to DataFrame using hstack
+    let nom_normalized_series = Series::new("nom_normalized", normalized_nom_strings);
+    let municipi_normalized_series = Series::new("municipi_normalized", normalized_municipi_strings);
+    let tokens_similar_series = Series::new("tokens_similar", similarities);
+
+    // Create a new DataFrame with additional columns
+    let additional_df = DataFrame::new(vec![
+        nom_normalized_series,
+        municipi_normalized_series,
+        tokens_similar_series,
     ])?;
 
-    // Calculate token intersection length
-    df = df.with_columns([
-        col("nom_normalized")
-            .list()
-            .set_intersection(col("municipi_normalized"))
-            .list()
-            .len()
-            .alias("tokens_similar")
-    ])?;
+    // Horizontally stack the additional columns
+    df = df.hstack(&additional_df.get_columns())?;
 
     // Sort and deduplicate
     df = df.sort(
@@ -520,7 +546,7 @@ fn transform_social_services_data(
 
     // Remove duplicates keeping first (highest tokens_similar due to sort)
     df = df.unique(
-        Some(vec![
+        Some(&[
             "registre".to_string(),
             "inscripcio".to_string(),
             "capacitat".to_string(),
@@ -530,6 +556,7 @@ fn transform_social_services_data(
             "service_qualification_id".to_string()
         ]),
         UniqueKeepStrategy::First,
+        None,
     )?;
 
     // Sort by tokens_similar
@@ -539,21 +566,30 @@ fn transform_social_services_data(
     )?;
 
     // Select final columns with transformations
-    let final_df = df.select([
-        col("registre").alias("social_service_register_id"),
-        col("inscripcio")
-            .str()
-            .to_date(StrptimeOptions::default().with_format(Some("%Y-%m-%d".to_string())))
-            .alias("inscription_date"),
-        col("capacitat")
-            .str()
-            .to_integer(false)
-            .alias("capacity"),
-        col("service_type_id"),
-        col("service_qualification_id"),
-        col("codi").alias("municipal_id"),
-        col("codi_comarca").alias("comarca_id")
-    ])?;
+    let final_df = df.clone()
+        .lazy()
+        .with_columns([
+            col("inscripcio")
+                .str()
+                .to_date(StrptimeOptions {
+                    format: Some("%Y-%m-%d".into()),
+                    ..Default::default()
+                })
+                .alias("inscription_date"),
+            col("capacitat")
+                .cast(DataType::Int32)
+                .alias("capacity")
+        ])
+        .select([
+            col("registre").alias("social_service_register_id"),
+            col("inscription_date"),
+            col("capacity"),
+            col("service_type_id"),
+            col("service_qualification_id"),
+            col("codi").alias("municipal_id"),
+            col("codi_comarca").alias("comarca_id")
+        ])
+        .collect()?;
 
     println!("Final DataFrame shape: {:?}", final_df.shape());
     println!("Final columns: {:?}", final_df.get_column_names());
