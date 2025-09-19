@@ -194,7 +194,7 @@ echo -e "${GREEN}✅ dbt integration completed ($(du -sh orchestration/dbt | cut
 echo -e "${YELLOW}💾 Committing deployment artifacts...${NC}"
 DEPLOYMENT_TAG="deployment-$(date +%Y%m%d-%H%M%S)-$ENVIRONMENT"
 
-git add orchestration/dbt/
+git add -f orchestration/dbt/
 
 if git commit -m "🚀 Deployment artifacts for $ENVIRONMENT
 
