@@ -150,6 +150,20 @@ export class IamConstruct extends Construct {
             `arn:aws:s3:::${bucketName}/landing/*`,
           ],
         }),
+        new iam.PolicyStatement({
+          sid: 'S3CatalogBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [
+            `arn:aws:s3:::${catalogBucketName}`,
+            `arn:aws:s3:::${catalogBucketName}/*`,
+          ],
+        }),
         // S3 Data Bucket Write (staging prefix)
         new iam.PolicyStatement({
           sid: 'S3DataBucketWrite',
