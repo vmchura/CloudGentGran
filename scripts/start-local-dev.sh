@@ -56,6 +56,29 @@ set_environment() {
     echo -e "   - AIRFLOW_UID: ${AIRFLOW_UID}"
 }
 
+# Set up local development structure
+setup_local_structure() {
+    echo -e "${YELLOW}📦 Setting up local development structure...${NC}"
+
+    # Remove existing dbt directory in orchestration if it exists
+    if [ -d "orchestration/dbt" ]; then
+        echo -e "${BLUE}🗑️  Removing existing orchestration/dbt directory${NC}"
+        rm -rf orchestration/dbt
+    fi
+
+    # Copy dbt directory for local development
+    echo -e "${BLUE}📁 Copying dbt/ -> orchestration/dbt/ for local development${NC}"
+    cp -r dbt orchestration/dbt
+
+    if [ -d "orchestration/dbt" ]; then
+        echo -e "${GREEN}✅ Local development structure set up${NC}"
+        echo -e "   📊 DBT directory size: $(du -sh orchestration/dbt | cut -f1)"
+    else
+        echo -e "${RED}❌ Failed to copy dbt directory${NC}"
+        exit 1
+    fi
+}
+
 # Clean up existing containers
 cleanup() {
     echo -e "${YELLOW}🧹 Cleaning up existing containers...${NC}"
@@ -79,6 +102,12 @@ cleanup() {
 
     # Set proper ownership
     sudo chown -R $USER:$USER ./localstack/s3-mounts/ 2>/dev/null || true
+
+    # Clean up local development dbt copy
+    if [ -d "orchestration/dbt" ]; then
+        echo -e "${BLUE}🗑️  Removing local development dbt copy${NC}"
+        rm -rf orchestration/dbt
+    fi
 
     # Clean up Docker
     docker system prune -f || true
@@ -242,6 +271,7 @@ main() {
             check_prerequisites
             set_environment
             cleanup
+            setup_local_structure
             start_services
             monitor_startup
             deploy_infrastructure  # CDK deployment after LocalStack is ready
@@ -257,6 +287,11 @@ main() {
         "stop")
             echo -e "${YELLOW}🛑 Stopping Catalunya Data Pipeline...${NC}"
             docker-compose -f docker-compose.local.yaml down --remove-orphans
+            # Clean up local development dbt copy
+            if [ -d "orchestration/dbt" ]; then
+                echo -e "${BLUE}🗑️  Cleaning up local development files${NC}"
+                rm -rf orchestration/dbt
+            fi
             echo -e "${GREEN}✅ Services stopped${NC}"
             ;;
         "restart")

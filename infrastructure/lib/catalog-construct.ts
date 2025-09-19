@@ -33,6 +33,7 @@ export class CatalogConstruct extends Construct {
   public readonly catalogBucket: s3.Bucket;
   public readonly catalogBucketName: string;
   public readonly serviceTypeCatalogLambda: lambda.Function;
+  public readonly serviceQualificationCatalogLambda: lambda.Function;
   public readonly municipalsCatalogLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: CatalogConstructProps) {
@@ -74,6 +75,17 @@ export class CatalogConstruct extends Construct {
       region,
       catalogExecutorRole: props.catalogExecutorRole
     });
+    this.serviceQualificationCatalogLambda = this.createServiceQualificationCatalogLambda({
+     environmentName,
+     projectName,
+     config,
+     dataBucketName: props.dataBucketName,
+     athenaDatabaseName: props.athenaDatabaseName,
+     lambdaPrefix,
+     account,
+     region,
+     catalogExecutorRole: props.catalogExecutorRole
+   });
   }
 
   /**
@@ -220,6 +232,82 @@ export class CatalogConstruct extends Construct {
 
     return serviceTypeCatalogLambda;
   }
+
+  private createServiceQualificationCatalogLambda(props: CatalogLambdaProps): lambda.Function {
+    const {
+      environmentName,
+      projectName,
+      config,
+      lambdaPrefix,
+      account,
+      region
+    } = props;
+
+    // ========================================
+    // IAM Role for Simple Catalog Lambda
+    // ========================================
+    // Use the execution role from props
+    const catalogRole = props.catalogExecutorRole;
+
+    // ========================================
+    // Simple Catalog Lambda
+    // ========================================
+    const serviceTypeCatalogLambda = new lambda.Function(this, 'ServiceQualificationCatalogLambda', {
+      functionName: `${lambdaPrefix}-service-qualification-catalog`,
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'service_qualification_initializer.lambda_handler',
+      code: lambda.Code.fromAsset('../lambda/catalog/service_qualification', {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          command: [
+            'bash', '-c', [
+              // Install minimal dependencies for parquet creation
+              'pip install pandas fastparquet -t /asset-output',
+              'cp -au . /asset-output'
+            ].join(' && ')
+          ],
+        },
+      }),
+      timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
+      memorySize: 256, // Reduced memory for simple parquet creation
+      role: catalogRole,
+      environment: {
+        CATALOG_BUCKET_NAME: this.catalogBucketName,
+        ENVIRONMENT: environmentName,
+        REGION: region
+      },
+      description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
+    });
+
+    // ========================================
+    // Tags and Outputs
+    // ========================================
+    const commonTags = ConfigHelper.getCommonTags(environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(serviceTypeCatalogLambda).add(key, value);
+    });
+
+    // Simplified tags
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Purpose', 'ParquetGeneration');
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Layer', 'DataProcessing');
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Complexity', 'Simple');
+
+    // Lambda outputs
+    new cdk.CfnOutput(this, 'ServiceQualificationCatalogLambdaArn', {
+      value: serviceTypeCatalogLambda.functionArn,
+      description: 'ARN of the ServiceQualification Catalog Lambda function',
+      exportName: `${projectName}-ServiceQualificationCatalogLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'ServiceQualificationCatalogLambdaName', {
+      value: serviceTypeCatalogLambda.functionName,
+      description: 'Name of the ServiceQualification Catalog Lambda function',
+      exportName: `${projectName}-ServiceQualificationCatalogLambdaName`,
+    });
+
+    return serviceTypeCatalogLambda;
+  }
+
 private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
     const {
       environmentName,

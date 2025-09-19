@@ -341,8 +341,11 @@ test_data/
 
 # Localstack
 localstack/volume/
+localstack/catalunya-catalog-dev/
+localstack/catalunya-data-dev/
 infrastructure/cdk-outputs.json
 downloads/
 localstack/s3-mounts/
 rust-lambda-build/
 dbt/mart/local_data/
+orchestration/dbt

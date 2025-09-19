@@ -32,38 +32,34 @@ from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeF
 logger = logging.getLogger(__name__)
 
 # Environment configuration
-try:
-    ENVIRONMENT = Variable.get("environment", default_var="local")
-except Exception:
-    # Fallback if Variable.get fails during DAG parsing
-    ENVIRONMENT = "local"
+ENVIRONMENT = Variable.get("environment")
 
 # Environment-specific settings
 ENV_CONFIG = {
     "local": {
-        "use_localstack": True,
-        "catalog_aws_conn_id": "localstack_default",
+        "aws_conn_id": "localstack_default",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
+        "service_qualification_initializer_function": "catalunya-dev-service-qualification-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 10,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 1,
         "retry_delay": timedelta(minutes=2)
     },
-    "dev": {
-        "use_localstack": False,
-        "catalog_aws_conn_id": "aws_catalog_role_conn",
+    "development": {
+        "aws_conn_id": "aws_cross_account_role",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
+        "service_qualification_initializer_function": "catalunya-dev-service-qualification-catalog",
         "municipals_initializer_function": "catalunya-dev-municipals-catalog",
         "timeout_minutes": 15,
         "bucket_name": "catalunya-catalog-dev",
         "retry_attempts": 2,
         "retry_delay": timedelta(minutes=5)
     },
-    "prod": {
-        "use_localstack": False,
+    "production": {
         "aws_conn_id": "aws_lambda_role_conn",
         "service_type_initializer_function": "catalunya-prod-service-type-catalog",
+        "service_qualification_initializer_function": "catalunya-prod-service-qualification-catalog",
         "municipals_initializer_function": "catalunya-prod-municipals-catalog",
         "timeout_minutes": 20,
         "bucket_name": "catalunya-catalog-prod",
@@ -82,8 +78,6 @@ def create_service_type_payload(**context):
     """
     Create the payload for the service type catalog initializer Lambda function.
     """
-    dag_run = context.get('dag_run')
-    conf = dag_run.conf if dag_run and dag_run.conf else {}
 
     payload = {
         'source': 'airflow.catalog_initializer',
@@ -91,9 +85,26 @@ def create_service_type_payload(**context):
         'trigger_time': context.get('ts'),
         'dag_run_id': context.get('dag_run').run_id if context.get('dag_run') else None,
         'task_instance_key_str': context.get('task_instance_key_str'),
-        'use_localstack': config.get('use_localstack', False),
         'bucket_name': config['bucket_name'],
         'table_name': 'service_type'
+    }
+
+    logger.info(f"Created payload for service type catalog initializer: {json.dumps(payload, indent=2, default=str)}")
+    return json.dumps(payload)
+
+def create_service_qualification_payload(**context):
+    """
+    Create the payload for the service qualification catalog initializer Lambda function.
+    """
+
+    payload = {
+        'source': 'airflow.catalog_initializer',
+        'environment': ENVIRONMENT,
+        'trigger_time': context.get('ts'),
+        'dag_run_id': context.get('dag_run').run_id if context.get('dag_run') else None,
+        'task_instance_key_str': context.get('task_instance_key_str'),
+        'bucket_name': config['bucket_name'],
+        'table_name': 'service_qualification'
     }
 
     logger.info(f"Created payload for service type catalog initializer: {json.dumps(payload, indent=2, default=str)}")
@@ -103,8 +114,6 @@ def create_municipals_payload(**context):
     """
     Create the payload for the municipals catalog initializer Lambda function.
     """
-    dag_run = context.get('dag_run')
-    conf = dag_run.conf if dag_run and dag_run.conf else {}
 
     payload = {
         'source': 'airflow.catalog_initializer',
@@ -112,7 +121,6 @@ def create_municipals_payload(**context):
         'trigger_time': context.get('ts'),
         'dag_run_id': context.get('dag_run').run_id if context.get('dag_run') else None,
         'task_instance_key_str': context.get('task_instance_key_str'),
-        'use_localstack': config.get('use_localstack', False),
         'bucket_name': config['bucket_name'],
         'table_name': 'municipals'
     }
@@ -127,7 +135,6 @@ def create_municipals_payload(**context):
 def parse_service_type_response(**context) -> Dict[str, Any]:
     """
     Parse Service Type Catalog Initializer Lambda response and validate execution.
-    Works with both LocalStack and real Lambda responses.
     """
     task_instance = context['task_instance']
 
@@ -144,7 +151,6 @@ def parse_service_type_response(**context) -> Dict[str, Any]:
         response_body = lambda_response
         logger.info(f"Using direct response dict")
     elif isinstance(lambda_response, str):
-        # JSON string response (common with LocalStack)
         try:
             response_body = json.loads(lambda_response)
             logger.info(f"Parsed JSON string response")
@@ -211,10 +217,94 @@ def parse_service_type_response(**context) -> Dict[str, Any]:
 
     return catalog_data
 
+def parse_service_qualification_response(**context) -> Dict[str, Any]:
+    """
+    Parse Service Qualification Catalog Initializer Lambda response and validate execution.
+    """
+    task_instance = context['task_instance']
+
+    # Get the Lambda response from the invoke task
+    lambda_response = task_instance.xcom_pull(task_ids='invoke_service_qualification_initializer')
+    logger.info(f"Raw Service Qualification Lambda response received: {type(lambda_response)}")
+
+    # Parse Lambda response - handle different response formats
+    if lambda_response is None:
+        logger.error("Lambda response is None - this means the invoke_service_qualification_initializer task didn't run or failed")
+        raise AirflowException("No Lambda response found - previous task may have failed")
+    elif isinstance(lambda_response, dict):
+        # Direct response dict
+        response_body = lambda_response
+        logger.info(f"Using direct response dict")
+    elif isinstance(lambda_response, str):
+        try:
+            response_body = json.loads(lambda_response)
+            logger.info(f"Parsed JSON string response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            raise AirflowException(f"Invalid JSON response from Lambda: {lambda_response}")
+    elif hasattr(lambda_response, 'get'):
+        # Response with Payload
+        payload = lambda_response.get('Payload')
+        if payload:
+            try:
+                response_body = json.loads(payload) if isinstance(payload, str) else payload
+                logger.info(f"Parsed payload response")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse payload: {e}")
+                raise AirflowException(f"Invalid JSON payload from Lambda: {payload}")
+        else:
+            response_body = lambda_response
+            logger.info(f"Using full response without payload")
+    else:
+        logger.error(f"Unexpected response type: {type(lambda_response)}")
+        raise AirflowException(f"Unexpected Lambda response format: {type(lambda_response)}")
+
+    logger.info(f"Parsed response body: {json.dumps(response_body, indent=2, default=str)}")
+
+    # Check for Lambda execution errors (statusCode from the Lambda response)
+    status_code = response_body.get('statusCode', 200)
+    if status_code != 200:
+        error_body = response_body.get('body', 'Unknown error')
+        if isinstance(error_body, str):
+            try:
+                error_data = json.loads(error_body)
+                error_msg = error_data.get('error', error_body)
+            except json.JSONDecodeError:
+                error_msg = error_body
+        else:
+            error_msg = str(error_body)
+
+        logger.error(f"Service Type Catalog Initializer Lambda failed with status {status_code}: {error_msg}")
+        raise AirflowException(f"Service type catalog initialization failed: {error_msg}")
+
+    # Parse successful response body
+    body = response_body.get('body', '{}')
+    if isinstance(body, str):
+        try:
+            catalog_data = json.loads(body)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse response body: {e}")
+            raise AirflowException(f"Invalid JSON in response body: {body}")
+    else:
+        catalog_data = body
+
+    # Enhanced logging for monitoring and debugging
+    logger.info(f"✅ Service Qualification catalog initialization completed successfully:")
+    logger.info(f"   - Environment: {ENVIRONMENT}")
+    logger.info(f"   - Function: {config['service_qualification_initializer_function']}")
+    logger.info(f"   - Table name: {catalog_data.get('table_name', 'N/A')}")
+    logger.info(f"   - Records processed: {catalog_data.get('record_count', 'N/A')}")
+    logger.info(f"   - S3 location: {catalog_data.get('s3_location', 'N/A')}")
+    logger.info(f"   - Created at: {catalog_data.get('created_at', 'N/A')}")
+
+    # Store catalog data for potential downstream tasks
+    task_instance.xcom_push(key='service_qualification_metadata', value=catalog_data)
+
+    return catalog_data
+
 def parse_municipals_response(**context) -> Dict[str, Any]:
     """
     Parse Municipals Catalog Initializer Lambda response and validate execution.
-    Works with both LocalStack and real Lambda responses.
     """
     task_instance = context['task_instance']
 
@@ -231,7 +321,6 @@ def parse_municipals_response(**context) -> Dict[str, Any]:
         response_body = lambda_response
         logger.info(f"Using direct response dict")
     elif isinstance(lambda_response, str):
-        # JSON string response (common with LocalStack)
         try:
             response_body = json.loads(lambda_response)
             logger.info(f"Parsed JSON string response")
@@ -306,7 +395,6 @@ def validate_service_type_results(**context) -> str:
     created_at = catalog_data.get('created_at', '')
 
     logger.info(f"🔍 Validating service type catalog initialization results:")
-    logger.info(f"   - Environment: {ENVIRONMENT} ({'LocalStack' if config.get('use_localstack') else 'AWS'})")
     logger.info(f"   - Table name: {table_name}")
     logger.info(f"   - Record count: {record_count}")
     logger.info(f"   - S3 location: {s3_location}")
@@ -327,6 +415,53 @@ def validate_service_type_results(**context) -> str:
 
     logger.info("✅ Service type catalog initialization validation passed")
     return "service_type_validation_passed"
+
+def validate_service_qualification_results(**context) -> str:
+    """
+    Validate service qualification catalog initialization results and apply business rules.
+    Pure coordination logic - no heavy processing.
+    """
+    task_instance = context['task_instance']
+
+    # Get catalog metadata from previous task
+    catalog_data = task_instance.xcom_pull(task_ids='parse_service_qualification_response', key='service_qualification_metadata')
+
+    if not catalog_data:
+        logger.error("service_qualification catalog_data is None or empty")
+        # Try alternative approach - get the return value of parse_service_qualification_response
+        catalog_data = task_instance.xcom_pull(task_ids='parse_service_qualification_response')
+        logger.info(f"Trying return value instead: {catalog_data}")
+
+        if not catalog_data:
+            raise AirflowException("No service type catalog metadata found - previous task may have failed")
+
+    # Business validation rules
+    table_name = catalog_data.get('table_name', 'unknown')
+    record_count = catalog_data.get('record_count', 0)
+    s3_location = catalog_data.get('s3_location', '')
+    created_at = catalog_data.get('created_at', '')
+
+    logger.info(f"🔍 Validating service type catalog initialization results:")
+    logger.info(f"   - Table name: {table_name}")
+    logger.info(f"   - Record count: {record_count}")
+    logger.info(f"   - S3 location: {s3_location}")
+    logger.info(f"   - Created at: {created_at}")
+
+    # Critical validation checks
+    if not table_name or table_name == 'unknown':
+        raise AirflowException(f"Invalid table name: {table_name}")
+
+    if record_count <= 0:
+        raise AirflowException(f"No records were processed (record_count: {record_count})")
+
+    if not s3_location or not s3_location.startswith('s3://'):
+        raise AirflowException(f"Invalid S3 location: {s3_location}")
+
+    if not created_at:
+        logger.warning("⚠️  No creation timestamp found in response")
+
+    logger.info("✅ Service type catalog initialization validation passed")
+    return "service_qualification_validation_passed"
 
 def validate_municipals_results(**context) -> str:
     """
@@ -355,7 +490,6 @@ def validate_municipals_results(**context) -> str:
     min_expected_records = 100  # Minimum expected for municipals data
 
     logger.info(f"🔍 Validating municipals catalog initialization results:")
-    logger.info(f"   - Environment: {ENVIRONMENT} ({'LocalStack' if config.get('use_localstack') else 'AWS'})")
     logger.info(f"   - Total records: {total_records}")
     logger.info(f"   - S3 key: {s3_key}")
     logger.info(f"   - Bucket: {bucket}")
@@ -412,9 +546,9 @@ dag = DAG(
 # =============================================================================
 
 logger.info(f"🏗️  Creating catalog initializer tasks for {ENVIRONMENT} environment")
-logger.info(f"   - LocalStack mode: {config.get('use_localstack', False)}")
 logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
 logger.info(f"   - Service Type Initializer function: {config['service_type_initializer_function']}")
+logger.info(f"   - Service Qualification Initializer function: {config['service_qualification_initializer_function']}")
 logger.info(f"   - Municipals Initializer function: {config['municipals_initializer_function']}")
 
 # =============================================================================
@@ -428,11 +562,11 @@ create_service_type_payload_task = PythonOperator(
     dag=dag
 )
 
-# Task 2a: Invoke Service Type Catalog Initializer Lambda (LocalStack or AWS)
+# Task 2a: Invoke Service Type Catalog Initializer Lambda
 invoke_service_type_initializer = LambdaInvokeFunctionOperator(
     task_id='invoke_service_type_initializer',
     function_name=config['service_type_initializer_function'],
-    aws_conn_id=config['catalog_aws_conn_id'],
+    aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_service_type_payload") }}',
     dag=dag
@@ -453,6 +587,41 @@ validate_service_type_results = PythonOperator(
 )
 
 # =============================================================================
+# SERVICE QUALIFICATION CATALOG TASKS
+# =============================================================================
+
+# Task 1a: Create payload for Service Type Lambda invocation
+create_service_qualification_payload_task = PythonOperator(
+    task_id='create_service_qualification_payload',
+    python_callable=create_service_qualification_payload,
+    dag=dag
+)
+
+# Task 2a: Invoke Service Type Catalog Initializer Lambda
+invoke_service_qualification_initializer = LambdaInvokeFunctionOperator(
+    task_id='invoke_service_qualification_initializer',
+    function_name=config['service_qualification_initializer_function'],
+    aws_conn_id=config['aws_conn_id'],
+    invocation_type='RequestResponse',  # Synchronous invocation
+    payload='{{ task_instance.xcom_pull(task_ids="create_service_qualification_payload") }}',
+    dag=dag
+)
+
+# Task 3a: Parse and validate service type catalog initializer response
+parse_service_qualification_response = PythonOperator(
+    task_id='parse_service_qualification_response',
+    python_callable=parse_service_qualification_response,
+    dag=dag
+)
+
+# Task 4a: Validate service type catalog initialization results
+validate_service_qualification_results = PythonOperator(
+    task_id='validate_service_qualification_results',
+    python_callable=validate_service_qualification_results,
+    dag=dag
+)
+
+# =============================================================================
 # MUNICIPALS CATALOG TASKS
 # =============================================================================
 
@@ -463,11 +632,11 @@ create_municipals_payload_task = PythonOperator(
     dag=dag
 )
 
-# Task 2b: Invoke Municipals Catalog Initializer Lambda (LocalStack or AWS)
+# Task 2b: Invoke Municipals Catalog Initializer Lambda
 invoke_municipals_initializer = LambdaInvokeFunctionOperator(
     task_id='invoke_municipals_initializer',
     function_name=config['municipals_initializer_function'],
-    aws_conn_id=config['catalog_aws_conn_id'],
+    aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_municipals_payload") }}',
     dag=dag
@@ -495,5 +664,8 @@ validate_municipals_results = PythonOperator(
 # Service Type pipeline
 create_service_type_payload_task >> invoke_service_type_initializer >> parse_service_type_response >> validate_service_type_results
 
-# Municipals pipeline (runs in parallel)
+# Service Qualification pipeline
+create_service_qualification_payload_task >> invoke_service_qualification_initializer >> parse_service_qualification_response >> validate_service_qualification_results
+
+# Municipals pipeline
 create_municipals_payload_task >> invoke_municipals_initializer >> parse_municipals_response >> validate_municipals_results
