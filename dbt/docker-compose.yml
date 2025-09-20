@@ -1,0 +1,35 @@
+# DBT Docker Compose for Catalunya Data Pipeline
+# Minimal setup with LocalStack S3 bucket integration
+# Usage: docker-compose up --build
+
+version: '3.8'
+
+services:
+  dbt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: catalunya-dbt
+    volumes:
+      # Mount the entire mart project
+      - ./mart:/opt/dbt
+      # Mount local data directory for DuckDB persistence
+      - ./mart/local_data:/opt/dbt/local_data
+      # Mount LocalStack S3 buckets
+      - ../localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:ro
+      - ../localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:ro
+    environment:
+      - DBT_PROJECT_DIR=/opt/dbt
+      - DBT_PROFILES_DIR=/home/dbt/.dbt
+    working_dir: /opt/dbt
+    # Keep container running for interactive use
+    command: tail -f /dev/null
+    networks:
+      - cloudgentgran-local
+    # Optional: connect to existing LocalStack if running
+    external_links:
+      - cloudgentgran-localstack:localstack
+
+networks:
+  cloudgentgran-local:
+    external: true

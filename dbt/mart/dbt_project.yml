@@ -20,8 +20,8 @@ clean-targets:
 # Variables for different environments
 vars:
   # Local development paths
-  staging_path: "./local_data/staging"
-  marts_path: "./local_data/marts"
+  staging_path: "/mnt/s3-data/staging"
+  marts_path: "/mnt/s3-data/marts"
 
 # Configuring models
 models:
