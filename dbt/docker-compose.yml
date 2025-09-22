@@ -16,8 +16,8 @@ services:
       # Mount local data directory for DuckDB persistence
       - ./mart/local_data:/opt/dbt/local_data
       # Mount LocalStack S3 buckets
-      - ../localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:ro
-      - ../localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:ro
+      - ../localstack/catalunya-data-dev:/mnt/s3-data:ro
+      - ../localstack/catalunya-catalog-dev:/mnt/s3-catalog:ro
     environment:
       - DBT_PROJECT_DIR=/opt/dbt
       - DBT_PROFILES_DIR=/home/dbt/.dbt

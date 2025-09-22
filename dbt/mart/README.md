@@ -13,22 +13,10 @@ import duckdb
 
 con = duckdb.connect("./local_data/catalunya_local.duckdb")
 
-# Check row count in both tables
-
-print("Row count in src_social_services:",
-con.execute("SELECT COUNT(*) FROM marts.src_social_services;").fetchone())
-
-
 print("Row count in social_services_mart:",
 con.execute("SELECT COUNT(*) FROM marts.social_services_mart;").fetchone())
 
 # If there are rows, show a sample
-
-try:
-    sample = con.execute("SELECT * FROM marts.src_social_services LIMIT 3;").fetchall()
-    print("Sample from src_social_services:", sample)
-except Exception as e:
-    print("Error querying src_social_services:", e)
     
 try:
     sample = con.execute("SELECT * FROM marts.social_services_mart LIMIT 3;").fetchall()

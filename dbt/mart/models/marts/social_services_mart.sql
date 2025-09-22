@@ -1,22 +1,20 @@
 -- Mart: Social Services - Simple pass-through for testing
 -- This model creates the final mart table from staging data
 
-{% if target.name == 'prod' %}
-{{ config(
-    materialized='table',
-    description='Social services mart - testing DBT setup',
-    file_format='parquet',
-    location_root='s3://catalunya-data-prod/marts/social_services/'
-) }}
-{% else %}
-{{ config(
-    materialized='table',
-    description='Social services mart - testing DBT setup'
-) }}
-{% endif %}
-
-SELECT 
-    *,
-    CURRENT_TIMESTAMP as dbt_created_at,
-    '{{ target.name }}' as environment
+SELECT
+    service_qualification_id,
+    service_type_id,
+    comarca_id,
+    municipal_id,
+    EXTRACT(YEAR FROM inscription_date) as year,
+    EXTRACT(MONTH FROM inscription_date) as month,
+    SUM(capacity) as capacity
 FROM {{ ref('src_social_services') }}
+WHERE capacity > 0 and
+    service_type_id in ('DAY-001', 'RES-003', 'RES-002', 'TUT-001', 'RES-001')
+GROUP BY service_qualification_id,
+             service_type_id,
+             comarca_id,
+             municipal_id,
+             EXTRACT(YEAR FROM inscription_date),
+             EXTRACT(MONTH FROM inscription_date)
