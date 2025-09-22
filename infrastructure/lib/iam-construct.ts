@@ -238,8 +238,13 @@ export class IamConstruct extends Construct {
             's3:DeleteObject',
             's3:GetObject',
             's3:GetObjectVersion',
+            's3:ListBucket',
+            's3:GetBucketLocation',
           ],
-          resources: [`arn:aws:s3:::${bucketName}/marts/*`],
+          resources: [
+            `arn:aws:s3:::${bucketName}/marts`,
+            `arn:aws:s3:::${bucketName}/marts/*`,
+          ],
         }),
         // S3 Athena Results Access
         new iam.PolicyStatement({
@@ -251,6 +256,10 @@ export class IamConstruct extends Construct {
             's3:PutObject',
             's3:GetObject',
             's3:DeleteObject',
+            's3:GetObjectVersion',
+            's3:ListBucketVersions',
+            's3:AbortMultipartUpload',
+            's3:ListMultipartUploadParts',
           ],
           resources: [
             `arn:aws:s3:::${athenaResultsBucketName}`,
@@ -263,16 +272,21 @@ export class IamConstruct extends Construct {
           effect: iam.Effect.ALLOW,
           actions: [
             'glue:GetDatabase',
+            'glue:GetDatabases',
             'glue:GetTable',
             'glue:GetTables',
             'glue:GetPartition',
             'glue:GetPartitions',
             'glue:BatchGetPartition',
+            'glue:GetDataCatalogEncryptionSettings',
+            'glue:GetUserDefinedFunction',
+            'glue:GetUserDefinedFunctions',
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
             `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
             `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`,
+            `arn:aws:glue:${region}:${account}:userDefinedFunction/${athenaDatabaseName}/*`,
           ],
         }),
         // Glue Data Catalog Write
@@ -308,8 +322,15 @@ export class IamConstruct extends Construct {
             'athena:GetQueryResultsStream',
             'athena:ListQueryExecutions',
             'athena:BatchGetQueryExecution',
+            'athena:CancelQueryExecution',
+            'athena:GetResultConfiguration',
+            'athena:GetDataCatalog',
+            'athena:ListDataCatalogs',
           ],
-          resources: [`arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`],
+          resources: [
+            `arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`,
+            `arn:aws:athena:${region}:${account}:datacatalog/*`,
+          ],
         }),
         // Athena Workgroup Access
         new iam.PolicyStatement({
@@ -318,8 +339,17 @@ export class IamConstruct extends Construct {
           actions: [
             'athena:GetWorkGroup',
             'athena:ListWorkGroups',
+            'athena:UpdateWorkGroup',
+            'athena:GetResultConfiguration',
+            'athena:ListNamedQueries',
+            'athena:GetNamedQuery',
+            'athena:CreateNamedQuery',
+            'athena:DeleteNamedQuery',
           ],
-          resources: [`arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`],
+          resources: [
+            `arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`,
+            `arn:aws:athena:${region}:${account}:workgroup/primary`,
+          ],
         }),
         // X-Ray Permissions
         new iam.PolicyStatement({
@@ -335,6 +365,37 @@ export class IamConstruct extends Construct {
               'aws:RequestedRegion': region,
             },
           },
+        }),
+        // Additional Athena permissions for DBT operations
+        new iam.PolicyStatement({
+          sid: 'AthenaAdditionalPermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'athena:ListDatabases',
+            'athena:ListTableMetadata',
+            'athena:GetTableMetadata',
+            'athena:ListTagsForResource',
+          ],
+          resources: ['*'],
+          conditions: {
+            StringEquals: {
+              'aws:RequestedRegion': region,
+            },
+          },
+        }),
+        // Additional S3 permissions for data access patterns used by DBT
+        new iam.PolicyStatement({
+          sid: 'S3AdditionalDataAccess',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketVersioning',
+            's3:ListBucketMultipartUploads',
+            's3:GetBucketNotification',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${athenaResultsBucketName}`,
+          ],
         }),
       ],
     });
