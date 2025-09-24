@@ -19,16 +19,10 @@ services:
       - DBT_PROJECT_DIR=/opt/dbt
       - DBT_PROFILES_DIR=/home/dbt/.dbt
       # DBT Environment Variables for bucket names
-      - DATA_BUCKET=catalunya-data-dev
-      - CATALOG_BUCKET=catalunya-catalog-dev
+      - DATA_BUCKET=/mnt/s3-data
+      - CATALOG_BUCKET=/mnt/s3-catalog
     working_dir: /opt/dbt
     command: tail -f /dev/null
-    networks:
-      - cloudgentgran-local
     # Connect to existing LocalStack service
     external_links:
       - cloudgentgran-localstack:localstack
-
-networks:
-  cloudgentgran-local:
-    external: true

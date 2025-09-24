@@ -11,8 +11,7 @@ SELECT
     EXTRACT(MONTH FROM inscription_date) as month,
     SUM(capacity) as total_capacity,
     '{{ var("downloaded_date") }}' as downloaded_date
-SELECT *
-FROM {{ source('staging', 'social_services') }}
+FROM {{ read_staging_data('social_services', 'downloaded_date', var('downloaded_date')) }}
 WHERE downloaded_date = '{{ var("downloaded_date") }}' and
     capacity > 0 and
     service_type_id in ('DAY-001', 'RES-003', 'RES-002', 'TUT-001', 'RES-001')
