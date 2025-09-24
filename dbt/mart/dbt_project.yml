@@ -20,8 +20,8 @@ clean-targets:
 # Variables for different environments
 vars:
   # Environment-specific S3 buckets
-  data_bucket: "{{ 'catalunya-data-' ~ target.name }}"
-  catalog_bucket: "{{ 'catalunya-catalog-' ~ target.name }}"
+  data_bucket: "{{ 'catalunya-data-' ~ ('dev' if target.name == 'local' else target.name) }}"
+  catalog_bucket: "{{ 'catalunya-catalog-' ~ ('dev' if target.name == 'local' else target.name) }}"
 
 # Configuring models
 models:
