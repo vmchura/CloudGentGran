@@ -1,11 +1,5 @@
--- Mart: Social Services - Analytics-ready table
--- Aggregates social services data by service type and location
-
 {{ config(
-    materialized='table',
-    file_format='parquet',
-    location='s3://{{ var("data_bucket") }}/marts/social_services_aggregated/',
-    partitioned_by=['year', 'month']
+    partitioned_by=['downloaded_date']
 ) }}
 
 SELECT
@@ -15,7 +9,8 @@ SELECT
     municipal_id,
     EXTRACT(YEAR FROM inscription_date) as year,
     EXTRACT(MONTH FROM inscription_date) as month,
-    SUM(capacity) as total_capacity
+    SUM(capacity) as total_capacity,
+    '{{ var("downloaded_date") }}' as downloaded_date
 SELECT *
 FROM {{ source('staging', 'social_services') }}
 WHERE downloaded_date = '{{ var("downloaded_date") }}' and

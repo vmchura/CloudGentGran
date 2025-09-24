@@ -30,5 +30,5 @@ models:
     marts:
       +materialized: table
       # For Athena targets, use S3 location
-      +location: "s3://{{ var('marts_bucket') }}/marts/"
+      +location: "s3://{{ var('data_bucket') }}/marts/"
       +file_format: parquet
