@@ -20,8 +20,8 @@ clean-targets:
 # Variables for different environments
 vars:
   # Environment-specific S3 buckets
-  data_bucket: "{{ 'catalunya-data-' ~ ('dev' if target.name == 'local' else target.name) }}"
-  catalog_bucket: "{{ 'catalunya-catalog-' ~ ('dev' if target.name == 'local' else target.name) }}"
+  data_bucket: "{{ env_var('DATA_BUCKET') }}"
+  catalog_bucket: "{{ env_var('CATALOG_BUCKET') }}"
 
 # Configuring models
 models:
@@ -30,5 +30,5 @@ models:
     marts:
       +materialized: table
       # For Athena targets, use S3 location
-      +location: "s3://{{ var('data_bucket') }}/marts/"
+      +location: "s3://{{ env_var('DATA_BUCKET')}}/marts/"
       +file_format: parquet
