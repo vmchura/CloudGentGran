@@ -20,11 +20,14 @@ services:
     environment:
       - DBT_PROJECT_DIR=/opt/dbt
       - DBT_PROFILES_DIR=/home/dbt/.dbt
-      # AWS/LocalStack configuration for Athena - use service name, not localhost
+      # AWS/LocalStack configuration for Athena
       - AWS_ENDPOINT_URL=http://localstack:4566
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=eu-west-1
+      # DBT Environment Variables for bucket names
+      - DATA_BUCKET=catalunya-data-dev
+      - CATALOG_BUCKET=catalunya-catalog-dev
     working_dir: /opt/dbt
     command: tail -f /dev/null
     networks:
