@@ -1,5 +1,4 @@
 # DBT Dockerfile for Catalunya Data Pipeline
-# Updated for Athena/LocalStack integration
 
 FROM python:3.11-slim
 
@@ -13,38 +12,23 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     awscli \
-    gcc \
-    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Create dbt user
 RUN useradd -m -s /bin/bash dbt
 
-# Install dbt with Athena adapter
 RUN pip install --no-cache-dir \
-    dbt-athena==1.9.5 \
-    dbt-core==1.10.11 \
-    pyathena[pandas]==3.18.0 \
-    boto3==1.35.26 \
-    botocore==1.35.26
+    dbt-duckdb==1.9.6 \
+    dbt-core==1.10.11
 
 # Create necessary directories
-RUN mkdir -p /home/dbt/.dbt /opt/dbt
+RUN mkdir -p /home/dbt/.dbt /opt/dbt/local_data
 
 # Copy profiles template and rename to profiles.yml
 COPY mart/profiles_template.yml /home/dbt/.dbt/profiles.yml
 
 # Set ownership
 RUN chown -R dbt:dbt /home/dbt /opt/dbt
-
-# Create AWS config directory and files
-RUN mkdir -p /home/dbt/.aws && \
-    echo '[localstack]' > /home/dbt/.aws/credentials && \
-    echo 'aws_access_key_id = test' >> /home/dbt/.aws/credentials && \
-    echo 'aws_secret_access_key = test' >> /home/dbt/.aws/credentials && \
-    echo '[profile localstack]' > /home/dbt/.aws/config && \
-    echo 'region = eu-west-1' >> /home/dbt/.aws/config && \
-    echo 'endpoint_url = http://localhost:4566' >> /home/dbt/.aws/config
 
 # Switch to dbt user
 USER dbt

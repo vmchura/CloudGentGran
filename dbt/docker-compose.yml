@@ -1,8 +1,5 @@
 # DBT Docker Compose for Catalunya Data Pipeline
-# Connects to existing LocalStack running from root docker-compose.local.yaml
-# Usage: docker-compose up --build
-
-version: '3.8'
+# Usage: docker-compose up --build -d
 
 services:
   dbt:
@@ -13,18 +10,14 @@ services:
     volumes:
       # Mount the entire mart project
       - ./mart:/opt/dbt
-      # Mount LocalStack S3 buckets via the s3fs mounts
-      - ../localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:ro
-      - ../localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:ro
-      - ../localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:rw
+      # Mount local data directory for DuckDB persistence
+      - ./mart/local_data:/opt/dbt/local_data
+      # Mount LocalStack S3 buckets
+      - ../localstack/catalunya-data-dev:/mnt/s3-data:ro
+      - ../localstack/catalunya-catalog-dev:/mnt/s3-catalog:ro
     environment:
       - DBT_PROJECT_DIR=/opt/dbt
       - DBT_PROFILES_DIR=/home/dbt/.dbt
-      # AWS/LocalStack configuration for Athena
-      - AWS_ENDPOINT_URL=http://cloudgentgran-localstack:4566
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - AWS_DEFAULT_REGION=eu-west-1
       # DBT Environment Variables for bucket names
       - DATA_BUCKET=catalunya-data-dev
       - CATALOG_BUCKET=catalunya-catalog-dev
