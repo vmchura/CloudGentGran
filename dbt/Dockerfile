@@ -6,7 +6,7 @@ FROM python:3.11-slim
 ENV DBT_PROJECT_DIR=/opt/dbt
 ENV DBT_PROFILES_DIR=/home/dbt/.dbt
 ENV PYTHONUNBUFFERED=1
-
+ENV DBT_TARGET=standalone
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \

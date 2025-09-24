@@ -1,18 +1,20 @@
-# DBT Profile Template for Catalunya Data Pipeline
-# Copy this to ~/.dbt/profiles.yml 
-
 catalunya_data:
-  target: local
+  target: "{{ env_var('DBT_TARGET') }}"
   outputs:
-    # Local development with Athena via Localstack
-    local:
+    standalone:
       type: duckdb
       path: ./local_data/catalunya_local.duckdb
       schema: marts
       extensions:
         - parquet
-    
-    # Development environment with AWS Athena
+    local:
+      type: athena
+      s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
+      region_name: eu-west-1
+      database: catalunya_data_dev
+      schema: marts
+      work_group: catalunya-workgroup-dev
+
     dev:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
@@ -20,8 +22,7 @@ catalunya_data:
       database: catalunya_data_dev
       schema: marts
       work_group: catalunya-workgroup-dev
-    
-    # Production environment with AWS Athena
+
     prod:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-prod/query-results/

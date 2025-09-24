@@ -27,6 +27,12 @@ COPY --chown=airflow:root config/ /opt/airflow/config/
 
 COPY --chown=airflow:root dbt/ /opt/airflow/dbt/
 
+RUN cp /opt/airflow/dbt/mart/profiles_template.yml /opt/airflow/dbt/profiles.yml
+
+COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
+# Ensure plugins are importable
+RUN find /opt/airflow/plugins -name "*.py" -exec chmod 644 {} \;
+
 ENV DBT_PROJECT_DIR=/opt/airflow/dbt/mart
 ENV DBT_PROFILES_DIR=/opt/airflow/dbt
 
