@@ -1,5 +1,5 @@
 # DBT Dockerfile for Catalunya Data Pipeline
-# Simple container for running dbt locally with DuckDB and LocalStack integration
+# Updated for Athena/LocalStack integration
 
 FROM python:3.11-slim
 
@@ -13,18 +13,23 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     awscli \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Create dbt user
 RUN useradd -m -s /bin/bash dbt
 
-# Install dbt with DuckDB adapter
+# Install dbt with Athena adapter
 RUN pip install --no-cache-dir \
-    dbt-duckdb==1.9.6 \
-    dbt-core==1.10.11
+    dbt-athena==1.9.5 \
+    dbt-core==1.10.11 \
+    pyathena[pandas]==3.18.0 \
+    boto3==1.35.26 \
+    botocore==1.35.26
 
 # Create necessary directories
-RUN mkdir -p /home/dbt/.dbt /opt/dbt/local_data
+RUN mkdir -p /home/dbt/.dbt /opt/dbt
 
 # Copy profiles template and rename to profiles.yml
 COPY mart/profiles_template.yml /home/dbt/.dbt/profiles.yml

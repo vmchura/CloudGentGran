@@ -87,7 +87,7 @@ services:
     environment:
       # Core LocalStack configuration
       - DEBUG=1
-      - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm
+      - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm,athena,glue
       - DOCKER_HOST=unix:///var/run/docker.sock
       - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
 
