@@ -37,6 +37,15 @@ COPY mart/profiles_template.yml /home/dbt/.dbt/profiles.yml
 # Set ownership
 RUN chown -R dbt:dbt /home/dbt /opt/dbt
 
+# Create AWS config directory and files
+RUN mkdir -p /home/dbt/.aws && \
+    echo '[localstack]' > /home/dbt/.aws/credentials && \
+    echo 'aws_access_key_id = test' >> /home/dbt/.aws/credentials && \
+    echo 'aws_secret_access_key = test' >> /home/dbt/.aws/credentials && \
+    echo '[profile localstack]' > /home/dbt/.aws/config && \
+    echo 'region = eu-west-1' >> /home/dbt/.aws/config && \
+    echo 'endpoint_url = http://localhost:4566' >> /home/dbt/.aws/config
+
 # Switch to dbt user
 USER dbt
 
