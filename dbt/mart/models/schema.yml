@@ -3,33 +3,39 @@ version: 2
 sources:
   - name: staging
     description: Catalunya data staging layer
+    # Configure for Athena targets
+    meta:
+      external_location: "s3://{{ var('data_bucket') }}/staging/"
     tables:
       - name: social_services
         description: Social services data from staging parquet files
+        # Athena external table configuration
+        external_location: "s3://{{ var('data_bucket') }}/staging/social_services/"
+        file_format: parquet
+        partitioned_by:
+          - name: downloaded_date
+            data_type: string
 
 models:
   - name: src_social_services
     description: Raw social services data from staging layer
-    columns:
-      - name: id
-        description: Record identifier
-        tests:
-          - unique
-          - not_null
-    
+
   - name: social_services_mart
     description: Social services mart table for analytics
     columns:
-      - name: id
-        description: Record identifier
-        tests:
-          - unique
-          - not_null
-      - name: dbt_created_at
-        description: Timestamp when record was created by DBT
+      - name: service_qualification_id
+        description: Service qualification identifier
         tests:
           - not_null
-      - name: environment
-        description: Environment where DBT was executed (dev/prod)
+      - name: service_type_id
+        description: Service type identifier
+        tests:
+          - not_null
+      - name: year
+        description: Year extracted from inscription date
+        tests:
+          - not_null
+      - name: month
+        description: Month extracted from inscription date
         tests:
           - not_null

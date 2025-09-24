@@ -4,14 +4,16 @@
 catalunya_data:
   target: local
   outputs:
-    # Local development with DuckDB
+    # Local development with Athena via Localstack
     local:
-      type: duckdb
-      path: ./local_data/catalunya_local.duckdb
+      type: athena
+      s3_staging_dir: s3://catalunya-athena-results-local/query-results/
+      region_name: eu-west-1
+      database: catalunya_data_local
       schema: marts
-      extensions:
-        - httpfs  # For S3 access (if needed)
-        - parquet # For parquet files
+      work_group: catalunya-workgroup-local
+      aws_profile_name: localstack
+      s3_endpoint: http://localhost:4566
     
     # Development environment with AWS Athena
     dev:
