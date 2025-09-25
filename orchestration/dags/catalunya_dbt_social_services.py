@@ -20,7 +20,7 @@ dag = DAG(
     schedule=None,
     catchup=False,
     max_active_runs=1,
-    params={"downloaded_date": "20250920"},
+    params={"downloaded_date": "20250919"},
     tags=['catalunya', 'dbt', 'social-services', 'mart', f'env:{ENVIRONMENT}']
 )
 
@@ -30,7 +30,7 @@ run_dbt_model = DbtAthenaOperator(
     dbt_command='run',
     dbt_target=ENVIRONMENT,
     dbt_vars={"downloaded_date": "{{ params.downloaded_date }}"},
-    select_models='models.marts.social_services_mart',
+    select_models='social_services_mart',
     dag=dag
 )
 
