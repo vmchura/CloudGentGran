@@ -39,7 +39,7 @@ ENV_CONFIG = {
         "retry_attempts": 1,
         "retry_delay": timedelta(minutes=2)
     },
-    "development": {
+    "dev": {
         "aws_conn_id": "aws_cross_account_role",
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
@@ -50,7 +50,7 @@ ENV_CONFIG = {
         "retry_attempts": 2,
         "retry_delay": timedelta(minutes=5)
     },
-    "production": {
+    "prod": {
         "aws_conn_id": "aws_lambda_role_conn",
         "api_extractor_function": "catalunya-prod-social_services",
         "transformer_function": "catalunya-prod-social-services-transformer",

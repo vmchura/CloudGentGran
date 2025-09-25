@@ -39,7 +39,7 @@ ENV DATA_BUCKET=catalunya-data-dev
 ENV CATALOG_BUCKET=catalunya-catalog-dev
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8080/api/v2/monitor/health || exit 1
 
 EXPOSE 8080
 
