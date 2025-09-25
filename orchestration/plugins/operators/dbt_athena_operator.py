@@ -43,7 +43,7 @@ class DbtAthenaOperator(BaseOperator):
         sts_client = hook.get_session().client('sts')
 
         # Assume the mart execution role
-        ENVIRONMENT = os.getenv('ENVIRONMENT')
+        ENVIRONMENT = os.getenv('AIRFLOW_VAR_ENVIRONMENT')
         account_id = sts_client.get_caller_identity()['Account']
         mart_role_arn = f"arn:aws:iam::{account_id}:role/catalunya-mart-role-{ENVIRONMENT}"
 
