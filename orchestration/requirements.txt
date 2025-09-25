@@ -1,5 +1,5 @@
 dbt-core
-dbt-duckdb
+dbt-athena
 psycopg2-binary
 apache-airflow-providers-fab
 apache-airflow-providers-amazon>=8.15.0

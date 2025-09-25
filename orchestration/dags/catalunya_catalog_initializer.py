@@ -46,7 +46,7 @@ ENV_CONFIG = {
         "retry_attempts": 1,
         "retry_delay": timedelta(minutes=2)
     },
-    "development": {
+    "dev": {
         "aws_conn_id": "aws_cross_account_role",
         "service_type_initializer_function": "catalunya-dev-service-type-catalog",
         "service_qualification_initializer_function": "catalunya-dev-service-qualification-catalog",
@@ -56,7 +56,7 @@ ENV_CONFIG = {
         "retry_attempts": 2,
         "retry_delay": timedelta(minutes=5)
     },
-    "production": {
+    "prod": {
         "aws_conn_id": "aws_lambda_role_conn",
         "service_type_initializer_function": "catalunya-prod-service-type-catalog",
         "service_qualification_initializer_function": "catalunya-prod-service-qualification-catalog",

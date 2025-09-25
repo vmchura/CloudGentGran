@@ -31,10 +31,12 @@ if [ "$ENVIRONMENT" = "production" ]; then
     APP_NAME="cloudgentgran-orchestration-prod"
     DB_NAME="cloudgentgran-airflow-db-prod"
     SUBDOMAIN="airflow-prod"
+    AIRFLOW_ENV="prod"
 elif [ "$ENVIRONMENT" = "development" ]; then
     APP_NAME="cloudgentgran-orchestration-dev"
     DB_NAME="cloudgentgran-airflow-db-dev"
     SUBDOMAIN="airflow-dev"
+    AIRFLOW_ENV="dev"
 else
     echo -e "${RED}❌ Invalid environment. Use 'development' or 'production'${NC}"
     exit 1
@@ -194,7 +196,7 @@ echo -e "${GREEN}✅ dbt integration completed ($(du -sh orchestration/dbt | cut
 echo -e "${YELLOW}💾 Committing deployment artifacts...${NC}"
 DEPLOYMENT_TAG="deployment-$(date +%Y%m%d-%H%M%S)-$ENVIRONMENT"
 
-git add orchestration/dbt/
+git add -f orchestration/dbt/
 
 if git commit -m "🚀 Deployment artifacts for $ENVIRONMENT
 
@@ -276,7 +278,7 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__BASE_URL=htt
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__HOSTNAME_CALLABLE=airflow.utils.net.get_host_ip_address"
 
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$ENVIRONMENT"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$AIRFLOW_ENV"
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
 

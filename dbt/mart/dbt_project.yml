@@ -19,17 +19,16 @@ clean-targets:
 
 # Variables for different environments
 vars:
-  # Local development paths
-  staging_path: "./local_data/staging"
-  marts_path: "./local_data/marts"
+  # Environment-specific S3 buckets
+  data_bucket: "{{ env_var('DATA_BUCKET') }}"
+  catalog_bucket: "{{ env_var('CATALOG_BUCKET') }}"
 
 # Configuring models
 models:
   catalunya_marts:
-    # Staging models - temporary views for data transformation
-    staging:
-      +materialized: view
-      
     # Marts models - final tables for analytics
     marts:
       +materialized: table
+      # For Athena targets, use S3 location
+      +location: "s3://{{ env_var('DATA_BUCKET')}}/marts/"
+      +file_format: parquet
