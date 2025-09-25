@@ -279,6 +279,7 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__HOSTNAME_CALLABLE=airflow.utils.net.get_host_ip_address"
 
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$AIRFLOW_ENV"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_environment=$AIRFLOW_ENV"
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
 
