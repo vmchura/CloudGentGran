@@ -287,6 +287,8 @@ export class IamConstruct extends Construct {
             `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
             `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`,
             `arn:aws:glue:${region}:${account}:userDefinedFunction/${athenaDatabaseName}/*`,
+            `arn:aws:glue:${region}:${account}:database/marts`,
+            `arn:aws:glue:${region}:${account}:table/marts/*`
           ],
         }),
         // Glue Data Catalog Write
@@ -308,6 +310,8 @@ export class IamConstruct extends Construct {
             `arn:aws:glue:${region}:${account}:catalog`,
             `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
             `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`,
+            `arn:aws:glue:${region}:${account}:database/marts`,
+            `arn:aws:glue:${region}:${account}:table/marts/*`
           ],
         }),
         // Athena Query Execution
@@ -450,6 +454,7 @@ export class IamConstruct extends Construct {
             'glue:DeleteTable',
             'glue:GetDatabase',
             'glue:CreateDatabase',
+            'glue:CreateDatabases',
             'glue:UpdateDatabase',
           ],
           resources: [
@@ -564,7 +569,7 @@ export class IamConstruct extends Construct {
     this.martExecutionRole = new iam.Role(this, 'MartExecutionRole', {
       roleName: `catalunya-mart-role-${environmentName}`,
       description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      assumedBy: new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
       managedPolicies: [this.martExecutorPolicy],
     });
 
