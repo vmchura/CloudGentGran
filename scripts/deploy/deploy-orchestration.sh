@@ -31,10 +31,12 @@ if [ "$ENVIRONMENT" = "production" ]; then
     APP_NAME="cloudgentgran-orchestration-prod"
     DB_NAME="cloudgentgran-airflow-db-prod"
     SUBDOMAIN="airflow-prod"
+    AIRFLOW_ENV="dev"
 elif [ "$ENVIRONMENT" = "development" ]; then
     APP_NAME="cloudgentgran-orchestration-dev"
     DB_NAME="cloudgentgran-airflow-db-dev"
     SUBDOMAIN="airflow-dev"
+    AIRFLOW_ENV="prod"
 else
     echo -e "${RED}❌ Invalid environment. Use 'development' or 'production'${NC}"
     exit 1
@@ -276,7 +278,7 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__BASE_URL=htt
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__HOSTNAME_CALLABLE=airflow.utils.net.get_host_ip_address"
 
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$ENVIRONMENT"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$AIRFLOW_ENV"
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
 
