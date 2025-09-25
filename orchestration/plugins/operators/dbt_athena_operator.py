@@ -64,7 +64,38 @@ class DbtAthenaOperator(BaseOperator):
         # Set environment with AWS credentials
         env = self._build_environment_from_assumed_role(credentials)
 
-        # Rest of the method stays the same...
+        # Execute DBT command
+        minutes = 5
+        try:
+            result = subprocess.run(
+                dbt_cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                cwd=self.dbt_project_dir,
+                timeout=minutes*60
+            )
+
+            if result.stdout:
+                logger.info(f"DBT stdout:\n{result.stdout}")
+            if result.stderr:
+                logger.warning(f"DBT stderr:\n{result.stderr}")
+
+            if result.returncode != 0:
+                raise AirflowException(
+                    f"DBT command failed with return code {result.returncode}:\n"
+                    f"STDOUT: {result.stdout}\n"
+                    f"STDERR: {result.stderr}"
+                )
+
+            logger.info("DBT command completed successfully")
+            return result.stdout
+
+        except subprocess.TimeoutExpired:
+            raise AirflowException(f"DBT command timed out after {minutes} minutes")
+        except Exception as e:
+            raise AirflowException(f"Failed to execute DBT command: {str(e)}")
+
 
     def _build_dbt_command(self) -> List[str]:
         cmd = ['dbt', self.dbt_command]
