@@ -31,12 +31,12 @@ if [ "$ENVIRONMENT" = "production" ]; then
     APP_NAME="cloudgentgran-orchestration-prod"
     DB_NAME="cloudgentgran-airflow-db-prod"
     SUBDOMAIN="airflow-prod"
-    AIRFLOW_ENV="dev"
+    AIRFLOW_ENV="prod"
 elif [ "$ENVIRONMENT" = "development" ]; then
     APP_NAME="cloudgentgran-orchestration-dev"
     DB_NAME="cloudgentgran-airflow-db-dev"
     SUBDOMAIN="airflow-dev"
-    AIRFLOW_ENV="prod"
+    AIRFLOW_ENV="dev"
 else
     echo -e "${RED}❌ Invalid environment. Use 'development' or 'production'${NC}"
     exit 1
