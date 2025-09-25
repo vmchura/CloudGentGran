@@ -36,16 +36,30 @@ class DbtAthenaOperator(BaseOperator):
     def execute(self, context: Context) -> str:
         logger.info(f"Starting DBT {self.dbt_command} with target: {self.dbt_target}")
 
-        # Get AWS credentials from connection
+        # Get AWS credentials from connection (cross-account role)
         hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='sts')
-        credentials = hook.get_credentials()
+        sts_client = hook.get_client_type('sts')
+
+        # Assume the mart execution role
+        ENVIRONMENT = os.getenv('ENVIRONMENT')
+        mart_role_arn = f"arn:aws:iam::{sts_client.get_caller_identity()['Account']}:role/catalunya-mart-role-{ENVIRONMENT}"
+
+        logger.info(f"Assuming mart role: {mart_role_arn}")
+
+        assumed_role = sts_client.assume_role(
+            RoleArn=mart_role_arn,
+            RoleSessionName='dbt_execution'
+        )
+
+        # Use assumed role credentials
+        credentials = assumed_role['Credentials']
 
         # Build DBT command
         dbt_cmd = self._build_dbt_command()
         logger.info(f"Executing DBT command: {' '.join(dbt_cmd)}")
 
         # Set environment with AWS credentials
-        env = self._build_environment(credentials)
+        env = self._build_environment_from_assumed_role(credentials)
 
         # Execute DBT command
         try:
@@ -55,16 +69,14 @@ class DbtAthenaOperator(BaseOperator):
                 capture_output=True,
                 text=True,
                 cwd=self.dbt_project_dir,
-                timeout=1800  # 30 minutes timeout
+                timeout=1800
             )
 
-            # Log output
             if result.stdout:
                 logger.info(f"DBT stdout:\n{result.stdout}")
             if result.stderr:
                 logger.warning(f"DBT stderr:\n{result.stderr}")
 
-            # Check execution result
             if result.returncode != 0:
                 raise AirflowException(
                     f"DBT command failed with return code {result.returncode}:\n"
@@ -100,6 +112,20 @@ class DbtAthenaOperator(BaseOperator):
             cmd.extend(['--select', self.select_models])
 
         return cmd
+
+    def _build_environment_from_assumed_role(self, credentials) -> Dict[str, str]:
+        env = os.environ.copy()
+
+        env['AWS_ACCESS_KEY_ID'] = credentials['AccessKeyId']
+        env['AWS_SECRET_ACCESS_KEY'] = credentials['SecretAccessKey']
+        env['AWS_SESSION_TOKEN'] = credentials['SessionToken']
+        env['AWS_DEFAULT_REGION'] = 'eu-west-1'
+
+        env['DBT_TARGET'] = self.dbt_target
+        env['DBT_PROJECT_DIR'] = self.dbt_project_dir
+        env['DBT_PROFILES_DIR'] = self.dbt_profiles_dir
+
+        return env
 
     def _build_environment(self, credentials) -> Dict[str, str]:
         env = os.environ.copy()
