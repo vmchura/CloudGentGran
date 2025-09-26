@@ -11,22 +11,22 @@ catalunya_data:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
       region_name: eu-west-1
-      database: catalunya_data_dev
-      schema: marts
+      database: awsdatacatalog
+      schema: catalunya_data_dev
       work_group: catalunya-workgroup-dev
 
     dev:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
       region_name: eu-west-1
-      database: catalunya_data_dev
-      schema: marts
+      database: awsdatacatalog
+      schema: catalunya_data_dev
       work_group: catalunya-workgroup-dev
 
     prod:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-prod/query-results/
       region_name: eu-west-1
-      database: catalunya_data_prod
-      schema: marts
+      database: awsdatacatalog
+      schema: catalunya_data_prod
       work_group: catalunya-workgroup-prod
