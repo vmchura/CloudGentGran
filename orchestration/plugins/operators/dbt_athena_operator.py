@@ -10,6 +10,7 @@ from airflow.exceptions import AirflowException
 
 logger = logging.getLogger(__name__)
 
+
 class DbtAthenaOperator(BaseOperator):
     template_fields = ['dbt_vars', 'select_models']
 
@@ -40,11 +41,14 @@ class DbtAthenaOperator(BaseOperator):
         hook = AwsBaseHook(aws_conn_id=self.aws_conn_id)
 
         # Create STS client correctly
-        sts_client = hook.get_session().client('sts')
+        session = hook.get_session()
+        sts_client = session.client('sts')
 
-        # Assume the mart execution role
-        ENVIRONMENT = os.getenv('AIRFLOW_VAR_ENVIRONMENT')
+        # Get account ID using the cross-account role
         account_id = sts_client.get_caller_identity()['Account']
+
+        # Now assume the mart execution role using the cross-account role credentials
+        ENVIRONMENT = os.getenv('AIRFLOW_VAR_ENVIRONMENT')
         mart_role_arn = f"arn:aws:iam::{account_id}:role/catalunya-mart-role-{ENVIRONMENT}"
 
         logger.info(f"Assuming mart role: {mart_role_arn}")
@@ -54,14 +58,14 @@ class DbtAthenaOperator(BaseOperator):
             RoleSessionName='dbt_execution'
         )
 
-        # Use assumed role credentials
+        # Use assumed mart role credentials for dbt
         credentials = assumed_role['Credentials']
 
         # Build DBT command
         dbt_cmd = self._build_dbt_command()
         logger.info(f"Executing DBT command: {' '.join(dbt_cmd)}")
 
-        # Set environment with AWS credentials
+        # Set environment with mart role AWS credentials
         env = self._build_environment_from_assumed_role(credentials)
 
         # Execute DBT command
@@ -73,7 +77,7 @@ class DbtAthenaOperator(BaseOperator):
                 capture_output=True,
                 text=True,
                 cwd=self.dbt_project_dir,
-                timeout=minutes*60
+                timeout=minutes * 60
             )
 
             if result.stdout:
@@ -95,7 +99,6 @@ class DbtAthenaOperator(BaseOperator):
             raise AirflowException(f"DBT command timed out after {minutes} minutes")
         except Exception as e:
             raise AirflowException(f"Failed to execute DBT command: {str(e)}")
-
 
     def _build_dbt_command(self) -> List[str]:
         cmd = ['dbt', self.dbt_command]
