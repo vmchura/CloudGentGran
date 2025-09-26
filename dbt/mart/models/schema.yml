@@ -3,6 +3,7 @@ version: 2
 sources:
   - name: staging
     description: Catalunya data staging layer
+    database: catalunya_data_dev  # Add this line
     # Configure for Athena targets
     meta:
       external_location: "s3://{{ var('data_bucket') }}/staging/"
