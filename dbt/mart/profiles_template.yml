@@ -11,6 +11,7 @@ catalunya_data:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
       region_name: eu-west-1
+      catalog: AwsDataCatalog
       database: catalunya_data_dev
       schema: marts
       work_group: catalunya-workgroup-dev
@@ -19,6 +20,7 @@ catalunya_data:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
       region_name: eu-west-1
+      catalog: AwsDataCatalog
       database: catalunya_data_dev
       schema: marts
       work_group: catalunya-workgroup-dev
@@ -27,6 +29,7 @@ catalunya_data:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-prod/query-results/
       region_name: eu-west-1
+      catalog: AwsDataCatalog
       database: catalunya_data_prod
       schema: marts
       work_group: catalunya-workgroup-prod
