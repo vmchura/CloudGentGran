@@ -1,23 +1,18 @@
 catalunya_data:
   target: "{{ env_var('DBT_TARGET') }}"
   outputs:
-    standalone:
+
+    local:
       type: duckdb
       path: ./local_data/catalunya_local.duckdb
       schema: marts
       extensions:
         - parquet
-    local:
-      type: athena
-      s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
-      region_name: eu-west-1
-      database: awsdatacatalog
-      schema: catalunya_data_dev
-      work_group: catalunya-workgroup-dev
 
     dev:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-dev/query-results/
+      s3_data_dir: s3://catalunya-data-dev/
       region_name: eu-west-1
       database: awsdatacatalog
       schema: catalunya_data_dev
@@ -26,6 +21,7 @@ catalunya_data:
     prod:
       type: athena
       s3_staging_dir: s3://catalunya-athena-results-prod/query-results/
+      s3_data_dir: s3://catalunya-data-prod/
       region_name: eu-west-1
       database: awsdatacatalog
       schema: catalunya_data_prod

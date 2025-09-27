@@ -25,12 +25,12 @@ dag = DAG(
 )
 
 run_dbt_model = DbtAthenaOperator(
-    task_id='run_social_services_mart',
+    task_id='social_services_by_service_municipal',
     aws_conn_id='aws_cross_account_role',
     dbt_command='run',
     dbt_target=ENVIRONMENT,
     dbt_vars={"downloaded_date": "{{ params.downloaded_date }}"},
-    select_models='social_services_mart',
+    select_models='social_services_by_service_municipal',
     dag=dag
 )
 
