@@ -6,12 +6,12 @@ version: '1.0.0'
 profile: 'catalunya_data'
 
 # These configurations specify where dbt should look for different types of files.
-model-paths: ["models"]
-analysis-paths: ["analyses"]
-test-paths: ["tests"]
-seed-paths: ["seeds"]
-macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
+model-paths: [ "models" ]
+analysis-paths: [ "analyses" ]
+test-paths: [ "tests" ]
+seed-paths: [ "seeds" ]
+macro-paths: [ "macros" ]
+snapshot-paths: [ "snapshots" ]
 
 clean-targets:
   - "target"
@@ -30,5 +30,7 @@ models:
     marts:
       +materialized: table
       # For Athena targets, use S3 location
-      +location: "s3://{{ env_var('DATA_BUCKET')}}/marts/"
+      +s3_data_dir: "s3://{{ var('data_bucket') }}/marts/"
       +file_format: parquet
+      +s3_data_naming: schema_table
+      +database: awsdatacatalog
