@@ -1,10 +1,3 @@
-{{ config(
-    materialized='incremental',
-    incremental_strategy='insert_overwrite',
-    partitioned_by=['downloaded_date'],
-    external_location='s3://' ~ var('data_bucket') ~ '/marts/social_services_by_service_municipal'
-) }}
-
 SELECT
     service_qualification_id,
     service_type_id,
@@ -12,8 +5,7 @@ SELECT
     municipal_id,
     EXTRACT(YEAR FROM inscription_date) as year,
     EXTRACT(MONTH FROM inscription_date) as month,
-    SUM(capacity) as total_capacity,
-    '{{ var("downloaded_date") }}' as downloaded_date
+    SUM(capacity) as total_capacit
 FROM {{ read_staging_data('social_services', 'downloaded_date', var('downloaded_date')) }}
 WHERE downloaded_date = '{{ var("downloaded_date") }}' and
     capacity > 0 and
