@@ -305,6 +305,7 @@ export class IamConstruct extends Construct {
             'glue:BatchCreatePartition',
             'glue:BatchUpdatePartition',
             'glue:BatchDeletePartition',
+            'glue:DeletePartition'
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
@@ -456,6 +457,7 @@ export class IamConstruct extends Construct {
             'glue:CreateDatabase',
             'glue:CreateDatabases',
             'glue:UpdateDatabase',
+            'glue:GetTableVersions',
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
