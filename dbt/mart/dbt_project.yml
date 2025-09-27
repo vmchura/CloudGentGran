@@ -30,7 +30,7 @@ models:
     marts:
       +materialized: table
       # For Athena targets, use S3 location
-      +s3_data_dir: "s3://{{ var('data_bucket') }}/marts/"
+      +s3_data_dir: "s3://{{ env_var('DATA_BUCKET') }}/marts/"
       +file_format: parquet
       +s3_data_naming: schema_table
       +database: awsdatacatalog
