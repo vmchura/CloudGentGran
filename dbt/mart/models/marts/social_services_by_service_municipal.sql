@@ -1,4 +1,6 @@
 {{ config(
+    materialized='incremental',
+    incremental_strategy='insert_overwrite',
     partitioned_by=['downloaded_date'],
     external_location="s3://{{ var('data_bucket') }}/marts/social_services_by_service_municipal"
 ) }}
