@@ -189,6 +189,19 @@ export class IamConstruct extends Construct {
             },
           },
         }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'glue:CreatePartition',
+            'glue:GetTable',
+            'glue:GetDatabase'
+          ],
+          resources: [
+            `arn:aws:glue:${region}:${account}:catalog`,
+            `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
+            `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`
+          ]
+        })
       ],
     });
 

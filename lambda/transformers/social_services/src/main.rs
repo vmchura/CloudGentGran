@@ -102,10 +102,20 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
     downloaded_date, Utc::now().format("%Y%m%d_%H%M%S"));
 
     match process_files_for_date(&s3_client, bucket_name, &source_prefix, &target_key).await {
-        Ok(result) => Ok(create_success_response(
+        Ok(result) => {
+            let glue_client = aws_sdk_glue::Client::new(&shared_config);
+            let s3_prefix = format!("s3://{}/staging/social_services", bucket_name);
+                add_partition_to_glue(
+                    &glue_client,
+                    &bucket_name,
+                    "social_services",
+                    downloaded_date,
+                    &s3_prefix
+                ).await?;
+            Ok(create_success_response(
             &format!("Successfully processed files for date {}", downloaded_date),
             Some(result)
-        )),
+        ))},
         Err(e) => {
             eprintln!("Error in lambda_handler: {}", e);
             Ok(create_error_response(&format!("Handler error: {}", e)))
@@ -655,4 +665,31 @@ fn create_error_response(message: &str) -> LambdaOutput {
         processor: "social-services-transformer".to_string(),
         data: None,
     }
+}
+
+async fn add_partition_to_glue(
+    glue_client: &aws_sdk_glue::Client,
+    database_name: &str,
+    table_name: &str,
+    downloaded_date: &str,
+    s3_location: &str,
+) -> Result<()> {
+    let partition_input = aws_sdk_glue::types::PartitionInput::builder()
+        .values(downloaded_date.to_string())
+        .storage_descriptor(
+            aws_sdk_glue::types::StorageDescriptor::builder()
+                .location(format!("{}/downloaded_date={}/", s3_location, downloaded_date))
+                .build(),
+        )
+        .build();
+
+    glue_client
+        .create_partition()
+        .database_name(database_name)
+        .table_name(table_name)
+        .partition_input(partition_input)
+        .send()
+        .await?;
+
+    Ok(())
 }
