@@ -15,7 +15,7 @@ catalunya_data:
       region_name: eu-west-1
       schema: catalunya_data_dev
       work_group: catalunya-workgroup-dev
-      s3_data_dir: "s3://catalunya-data-dev/marts/"
+      s3_data_dir: s3://catalunya-data-dev/marts/
       file_format: parquet
       s3_data_naming: schema_table
       database: awsdatacatalog
@@ -26,7 +26,7 @@ catalunya_data:
       region_name: eu-west-1
       schema: catalunya_data_prod
       work_group: catalunya-workgroup-prod
-      s3_data_dir: "s3://catalunya-data-prod/marts/"
+      s3_data_dir: s3://catalunya-data-prod/marts/
       file_format: parquet
       s3_data_naming: schema_table
       database: awsdatacatalog
