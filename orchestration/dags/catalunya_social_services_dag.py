@@ -34,6 +34,7 @@ ENV_CONFIG = {
         "transformer_function": "catalunya-dev-social-services-transformer",
         "catalog_bucket": "catalunya-catalog-dev",
         "data_bucket": "catalunya-data-dev",
+        "athena_database_name": "catalunya_data_dev",
         "schedule": timedelta(hours=2),  # More frequent for testing
         "timeout_minutes": 15,
         "retry_attempts": 1,
@@ -44,6 +45,7 @@ ENV_CONFIG = {
         "api_extractor_function": "catalunya-dev-social_services",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "catalog_bucket": "catalunya-catalog-dev",
+        "athena_database_name": "catalunya_data_dev",
         "data_bucket": "catalunya-data-dev",
         "schedule": "0 23 * * 1",  # Monday 23:00
         "timeout_minutes": 15,
@@ -55,6 +57,7 @@ ENV_CONFIG = {
         "api_extractor_function": "catalunya-prod-social_services",
         "transformer_function": "catalunya-prod-social-services-transformer",
         "catalog_bucket": "catalunya-catalog-prod",
+        "athena_database_name": "catalunya_data_prod",
         "data_bucket": "catalunya-data-prod",
         "schedule": "0 23 * * 5",  # Friday 23:00
         "timeout_minutes": 20,
@@ -176,6 +179,7 @@ def prepare_transformer_payload(**context) -> Dict[str, Any]:
     transformer_payload = {
         'downloaded_date': downloaded_date,
         'bucket_name': config['data_bucket'],
+        'athena_database_name': config['athena_database_name'],
         'semantic_identifier': 'social_services'
     }
 
