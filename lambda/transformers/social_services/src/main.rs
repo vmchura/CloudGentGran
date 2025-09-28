@@ -46,6 +46,7 @@ use std::io::Cursor;
 
 #[derive(Deserialize, Serialize)]
 struct LambdaInput {
+    environment: String,
     downloaded_date: String,
     bucket_name: String,
     athena_database_name: String,
@@ -96,6 +97,7 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
     let bucket_name = &event.payload.bucket_name;
     let athena_database_name = &event.payload.athena_database_name;
     let semantic_identifier = &event.payload.semantic_identifier;
+    let is_not_local = &event.payload.environment != "local";
 
     println!(
         "Processing files: s3://{}/landing/{}/downloaded_date={}",
@@ -112,7 +114,7 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
     );
 
     match process_files_for_date(&s3_client, bucket_name, &source_prefix, &target_key).await {
-        Ok(result) => {
+        Ok(result) if is_not_local => {
             println!("Glue partition creation attempt");
             let glue_client = aws_sdk_glue::Client::new(&shared_config);
             let s3_prefix = format!("s3://{}/staging/social_services", bucket_name);
@@ -141,6 +143,10 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
                 }
             }
         }
+        Ok(result) => Ok(create_success_response(
+            &format!("Successfully processed files for date {}", downloaded_date),
+            Some(result),
+        )),
         Err(e) => {
             eprintln!("Error in lambda_handler: {}", e);
             Ok(create_error_response(&format!("Handler error: {}", e)))

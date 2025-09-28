@@ -20,11 +20,12 @@ from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
+from operators.dbt_athena_operator import DbtAthenaOperator
 
 logger = logging.getLogger(__name__)
 
 # Environment configuration
-ENVIRONMENT = Variable.get("environment", default_var="local")
+ENVIRONMENT = Variable.get("environment")
 
 # Environment-specific settings
 ENV_CONFIG = {
@@ -177,6 +178,7 @@ def prepare_transformer_payload(**context) -> Dict[str, Any]:
 
     # Prepare payload matching the Rust transformer's expected input structure
     transformer_payload = {
+        'environment': ENVIRONMENT,
         'downloaded_date': downloaded_date,
         'bucket_name': config['data_bucket'],
         'athena_database_name': config['athena_database_name'],
@@ -289,43 +291,29 @@ def parse_transformation_response(**context) -> Dict[str, Any]:
 
     return transformation_data
 
-def trigger_dbt_workflow(**context) -> str:
+def prepare_mart_payload(**context) -> str:
     """
     Trigger DBT workflow with staging data.
     Placeholder for future DBT integration.
     """
     task_instance = context['task_instance']
 
-    # Get metadata from previous tasks
+    # Get extraction metadata
     extraction_data = task_instance.xcom_pull(task_ids='parse_extraction_response', key='extraction_metadata')
-    transformation_data = task_instance.xcom_pull(task_ids='parse_transformation_response', key='transformation_metadata')
 
-    logger.info("🚀 Preparing DBT workflow trigger...")
-    logger.info(f"   - Environment: {ENVIRONMENT}")
+    if not extraction_data:
+        extraction_data = task_instance.xcom_pull(task_ids='parse_extraction_response')
 
-    if extraction_data:
-        logger.info(f"   - Extracted records: {extraction_data.get('total_records', 'N/A')}")
-        logger.info(f"   - Source prefix: {extraction_data.get('source_prefix', 'N/A')}")
+    if not extraction_data:
+        raise AirflowException("No extraction metadata found - previous task may have failed")
 
-    if transformation_data:
-        logger.info(f"   - Transformed records: {transformation_data.get('clean_records', 'N/A')}")
-        logger.info(f"   - Staging location: {transformation_data.get('target_location', 'N/A')}")
-
-    # Store trigger information for potential DAG chaining or manual DBT runs
-    trigger_data = {
-        'environment': ENVIRONMENT,
-        'trigger_time': datetime.utcnow().isoformat(),
-        'source_records': extraction_data.get('total_records') if extraction_data else None,
-        'staging_records': transformation_data.get('clean_records') if transformation_data else None,
-        'staging_location': transformation_data.get('target_location') if transformation_data else None,
-        'bucket': config['data_bucket'],
-        'semantic_identifier': 'social_services'
+    # Extract downloaded_date from the extraction data or derive from context
+    downloaded_date = extraction_data.get('downloaded_date')
+    dbt_social_services_mart_parameters = {
+        "downloaded_date": downloaded_date
     }
 
-    task_instance.xcom_push(key='dbt_trigger_data', value=trigger_data)
-
-    logger.info("✅ Pipeline completed successfully - ready for DBT processing")
-    return "dbt_workflow_ready"
+    return dbt_social_services_mart_parameters
 
 # =============================================================================
 # DAG DEFINITION
@@ -343,11 +331,11 @@ dag = DAG(
         'retry_delay': config['retry_delay'],
         'execution_timeout': timedelta(minutes=config['timeout_minutes'])
     },
-    description=f'Catalunya Social Services Pipeline - {ENVIRONMENT} environment (Direct Lambda Orchestration)',
+    description=f'Catalunya Social Services Pipeline - {ENVIRONMENT})',
     schedule=config['schedule'],
     catchup=False,
     max_active_runs=1,
-    tags=['catalunya', 'social-services', 'lambda-orchestration', f'env:{ENVIRONMENT}']
+    tags=['catalunya', 'social-services', 'lambda-orchestration', 'athena-job', f'env:{ENVIRONMENT}']
 )
 
 # =============================================================================
@@ -415,10 +403,14 @@ parse_transformation_response_task = PythonOperator(
     dag=dag
 )
 
-# Task 8: Trigger DBT workflow (placeholder)
-trigger_dbt_workflow_task = PythonOperator(
-    task_id='trigger_dbt_workflow',
-    python_callable=trigger_dbt_workflow,
+# Task 8: Trigger DBT workflow
+social_service_mart_model = DbtAthenaOperator(
+    task_id='social_services_by_service_municipal',
+    aws_conn_id='aws_cross_account_role',
+    dbt_command='run',
+    dbt_target=ENVIRONMENT,
+    dbt_vars=prepare_mart_payload,
+    select_models='social_services_by_service_municipal',
     dag=dag
 )
 
@@ -434,4 +426,4 @@ trigger_dbt_workflow_task = PythonOperator(
  prepare_transformer_payload_task >>
  invoke_transformer >>
  parse_transformation_response_task >>
- trigger_dbt_workflow_task)
+ social_service_mart_model)
