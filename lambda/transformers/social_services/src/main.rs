@@ -103,19 +103,29 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
 
     match process_files_for_date(&s3_client, bucket_name, &source_prefix, &target_key).await {
         Ok(result) => {
+            println!("Glue partition creation attempt");
             let glue_client = aws_sdk_glue::Client::new(&shared_config);
             let s3_prefix = format!("s3://{}/staging/social_services", bucket_name);
-                add_partition_to_glue(
+                match add_partition_to_glue(
                     &glue_client,
                     &bucket_name,
                     "social_services",
                     downloaded_date,
                     &s3_prefix
-                ).await?;
-            Ok(create_success_response(
-            &format!("Successfully processed files for date {}", downloaded_date),
-            Some(result)
-        ))},
+                ).await {
+                   Ok(_) => {
+                       println!("Successfully added Glue partition");
+                       Ok(create_success_response(
+                           &format!("Successfully processed files for date {}", downloaded_date),
+                           Some(result)
+                       ))
+                   },
+                   Err(e) => {
+                       eprintln!("Error adding Glue partition: {}", e);
+                       Ok(create_error_response(&format!("Glue partition error: {}", e)))
+                   }
+               }
+        },
         Err(e) => {
             eprintln!("Error in lambda_handler: {}", e);
             Ok(create_error_response(&format!("Handler error: {}", e)))
@@ -680,16 +690,19 @@ async fn add_partition_to_glue(
         .name(table_name)
         .send()
         .await?;
+
     let table = table_response.table().ok_or_else(|| anyhow!("Table not found"))?;
     let base_storage_descriptor = table.storage_descriptor().ok_or_else(|| anyhow!("No storage descriptor"))?;
+
     let partition_storage_descriptor = aws_sdk_glue::types::StorageDescriptor::builder()
-        .set_columns(base_storage_descriptor.columns().map(|cols| cols.to_vec()))
+        .set_columns(Some(base_storage_descriptor.columns().to_vec()))
         .set_location(Some(format!("{}/downloaded_date={}/", s3_location, downloaded_date)))
         .set_input_format(base_storage_descriptor.input_format().map(|s| s.to_string()))
         .set_output_format(base_storage_descriptor.output_format().map(|s| s.to_string()))
-        .set_compressed(base_storage_descriptor.compressed())
+        .set_compressed(Some(base_storage_descriptor.compressed()))
         .set_serde_info(base_storage_descriptor.serde_info().cloned())
         .build();
+
     let partition_input = aws_sdk_glue::types::PartitionInput::builder()
         .values(downloaded_date.to_string())
         .storage_descriptor(partition_storage_descriptor)
