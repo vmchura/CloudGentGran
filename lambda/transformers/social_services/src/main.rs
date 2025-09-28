@@ -48,6 +48,7 @@ use std::collections::HashSet;
 struct LambdaInput {
     downloaded_date: String,
     bucket_name: String,
+    athena_database_name: String,
     semantic_identifier: String,
 }
 
@@ -93,6 +94,7 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
     // Get parameters directly from Airflow payload
     let downloaded_date = &event.payload.downloaded_date;
     let bucket_name = &event.payload.bucket_name;
+    let athena_database_name = &event.payload.athena_database_name;
     let semantic_identifier = &event.payload.semantic_identifier;
 
     println!("Processing files: s3://{}/landing/{}/downloaded_date={}", bucket_name, semantic_identifier, downloaded_date);
@@ -108,7 +110,7 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
             let s3_prefix = format!("s3://{}/staging/social_services", bucket_name);
                 match add_partition_to_glue(
                     &glue_client,
-                    &bucket_name,
+                    &athena_database_name,
                     "social_services",
                     downloaded_date,
                     &s3_prefix
@@ -684,19 +686,32 @@ async fn add_partition_to_glue(
     downloaded_date: &str,
     s3_location: &str,
 ) -> Result<()> {
-    let table_response = glue_client
+    println!("Getting table info for {}/{}", database_name, table_name);
+
+    let table_response = match glue_client
         .get_table()
         .database_name(database_name)
         .name(table_name)
         .send()
-        .await?;
+        .await {
+        Ok(resp) => resp,
+        Err(e) => {
+            eprintln!("Failed to get table: {:?}", e);
+            return Err(anyhow!("Get table failed: {}", e));
+        }
+    };
+
+    println!("Building partition for date: {}", downloaded_date);
 
     let table = table_response.table().ok_or_else(|| anyhow!("Table not found"))?;
     let base_storage_descriptor = table.storage_descriptor().ok_or_else(|| anyhow!("No storage descriptor"))?;
 
+    let partition_location = format!("{}/downloaded_date={}/", s3_location, downloaded_date);
+    println!("Partition location: {}", partition_location);
+
     let partition_storage_descriptor = aws_sdk_glue::types::StorageDescriptor::builder()
         .set_columns(Some(base_storage_descriptor.columns().to_vec()))
-        .set_location(Some(format!("{}/downloaded_date={}/", s3_location, downloaded_date)))
+        .set_location(Some(partition_location))
         .set_input_format(base_storage_descriptor.input_format().map(|s| s.to_string()))
         .set_output_format(base_storage_descriptor.output_format().map(|s| s.to_string()))
         .set_compressed(Some(base_storage_descriptor.compressed()))
@@ -708,14 +723,22 @@ async fn add_partition_to_glue(
         .storage_descriptor(partition_storage_descriptor)
         .build();
 
-    glue_client
+    println!("Creating partition...");
+
+    match glue_client
         .create_partition()
         .database_name(database_name)
         .table_name(table_name)
         .partition_input(partition_input)
         .send()
-        .await?;
-
-    println!("Successfully created partition for {}/{} with date {}", database_name, table_name, downloaded_date);
-    Ok(())
+        .await {
+        Ok(_) => {
+            println!("Successfully created partition for {}/{} with date {}", database_name, table_name, downloaded_date);
+            Ok(())
+        },
+        Err(e) => {
+            eprintln!("Create partition failed: {:?}", e);
+            Err(anyhow!("Create partition failed: {}", e))
+        }
+    }
 }

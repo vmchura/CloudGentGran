@@ -50,6 +50,8 @@ The social services transformer is located at `lambda/transformers/social_servic
    
    # Copy the bootstrap binary to deployment directory
    cp lambda/transformers/social_services/target/lambda/bootstrap/bootstrap rust-lambda-build/
+   cd rust-lambda-build
+   zip social-services-transformer.zip bootstrap
    ```
 
 ### Build Output
