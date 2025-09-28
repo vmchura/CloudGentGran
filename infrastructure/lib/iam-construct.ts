@@ -194,7 +194,8 @@ export class IamConstruct extends Construct {
           actions: [
             'glue:CreatePartition',
             'glue:GetTable',
-            'glue:GetDatabase'
+            'glue:GetDatabase',
+            'glue:CreatePartition'
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
