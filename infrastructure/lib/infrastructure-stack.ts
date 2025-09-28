@@ -6,6 +6,7 @@ import { S3Construct } from './s3-construct';
 import { LambdaConstruct } from './lambda-construct';
 import { AnalyticsConstruct } from './analytics-construct';
 import { CatalogConstruct } from './catalog-construct';
+import { GlueConstruct } from './glue-construct';
 
 export interface CatalunyaDataStackProps extends cdk.StackProps {
   environmentName: string;
@@ -30,6 +31,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly lambdaInfrastructure: LambdaConstruct;
   public readonly analyticsInfrastructure: AnalyticsConstruct;
   public readonly catalogInfrastructure: CatalogConstruct;
+  public readonly glueInfrastructure: GlueConstruct;
 
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -133,6 +135,18 @@ export class CatalunyaDataStack extends cdk.Stack {
     });
 
     // ========================================
+    // Glue Infrastructure (Table Schema Layer)
+    // ========================================
+    this.glueInfrastructure = new GlueConstruct(this, 'GlueInfrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      dataBucketName: this.bucketName,
+      athenaDatabaseName: this.athenaDatabaseName,
+      glueExecutorRole: this.iamInfrastructure.catalogExecutorRole,
+    });
+
+    // ========================================
     // Cross-Construct Dependencies
     // ========================================
 
@@ -151,6 +165,9 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.catalogInfrastructure.node.addDependency(this.iamInfrastructure);
     this.catalogInfrastructure.node.addDependency(this.s3Infrastructure);
     this.catalogInfrastructure.node.addDependency(this.analyticsInfrastructure);
+
+    // Glue depends on analytics (database must exist first)
+    this.glueInfrastructure.node.addDependency(this.analyticsInfrastructure);
 
     // ========================================
     // CloudFormation Outputs
