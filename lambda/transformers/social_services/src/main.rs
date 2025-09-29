@@ -32,22 +32,24 @@
  * ready for analytics and reporting.
  */
 
-use aws_sdk_s3::{Client, primitives::ByteStream};
+use anyhow::{anyhow, Result};
 use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_s3::{primitives::ByteStream, Client};
 use chrono::Utc;
+use lambda_runtime::{service_fn, Error, LambdaEvent};
 use polars::prelude::*;
 use regex::Regex;
-use std::env;
-use std::io::Cursor;
-use anyhow::{Result, anyhow};
-use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::env;
+use std::io::Cursor;
 
 #[derive(Deserialize, Serialize)]
 struct LambdaInput {
+    environment: String,
     downloaded_date: String,
     bucket_name: String,
+    athena_database_name: String,
     semantic_identifier: String,
 }
 
@@ -93,29 +95,58 @@ async fn function_handler(event: LambdaEvent<LambdaInput>) -> Result<LambdaOutpu
     // Get parameters directly from Airflow payload
     let downloaded_date = &event.payload.downloaded_date;
     let bucket_name = &event.payload.bucket_name;
+    let athena_database_name = &event.payload.athena_database_name;
     let semantic_identifier = &event.payload.semantic_identifier;
+    let is_not_local = &event.payload.environment != "local";
 
-    println!("Processing files: s3://{}/landing/{}/downloaded_date={}", bucket_name, semantic_identifier, downloaded_date);
+    println!(
+        "Processing files: s3://{}/landing/{}/downloaded_date={}",
+        bucket_name, semantic_identifier, downloaded_date
+    );
 
-    let source_prefix = format!("landing/{}/downloaded_date={}/", semantic_identifier, downloaded_date);
-    let target_key = format!("staging/{}/downloaded_date={}/{}.parquet", semantic_identifier,
-    downloaded_date, Utc::now().format("%Y%m%d_%H%M%S"));
+    let source_prefix = format!(
+        "landing/{}/downloaded_date={}/",
+        semantic_identifier, downloaded_date
+    );
+    let target_key = format!(
+        "staging/{}/downloaded_date={}/{}.parquet",
+        semantic_identifier, downloaded_date, semantic_identifier
+    );
 
     match process_files_for_date(&s3_client, bucket_name, &source_prefix, &target_key).await {
-        Ok(result) => {
+        Ok(result) if is_not_local => {
+            println!("Glue partition creation attempt");
             let glue_client = aws_sdk_glue::Client::new(&shared_config);
             let s3_prefix = format!("s3://{}/staging/social_services", bucket_name);
-                add_partition_to_glue(
-                    &glue_client,
-                    &bucket_name,
-                    "social_services",
-                    downloaded_date,
-                    &s3_prefix
-                ).await?;
-            Ok(create_success_response(
+            match add_partition_to_glue(
+                &glue_client,
+                &athena_database_name,
+                "social_services",
+                downloaded_date,
+                &s3_prefix,
+            )
+            .await
+            {
+                Ok(_) => {
+                    println!("Successfully added Glue partition");
+                    Ok(create_success_response(
+                        &format!("Successfully processed files for date {}", downloaded_date),
+                        Some(result),
+                    ))
+                }
+                Err(e) => {
+                    eprintln!("Error adding Glue partition: {}", e);
+                    Ok(create_error_response(&format!(
+                        "Glue partition error: {}",
+                        e
+                    )))
+                }
+            }
+        }
+        Ok(result) => Ok(create_success_response(
             &format!("Successfully processed files for date {}", downloaded_date),
-            Some(result)
-        ))},
+            Some(result),
+        )),
         Err(e) => {
             eprintln!("Error in lambda_handler: {}", e);
             Ok(create_error_response(&format!("Handler error: {}", e)))
@@ -127,7 +158,7 @@ async fn process_files_for_date(
     s3_client: &Client,
     bucket: &str,
     source_prefix: &str,
-    target_key: &str
+    target_key: &str,
 ) -> Result<ProcessingResult> {
     // Load catalog data - fail if environment variable not found
     let catalog_bucket = env::var("CATALOG_BUCKET_NAME").unwrap();
@@ -136,10 +167,15 @@ async fn process_files_for_date(
 
     let municipals_df = load_catalog_data(s3_client, &catalog_bucket, "municipals").await?;
     let service_types_df = load_catalog_data(s3_client, &catalog_bucket, "service_type").await?;
-    let service_qualification_df = load_catalog_data(s3_client, &catalog_bucket, "service_qualification").await?;
+    let service_qualification_df =
+        load_catalog_data(s3_client, &catalog_bucket, "service_qualification").await?;
 
-    println!("Loaded catalogs - municipals: {}, service_types: {}, service_qualification: {}",
-             municipals_df.height(), service_types_df.height(), service_qualification_df.height());
+    println!(
+        "Loaded catalogs - municipals: {}, service_types: {}, service_qualification: {}",
+        municipals_df.height(),
+        service_types_df.height(),
+        service_qualification_df.height()
+    );
 
     // List files
     let resp = s3_client
@@ -179,7 +215,10 @@ async fn process_files_for_date(
         .collect();
 
     if json_keys.is_empty() {
-        println!("No matching JSON files found in s3://{}/{}", bucket, source_prefix);
+        println!(
+            "No matching JSON files found in s3://{}/{}",
+            bucket, source_prefix
+        );
         return Ok(ProcessingResult {
             source_prefix: source_prefix.to_string(),
             target_key: target_key.to_string(),
@@ -202,16 +241,15 @@ async fn process_files_for_date(
             Ok((df, records)) => {
                 total_raw_records += records;
 
-
                 dfs.push(df.select(&[
-                                                   "registre",
-                                                   "tipologia",
-                                                   "inscripcio",
-                                                   "capacitat",
-                                                   "municipi",
-                                                   "comarca",
-                                                   "qualificacio"
-                                               ])?);
+                    "registre",
+                    "tipologia",
+                    "inscripcio",
+                    "capacitat",
+                    "municipi",
+                    "comarca",
+                    "qualificacio",
+                ])?);
                 println!("Read {} records from {}", records, key);
             }
             Err(e) => {
@@ -235,16 +273,24 @@ async fn process_files_for_date(
     let merged_df = concat(lazy_frames, UnionArgs::default())?.collect()?;
 
     let transformed_df = transform_social_services_data(
-                        merged_df,
-                        municipals_df,
-                        service_types_df,
-                        service_qualification_df
-                    )?;
+        merged_df,
+        municipals_df,
+        service_types_df,
+        service_qualification_df,
+    )?;
 
     upload_parquet_to_s3(s3_client, &transformed_df, bucket, target_key).await?;
 
-    println!("Successfully processed {} files -> {}", json_keys.len(), target_key);
-    println!("Transformed {} raw records to {} clean records", total_raw_records, transformed_df.height());
+    println!(
+        "Successfully processed {} files -> {}",
+        json_keys.len(),
+        target_key
+    );
+    println!(
+        "Transformed {} raw records to {} clean records",
+        total_raw_records,
+        transformed_df.height()
+    );
 
     Ok(ProcessingResult {
         source_prefix: source_prefix.to_string(),
@@ -257,7 +303,11 @@ async fn process_files_for_date(
     })
 }
 
-async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Result<(DataFrame, usize)> {
+async fn process_single_file(
+    s3_client: &Client,
+    bucket: &str,
+    key: &str,
+) -> Result<(DataFrame, usize)> {
     let obj = s3_client
         .get_object()
         .bucket(bucket)
@@ -279,7 +329,7 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
             "capacitat",
             "municipi",
             "comarca",
-            "qualificacio"
+            "qualificacio",
         ])?
         .lazy()
         .with_columns([
@@ -292,7 +342,7 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
             when(col("comarca").eq(lit("Val d'Aran")))
                 .then(lit("Aran"))
                 .otherwise(col("comarca"))
-                .alias("comarca")
+                .alias("comarca"),
         ])
         .collect()?;
 
@@ -300,7 +350,11 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
     Ok((df, record_count))
 }
 
-async fn load_catalog_data(s3_client: &Client, bucket: &str, catalog_name: &str) -> Result<DataFrame> {
+async fn load_catalog_data(
+    s3_client: &Client,
+    bucket: &str,
+    catalog_name: &str,
+) -> Result<DataFrame> {
     println!("Loading catalog: {}", catalog_name);
 
     // List all parquet files in the catalog folder
@@ -331,7 +385,10 @@ async fn load_catalog_data(s3_client: &Client, bucket: &str, catalog_name: &str)
         .collect();
 
     if parquet_keys.is_empty() {
-        return Err(anyhow!("No parquet files found for catalog {}", catalog_name));
+        return Err(anyhow!(
+            "No parquet files found for catalog {}",
+            catalog_name
+        ));
     }
 
     // Find the most recent parquet file
@@ -351,12 +408,15 @@ async fn load_catalog_data(s3_client: &Client, bucket: &str, catalog_name: &str)
     let data = obj.body.collect().await?.into_bytes();
 
     // Create temporary file for parquet reading using std approach
-    let temp_path = format!("/tmp/catalog_{}_{}.parquet", catalog_name, std::process::id());
+    let temp_path = format!(
+        "/tmp/catalog_{}_{}.parquet",
+        catalog_name,
+        std::process::id()
+    );
     std::fs::write(&temp_path, &data)?;
 
     // Load parquet into Polars
-    let df = LazyFrame::scan_parquet(&temp_path, ScanArgsParquet::default())?
-        .collect()?;
+    let df = LazyFrame::scan_parquet(&temp_path, ScanArgsParquet::default())?.collect()?;
 
     // Clean up temp file
     let _ = std::fs::remove_file(&temp_path);
@@ -369,7 +429,7 @@ fn has_unmapped_element(
     left_series: &Series,
     right_series: &Series,
     allow_null_left: bool,
-    prefix: &str
+    prefix: &str,
 ) -> Result<Vec<String>> {
     let mut errors = Vec::new();
 
@@ -396,7 +456,10 @@ fn has_unmapped_element(
         } else {
             let val_str = val.to_string().replace("\"", "");
             if !right_set.contains(&val_str) {
-                errors.push(format!("[{}]: Value `{}` not in right series", prefix, val_str));
+                errors.push(format!(
+                    "[{}]: Value `{}` not in right series",
+                    prefix, val_str
+                ));
             }
         }
     }
@@ -437,7 +500,7 @@ fn transform_social_services_data(
     mut df: DataFrame,
     municipals_df: DataFrame,
     service_types_df: DataFrame,
-    service_qualification_df: DataFrame
+    service_qualification_df: DataFrame,
 ) -> Result<DataFrame> {
     println!("Original DataFrame shape: {:?}", df.shape());
     println!("Original columns: {:?}", df.get_column_names());
@@ -448,12 +511,23 @@ fn transform_social_services_data(
     // Check service types mapping
     let tipologia_series = df.column("tipologia")?;
     let service_type_desc_series = service_types_df.column("service_type_description")?;
-    errors.extend(has_unmapped_element(tipologia_series, service_type_desc_series, false, "service_type")?);
+    errors.extend(has_unmapped_element(
+        tipologia_series,
+        service_type_desc_series,
+        false,
+        "service_type",
+    )?);
 
     // Check service qualification mapping
     let qualificacio_series = df.column("qualificacio")?;
-    let service_qual_desc_series = service_qualification_df.column("service_qualification_description")?;
-    errors.extend(has_unmapped_element(qualificacio_series, service_qual_desc_series, true, "service_qualification")?);
+    let service_qual_desc_series =
+        service_qualification_df.column("service_qualification_description")?;
+    errors.extend(has_unmapped_element(
+        qualificacio_series,
+        service_qual_desc_series,
+        true,
+        "service_qualification",
+    )?);
 
     if !errors.is_empty() {
         for error in &errors {
@@ -469,7 +543,7 @@ fn transform_social_services_data(
         &service_types_df,
         ["tipologia"],
         ["service_type_description"],
-        JoinArgs::new(JoinType::Left)
+        JoinArgs::new(JoinType::Left),
     )?;
 
     // Join with service qualification
@@ -477,7 +551,7 @@ fn transform_social_services_data(
         &service_qualification_df,
         ["qualificacio"],
         ["service_qualification_description"],
-        JoinArgs::new(JoinType::Left)
+        JoinArgs::new(JoinType::Left),
     )?;
 
     // Select intermediate columns
@@ -488,7 +562,7 @@ fn transform_social_services_data(
         "municipi",
         "comarca",
         "service_type_id",
-        "service_qualification_id"
+        "service_qualification_id",
     ])?;
 
     println!("After joins shape: {:?}", df.shape());
@@ -498,7 +572,7 @@ fn transform_social_services_data(
         &municipals_df,
         ["comarca"],
         ["nom_comarca"],
-        JoinArgs::new(JoinType::Left)
+        JoinArgs::new(JoinType::Left),
     )?;
 
     // Calculate normalized strings and similarities using a simpler approach
@@ -519,7 +593,7 @@ fn transform_social_services_data(
                 normalized_nom_strings.push(Some(nom_tokens.join(" ")));
                 normalized_municipi_strings.push(Some(municipi_tokens.join(" ")));
                 similarities.push(similarity);
-            },
+            }
             _ => {
                 normalized_nom_strings.push(None);
                 normalized_municipi_strings.push(None);
@@ -530,7 +604,8 @@ fn transform_social_services_data(
 
     // Create Series from the processed data and add to DataFrame using hstack
     let nom_normalized_series = Series::new("nom_normalized", normalized_nom_strings);
-    let municipi_normalized_series = Series::new("municipi_normalized", normalized_municipi_strings);
+    let municipi_normalized_series =
+        Series::new("municipi_normalized", normalized_municipi_strings);
     let tokens_similar_series = Series::new("tokens_similar", similarities);
 
     // Create a new DataFrame with additional columns
@@ -546,8 +621,7 @@ fn transform_social_services_data(
     // Sort and deduplicate
     df = df.sort(
         ["registre", "tokens_similar"],
-        SortMultipleOptions::default()
-            .with_order_descending_multi([false, true])
+        SortMultipleOptions::default().with_order_descending_multi([false, true]),
     )?;
 
     // Remove duplicates keeping first (highest tokens_similar due to sort)
@@ -559,20 +633,18 @@ fn transform_social_services_data(
             "municipi".to_string(),
             "comarca".to_string(),
             "service_type_id".to_string(),
-            "service_qualification_id".to_string()
+            "service_qualification_id".to_string(),
         ]),
         UniqueKeepStrategy::First,
         None,
     )?;
 
     // Sort by tokens_similar
-    df = df.sort(
-        ["tokens_similar"],
-        SortMultipleOptions::default()
-    )?;
+    df = df.sort(["tokens_similar"], SortMultipleOptions::default())?;
 
     // Select final columns with transformations
-    let final_df = df.clone()
+    let final_df = df
+        .clone()
         .lazy()
         .with_columns([
             col("inscripcio")
@@ -582,9 +654,7 @@ fn transform_social_services_data(
                     ..Default::default()
                 })
                 .alias("inscription_date"),
-            col("capacitat")
-                .cast(DataType::Int32)
-                .alias("capacity")
+            col("capacitat").cast(DataType::Int32).alias("capacity"),
         ])
         .select([
             col("registre").alias("social_service_register_id"),
@@ -593,7 +663,7 @@ fn transform_social_services_data(
             col("service_type_id"),
             col("service_qualification_id"),
             col("codi").alias("municipal_id"),
-            col("codi_comarca").alias("comarca_id")
+            col("codi_comarca").alias("comarca_id"),
         ])
         .collect()?;
 
@@ -602,12 +672,16 @@ fn transform_social_services_data(
 
     // Validate data integrity
     let original_unique_registre = df.column("registre")?.unique()?.len();
-    let final_unique_registre = final_df.column("social_service_register_id")?.unique()?.len();
+    let final_unique_registre = final_df
+        .column("social_service_register_id")?
+        .unique()?
+        .len();
 
     if original_unique_registre != final_unique_registre {
         return Err(anyhow!(
             "Data integrity check failed: original unique registre count ({}) != final count ({})",
-            original_unique_registre, final_unique_registre
+            original_unique_registre,
+            final_unique_registre
         ));
     }
 
@@ -615,12 +689,20 @@ fn transform_social_services_data(
         return Err(anyhow!("No records in final dataset"));
     }
 
-    println!("Data integrity check passed: {} unique records preserved", final_unique_registre);
+    println!(
+        "Data integrity check passed: {} unique records preserved",
+        final_unique_registre
+    );
 
     Ok(final_df)
 }
 
-async fn upload_parquet_to_s3(s3_client: &Client, df: &DataFrame, bucket: &str, s3_key: &str) -> Result<()> {
+async fn upload_parquet_to_s3(
+    s3_client: &Client,
+    df: &DataFrame,
+    bucket: &str,
+    s3_key: &str,
+) -> Result<()> {
     let mut buf = Vec::new();
     ParquetWriter::new(&mut buf)
         .with_compression(ParquetCompression::Snappy)
@@ -640,7 +722,10 @@ async fn upload_parquet_to_s3(s3_client: &Client, df: &DataFrame, bucket: &str, 
         .send()
         .await?;
 
-    println!("Successfully uploaded Parquet file to s3://{}/{}", bucket, s3_key);
+    println!(
+        "Successfully uploaded Parquet file to s3://{}/{}",
+        bucket, s3_key
+    );
     println!("File size: {} bytes, Records: {}", buf.len(), df.height());
     Ok(())
 }
@@ -674,22 +759,105 @@ async fn add_partition_to_glue(
     downloaded_date: &str,
     s3_location: &str,
 ) -> Result<()> {
-    let partition_input = aws_sdk_glue::types::PartitionInput::builder()
-        .values(downloaded_date.to_string())
-        .storage_descriptor(
-            aws_sdk_glue::types::StorageDescriptor::builder()
-                .location(format!("{}/downloaded_date={}/", s3_location, downloaded_date))
-                .build(),
+    println!("Getting table info for {}/{}", database_name, table_name);
+
+    let table_response = match glue_client
+        .get_table()
+        .database_name(database_name)
+        .name(table_name)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            eprintln!("Failed to get table: {:?}", e);
+            return Err(anyhow!("Get table failed: {}", e));
+        }
+    };
+
+    match glue_client
+        .get_partition()
+        .database_name(database_name)
+        .table_name(table_name)
+        .partition_values(downloaded_date.to_string())
+        .send()
+        .await
+    {
+        Ok(_) => {
+            println!(
+                "Partition for {}/{} with date {} already exists - skipping creation",
+                database_name, table_name, downloaded_date
+            );
+            return Ok(());
+        }
+        Err(aws_sdk_glue::error::SdkError::ServiceError(e))
+            if e.err().is_entity_not_found_exception() =>
+        {
+            println!(
+                "Partition for {}/{} with date {} DO NOT exists",
+                database_name, table_name, downloaded_date
+            );
+        }
+        Err(e) => {
+            eprintln!("Unexpected error getting partitions: {:?}", e);
+            return Err(e.into());
+        }
+    }
+
+    println!("Building partition for date: {}", downloaded_date);
+
+    let table = table_response
+        .table()
+        .ok_or_else(|| anyhow!("Table not found"))?;
+    let base_storage_descriptor = table
+        .storage_descriptor()
+        .ok_or_else(|| anyhow!("No storage descriptor"))?;
+
+    let partition_location = format!("{}/downloaded_date={}/", s3_location, downloaded_date);
+    println!("Partition location: {}", partition_location);
+
+    let partition_storage_descriptor = aws_sdk_glue::types::StorageDescriptor::builder()
+        .set_columns(Some(base_storage_descriptor.columns().to_vec()))
+        .set_location(Some(partition_location))
+        .set_input_format(
+            base_storage_descriptor
+                .input_format()
+                .map(|s| s.to_string()),
         )
+        .set_output_format(
+            base_storage_descriptor
+                .output_format()
+                .map(|s| s.to_string()),
+        )
+        .set_compressed(Some(base_storage_descriptor.compressed()))
+        .set_serde_info(base_storage_descriptor.serde_info().cloned())
         .build();
 
-    glue_client
+    let partition_input = aws_sdk_glue::types::PartitionInput::builder()
+        .values(downloaded_date.to_string())
+        .storage_descriptor(partition_storage_descriptor)
+        .build();
+
+    println!("Creating partition...");
+
+    match glue_client
         .create_partition()
         .database_name(database_name)
         .table_name(table_name)
         .partition_input(partition_input)
         .send()
-        .await?;
-
-    Ok(())
+        .await
+    {
+        Ok(_) => {
+            println!(
+                "Successfully created partition for {}/{} with date {}",
+                database_name, table_name, downloaded_date
+            );
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Create partition failed: {:?}", e);
+            Err(anyhow!("Create partition failed: {}", e))
+        }
+    }
 }
