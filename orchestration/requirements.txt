@@ -1,4 +1,5 @@
 dbt-core
+dbt-duckdb
 dbt-athena-community
 psycopg2-binary
 apache-airflow-providers-fab
