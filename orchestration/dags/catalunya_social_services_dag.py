@@ -292,10 +292,6 @@ def parse_transformation_response(**context) -> Dict[str, Any]:
     return transformation_data
 
 def prepare_mart_payload(**context) -> str:
-    """
-    Trigger DBT workflow with staging data.
-    Placeholder for future DBT integration.
-    """
     task_instance = context['task_instance']
 
     # Get extraction metadata
@@ -309,11 +305,12 @@ def prepare_mart_payload(**context) -> str:
 
     # Extract downloaded_date from the extraction data or derive from context
     downloaded_date = extraction_data.get('downloaded_date')
-    dbt_social_services_mart_parameters = {
-        "downloaded_date": downloaded_date
-    }
+    if not downloaded_date:
+        raise AirflowException("no download date found")
 
-    return dbt_social_services_mart_parameters
+    task_instance.xcom_push(key='downloaded_date', value=downloaded_date)
+
+    return downloaded_date
 
 # =============================================================================
 # DAG DEFINITION
@@ -402,14 +399,21 @@ parse_transformation_response_task = PythonOperator(
     python_callable=parse_transformation_response,
     dag=dag
 )
-
 # Task 8: Trigger DBT workflow
+
+prepare_mart_payload_task = PythonOperator(
+    task_id='prepare_mart_payload',
+    python_callable=prepare_mart_payload,
+    dag=dag
+)
+
+
 social_service_mart_model = DbtAthenaOperator(
     task_id='social_services_by_service_municipal',
     aws_conn_id='aws_cross_account_role',
     dbt_command='run',
     dbt_target=ENVIRONMENT,
-    dbt_vars=prepare_mart_payload,
+    dbt_vars={"downloaded_date": "{{ task_instance.xcom_pull(task_ids='prepare_mart_payload', key='downloaded_date') }}"},
     select_models='social_services_by_service_municipal',
     dag=dag
 )
@@ -426,4 +430,5 @@ social_service_mart_model = DbtAthenaOperator(
  prepare_transformer_payload_task >>
  invoke_transformer >>
  parse_transformation_response_task >>
+ prepare_mart_payload_task >>
  social_service_mart_model)
