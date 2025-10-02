@@ -1,25 +1,17 @@
-"""
-Catalunya Data Pipeline - Public API Extractor
-This Lambda function extracts data from a public API and writes to the landing S3 bucket.
-Returns extraction metadata for Airflow orchestration coordination.
-https://analisi.transparenciacatalunya.cat/Societat-benestar/Registre-d-entitats-serveis-i-establiments-socials/ivft-vegh/about_data
-"""
-
 import json
 import boto3
 import urllib.request
 import logging
+import time
 from datetime import datetime
 from typing import Dict, Any, List
 import os
 
-# Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
 def get_s3_client():
-    """Get S3 client with optional endpoint URL for LocalStack"""
     endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
     if endpoint_url:
         logger.info(f"Using S3 endpoint: {endpoint_url}")
@@ -30,28 +22,18 @@ def get_s3_client():
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    Main Lambda handler function
-
-    Args:
-        event: Lambda event data
-        context: Lambda context
-
-    Returns:
-        Dict containing execution results
-    """
     try:
         logger.info(f"Starting API extraction process at {datetime.utcnow()}")
 
-        # Get configuration from environment variables
         bucket_name = os.environ['BUCKET_NAME']
         semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
+
         with urllib.request.urlopen("https://api.idescat.cat/taules/v2") as url:
             all_statistics = json.load(url)['link']['item']
             if len(all_statistics) == 0:
                 return create_response(False, "No metrics found")
             href_population_and_homes = next(
-                entity['href'] for entity in all_statistics if 'Cens de població i habitatges' == entity['label'], None)
+                (entity['href'] for entity in all_statistics if 'Cens de població i habitatges' == entity['label']), None)
             if href_population_and_homes is None:
                 return create_response(False, "No metric of target population found")
 
@@ -60,8 +42,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if len(all_nodes) == 0:
                 return create_response(False, "No nodes found")
 
-            href_sex_and_age_by_large_groups = next(single_node['href'] for single_node in all_nodes if
-                                                    single_node['label'] == 'Població. Per sexe i edat en grans grups',
+            href_sex_and_age_by_large_groups = next((single_node['href'] for single_node in all_nodes if
+                                                     single_node['label'] == 'Població. Per sexe i edat en grans grups'),
                                                     None)
             if href_sex_and_age_by_large_groups is None:
                 return create_response(False, "No node of target population found")
@@ -80,7 +62,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return create_response(False, "No territories found from api")
 
             href_municipal_sex_and_age_by_large_groups = next(
-                single_territory['href'] for single_territory in all_territories if single_territory['label'] == 'Per municipis', None)
+                (single_territory['href'] for single_territory in all_territories if single_territory['label'] == 'Per municipis'), None)
 
             if href_municipal_sex_and_age_by_large_groups is None:
                 return create_response(False, "No territory target found from api")
@@ -94,7 +76,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         logger.info(f"Starting download for date")
 
-        for single_year in all_years[:10]:
+        for single_year in all_years:
             print(single_year)
             time.sleep(5)
             with urllib.request.urlopen(
@@ -109,11 +91,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     logger.info(f"No more data available. Finished at iteration {single_year}")
                     break
+
         if len(all_years) != len(s3_keys):
             return create_response(False, "Not all years downloaded")
 
-
-        # Return enhanced data for Airflow coordination
         logger.info("Successfully completed extraction - returning metadata for Airflow coordination")
 
         return create_response(True, f"Successfully processed {len(s3_keys)} blocks",
@@ -135,25 +116,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str, year: str) -> str:
-    """
-    Upload extracted data to S3 landing bucket
-    
-    Args:
-        bucket_name: S3 bucket name
-        json_data: Raw JSON data as bytes
-        semantic_identifier: Semantic identifier for the dataset
-        year: year downloaded
-    
-    Returns:
-        S3 key of the uploaded file
-    """
     try:
         s3_client = get_s3_client()
 
-        # Generate S3 key with partitioning by download date
         s3_key = f"landing/{semantic_identifier}/{year}.json"
 
-        # Upload to S3
         s3_client.put_object(
             Bucket=bucket_name,
             Key=s3_key,
@@ -176,23 +143,12 @@ def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str, y
 
 
 def create_response(success: bool, message: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
-    """
-    Create standardized Lambda response
-
-    Args:
-        success: Whether the operation was successful
-        message: Response message
-        data: Optional additional data
-
-    Returns:
-        Formatted response dictionary
-    """
     response = {
         'statusCode': 200 if success else 500,
         'success': success,
         'message': message,
         'timestamp': datetime.utcnow().isoformat(),
-        'extractor': 'social-services-api-extractor'
+        'extractor': 'population-municipal-greater-65-api-extractor'
     }
 
     if data:
