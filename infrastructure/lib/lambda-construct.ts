@@ -33,6 +33,7 @@ interface LambdaFunctionProps {
 
 export class LambdaConstruct extends Construct {
   public readonly apiExtractorLambda: lambda.Function;
+  public readonly populationMunicipalGreater65ApiExtractorLambda: lambda.Function;
   public readonly socialServicesTransformerLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: LambdaConstructProps) {
@@ -65,23 +66,35 @@ export class LambdaConstruct extends Construct {
       region,
       executionRole: props.transformerExecutionRole
     });
+
+    this.populationMunicipalGreater65ApiExtractorLambda = this.createApiExtractorLambdaPopulationGreater65({
+        environmentName,
+        projectName,
+        config,
+        bucketName,
+        catalogBucketName,
+        lambdaPrefix,
+        account,
+        region,
+        executionRole: props.extractorExecutionRole
+    });
   }
 
   /**
    * Gets the appropriate Python Lambda code, skipping bundling for tests
    */
-  private getPythonLambdaCode(): lambda.Code {
+  private getPythonLambdaCode(extractor_directory: string): lambda.Code {
     const isTest = process.env.NODE_ENV === 'test' ||
                    process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
 
     if (isTest) {
       // Skip bundling for tests - just use the source directory
       console.log('🧪 Skipping Python bundling for tests');
-      return lambda.Code.fromAsset('../lambda/extractors/social_services');
+      return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`);
     } else {
       // Use bundling for real deployments
       console.log('📦 Using Python bundling for deployment');
-      return lambda.Code.fromAsset('../lambda/extractors/social_services', {
+      return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`, {
         bundling: {
           image: lambda.Runtime.PYTHON_3_9.bundlingImage,
           command: [
@@ -116,9 +129,9 @@ export class LambdaConstruct extends Construct {
 
     const apiExtractorLambda = new lambda.Function(this, 'social_services_ApiExtractorLambda', {
       functionName: `${lambdaPrefix}-social_services`,
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_13,
       handler: 'api_extractor.lambda_handler',
-      code: this.getPythonLambdaCode(),
+      code: this.getPythonLambdaCode('social_services'),
       timeout: cdk.Duration.seconds(config.lambdaTimeout),
       memorySize: config.lambdaMemory,
       role: lambdaRole,
@@ -157,6 +170,50 @@ export class LambdaConstruct extends Construct {
       value: apiExtractorLambda.functionName,
       description: 'Name of the API Extractor Lambda function',
       exportName: `${projectName}-ApiExtractorLambdaName`,
+    });
+
+    return apiExtractorLambda;
+  }
+
+  private createApiExtractorLambdaPopulationGreater65(props: LambdaFunctionProps): lambda.Function {
+    const { environmentName, projectName, config, bucketName, catalogBucketName, lambdaPrefix, account, region } = props;
+
+    const lambdaRole = props.executionRole;
+
+    const apiExtractorLambda = new lambda.Function(this, 'population_municipal_greater_65_ApiExtractorLambda', {
+      functionName: `${lambdaPrefix}-population_municipal_greater_65`,
+      runtime: lambda.Runtime.PYTHON_3_13,
+      handler: 'api_extractor.lambda_handler',
+      code: this.getPythonLambdaCode('population_municipal_greater_65'),
+      timeout: cdk.Duration.seconds(config.lambdaTimeout),
+      memorySize: config.lambdaMemory,
+      role: lambdaRole,
+      environment: {
+        BUCKET_NAME: bucketName,
+        SEMANTIC_IDENTIFIER: 'population_municipal_greater_65',
+      },
+      description: `API Extractor Lambda Population Municipal Greater 65 for ${environmentName} environment - Orchestrated by Airflow`,
+    });
+
+    const commonTags = ConfigHelper.getCommonTags(environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(apiExtractorLambda).add(key, value);
+    });
+
+    cdk.Tags.of(apiExtractorLambda).add('Purpose', 'DataExtraction');
+    cdk.Tags.of(apiExtractorLambda).add('Layer', 'Ingestion');
+    cdk.Tags.of(apiExtractorLambda).add('DataSource', 'PublicAPI');
+
+    new cdk.CfnOutput(this, 'PopulationGreater65ApiExtractorLambdaArn', {
+      value: apiExtractorLambda.functionArn,
+      description: 'ARN of the PopulationGreater65 API Extractor Lambda function',
+      exportName: `${projectName}-APopulationGreater65piExtractorLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'PopulationGreater65ApiExtractorLambdaName', {
+      value: apiExtractorLambda.functionName,
+      description: 'Name of the PopulationGreater65 API Extractor Lambda function',
+      exportName: `${projectName}-PopulationGreater65ApiExtractorLambdaName`,
     });
 
     return apiExtractorLambda;
