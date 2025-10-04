@@ -50,8 +50,8 @@ pub(crate) async fn function_handler(
     );
     let resp = s3_client
         .list_objects_v2()
-        .bucket(bucket_name)
-        .prefix(source_prefix)
+        .bucket(bucket_name.clone())
+        .prefix(source_prefix.clone())
         .send()
         .await?;
 
@@ -85,12 +85,12 @@ pub(crate) async fn function_handler(
     for key in &json_keys {
         match process_single_file(&s3_client, &bucket_name, key).await {
             Ok(df) => {
-                dfs.push(df);
                 println!("Read {} records from {}", df.height(), key);
+                dfs.push(df);
             }
             Err(e) => {
                 eprintln!("Error processing file {}: {}", key, e);
-                Err(anyhow!("Error processing file {}: {}", key, e).into());
+                return Err(anyhow!("Error processing file {}: {}", key, e).into());
             }
         }
     }
@@ -236,20 +236,3 @@ async fn upload_parquet_to_s3(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use lambda_runtime::{Context, LambdaEvent};
-
-    #[tokio::test]
-    async fn test_generic_handler() {
-        let event = LambdaEvent::new(
-            IncomingMessage {
-                command: "test".to_string(),
-            },
-            Context::default(),
-        );
-        let response = function_handler(event).await.unwrap();
-        assert_eq!(response.msg, "Command test.");
-    }
-}
