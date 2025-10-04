@@ -158,27 +158,27 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
         .ok_or_else(|| anyhow!("population_values not array"))?;
 
     let municipal_codes: Vec<String> = municipal_codes_and_total
-        [..municipal_codes_and_total.len() - 1]
+        [..total_height]
         .iter()
         .map(|x| x.as_str().unwrap().to_string())
         .collect();
 
-    let pop_ge65: Vec<i64> = population_values
+    let pop_ge65: Vec<Option<i64>> = population_values
         .iter()
         .enumerate()
-        .filter_map(|(i, v)| (i % 2 == 0).then(|| v.as_i64()).flatten())
+        .filter_map(|(i, v)| (i % 2 == 0).then(|| v.as_f64().map(|x| x as i64)))
         .collect::<Vec<_>>()
         .into_iter()
-        .take(population_values.len() / 2 - 1) // skip last one
+        .take(total_height) // skip last one
         .collect();
 
-    let pop_total: Vec<i64> = population_values
+    let pop_total: Vec<Option<i64>> = population_values
         .iter()
         .enumerate()
-        .filter_map(|(i, v)| (i % 2 == 1).then(|| v.as_i64()).flatten())
+        .filter_map(|(i, v)| (i % 2 == 1).then(|| v.as_f64().map(|x| x as i64)))
         .collect::<Vec<_>>()
         .into_iter()
-        .take(population_values.len() / 2 - 1) // skip last one
+        .take(total_height) // skip last one
         .collect();
 
     let s_codes = Series::new("municipal_code".into(), municipal_codes);
