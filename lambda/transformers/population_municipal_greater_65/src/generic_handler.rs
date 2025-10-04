@@ -7,14 +7,13 @@ use polars::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::env;
 /// This is a made-up example. Incoming messages come into the runtime as unicode
 /// strings in json format, which can map to any structure that implements `serde::Deserialize`
 /// The runtime pays no attention to the contents of the incoming message payload.
 #[derive(Deserialize)]
 pub(crate) struct IncomingMessage {
-    bucket_name: String,
-    semantic_identifier: String,
-    source_prefix: String,
+    source_prefix: String
 }
 
 /// This is a made-up example of what an outgoing message structure may look like.
@@ -35,8 +34,8 @@ pub(crate) async fn function_handler(
     event: LambdaEvent<IncomingMessage>,
 ) -> Result<OutgoingMessage, Error> {
     // Extract some useful info from the request
-    let bucket_name = event.payload.bucket_name;
-    let semantic_identifier = event.payload.semantic_identifier;
+    let bucket_name = env::var("BUCKET_NAME")?;
+    let semantic_identifier = env::var("SEMANTIC_IDENTIFIER")?;
     let source_prefix = event.payload.source_prefix;
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
     let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
