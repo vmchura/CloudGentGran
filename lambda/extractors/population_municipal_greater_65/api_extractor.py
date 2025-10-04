@@ -101,13 +101,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                {
                                    'bucket': bucket_name,
                                    'semantic_identifier': semantic_identifier,
-                                   'extraction_completed_at': datetime.utcnow().isoformat(),
-                                   'transformer_payload': {
-                                       'bucket_name': bucket_name,
-                                       'semantic_identifier': semantic_identifier,
-                                       's3_keys': s3_keys,
-                                       'all_years': all_years,
-                                   }
+                                   'extraction_completed_at': datetime.utcnow().isoformat()
                                })
 
     except Exception as e:
