@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "population_municipal_greater_65_mart"
+name = "bootstrap"
 path = "src/main.rs"
 
 [dependencies]
