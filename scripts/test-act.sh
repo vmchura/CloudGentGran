@@ -93,7 +93,7 @@ run_full_workflow() {
     echo -e "${YELLOW}🎬 Running full workflow with LocalStack...${NC}"
 
     # Set environment variables for LocalStack
-    act push -b develop\
+    act push --defaultbranch develop \
         --artifact-server-path "$ARTIFACTS_DIR" \
         --container-architecture linux/amd64 \
         --env AWS_ACCESS_KEY_ID=test \
