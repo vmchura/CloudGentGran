@@ -7,10 +7,6 @@ edition = "2021"
 name = "bootstrap"
 path = "src/main.rs"
 
-[[bin]]
-name = "local_test"
-path = "local_test.rs"
-
 [dependencies]
 lambda_runtime.workspace = true
 serde.workspace = true
