@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rust-lambdas-${{ github.sha }}
-          path: rust_lambda_deployment.zip
+          path: lambda/rust_lambda_deployment.zip
           retention-days: 1
 
   # ==========================================
@@ -95,7 +95,7 @@ jobs:
       - name: Download Rust Lambda artifact
         uses: actions/download-artifact@v4
         with:
-          name: rust-lambda-${{ github.sha }}
+          name: rust-lambdas-${{ github.sha }}
           path: .
 
       - name: Extract Rust Lambda
@@ -180,7 +180,7 @@ jobs:
       - name: Download Rust Lambda artifact
         uses: actions/download-artifact@v4
         with:
-          name: rust-lambda-${{ github.sha }}
+          name: rust-lambdas-${{ github.sha }}
           path: .
 
       # Extract the ZIP so CDK can find the bootstrap file
@@ -322,7 +322,7 @@ jobs:
       - name: Download Rust Lambda artifact
         uses: actions/download-artifact@v4
         with:
-          name: rust-lambda-${{ github.sha }}
+          name: rust-lambdas-${{ github.sha }}
           path: .
 
       # Extract the ZIP so CDK can find the bootstrap file
