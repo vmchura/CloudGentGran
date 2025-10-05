@@ -13,7 +13,7 @@ use std::env;
 /// The runtime pays no attention to the contents of the incoming message payload.
 #[derive(Deserialize)]
 pub(crate) struct IncomingMessage {
-    source_prefix: String
+    source_prefix: String,
 }
 
 /// This is a made-up example of what an outgoing message structure may look like.
@@ -23,6 +23,7 @@ pub(crate) struct IncomingMessage {
 #[derive(Serialize)]
 pub(crate) struct OutgoingMessage {
     status: String,
+    target_prefix: Option<String>,
 }
 
 /// This is the main body for the function.
@@ -78,6 +79,7 @@ pub(crate) async fn function_handler(
         );
         return Ok(OutgoingMessage {
             status: "failed".to_string(),
+            target_prefix: None,
         });
     }
     let mut dfs: Vec<DataFrame> = Vec::new();
@@ -101,6 +103,7 @@ pub(crate) async fn function_handler(
     // Prepare the outgoing message
     let resp = OutgoingMessage {
         status: "succeeded".to_string(),
+        target_prefix: Some(target_key),
     };
 
     // Return `OutgoingMessage` (it will be serialized to JSON automatically by the runtime)
@@ -156,8 +159,7 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
         .as_array()
         .ok_or_else(|| anyhow!("population_values not array"))?;
 
-    let municipal_codes: Vec<String> = municipal_codes_and_total
-        [..total_height]
+    let municipal_codes: Vec<String> = municipal_codes_and_total[..total_height]
         .iter()
         .map(|x| x.as_str().unwrap().to_string())
         .collect();
@@ -234,4 +236,3 @@ async fn upload_parquet_to_s3(
     println!("File size: {} bytes, Records: {}", buf.len(), df.height());
     Ok(())
 }
-
