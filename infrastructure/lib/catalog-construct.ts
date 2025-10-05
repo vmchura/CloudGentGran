@@ -154,7 +154,33 @@ export class CatalogConstruct extends Construct {
 
     return catalogBucket;
   }
+    /**
+     * Gets the appropriate Python Lambda code, skipping bundling for tests
+     */
+    private getPythonLambdaCode(extractor_directory: string): lambda.Code {
+        const isTest = process.env.NODE_ENV === 'test' ||
+            process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
 
+        if (isTest) {
+            // Skip bundling for tests - just use the source directory
+            console.log('🧪 Skipping Python bundling for tests');
+            return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`);
+        } else {
+            // Use bundling for real deployments
+            console.log('📦 Using Python bundling for deployment');
+            return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`, {
+                bundling: {
+                    image: lambda.Runtime.PYTHON_3_13.bundlingImage,
+                    command: [
+                        'bash', '-c', [
+                            'pip install pandas fastparquet -t /asset-output',
+                            'cp -au . /asset-output'
+                        ].join(' && ')
+                    ],
+                },
+            });
+        }
+    }
   /**
    * Creates a simplified Lambda function for creating raw parquet files
    */
@@ -177,22 +203,14 @@ export class CatalogConstruct extends Construct {
     // ========================================
     // Simple Catalog Lambda
     // ========================================
+
+
+
     const serviceTypeCatalogLambda = new lambda.Function(this, 'ServiceTypeCatalogLambda', {
       functionName: `${lambdaPrefix}-service-type-catalog`,
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_13,
       handler: 'service_type_initializer.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/catalog/service_type', {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c', [
-              // Install minimal dependencies for parquet creation
-              'pip install pandas fastparquet -t /asset-output',
-              'cp -au . /asset-output'
-            ].join(' && ')
-          ],
-        },
-      }),
+      code: this.getPythonLambdaCode('service_type'),
       timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
@@ -254,20 +272,9 @@ export class CatalogConstruct extends Construct {
     // ========================================
     const serviceTypeCatalogLambda = new lambda.Function(this, 'ServiceQualificationCatalogLambda', {
       functionName: `${lambdaPrefix}-service-qualification-catalog`,
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_13,
       handler: 'service_qualification_initializer.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/catalog/service_qualification', {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c', [
-              // Install minimal dependencies for parquet creation
-              'pip install pandas fastparquet -t /asset-output',
-              'cp -au . /asset-output'
-            ].join(' && ')
-          ],
-        },
-      }),
+      code: this.getPythonLambdaCode('service_qualification'),
       timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
@@ -331,20 +338,9 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
 
     const municipalsCatalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
           functionName: `${lambdaPrefix}-municipals-catalog`,
-          runtime: lambda.Runtime.PYTHON_3_9,
+          runtime: lambda.Runtime.PYTHON_3_13,
           handler: 'municipals_initializer.lambda_handler',
-          code: lambda.Code.fromAsset('../lambda/catalog/municipals', {
-            bundling: {
-              image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-              command: [
-                'bash', '-c', [
-                  // Install minimal dependencies for parquet creation
-                  'pip install pandas fastparquet -t /asset-output',
-                  'cp -au . /asset-output'
-                ].join(' && ')
-              ],
-            },
-          }),
+          code: this.getPythonLambdaCode('municipals'),
           timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
           memorySize: 512, // Reduced memory for simple parquet creation
           role: catalogRole,

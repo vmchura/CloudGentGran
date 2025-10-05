@@ -120,7 +120,7 @@ export class LambdaConstruct extends Construct {
      */
     private getPythonLambdaCode(extractor_directory: string): lambda.Code {
         const isTest = process.env.NODE_ENV === 'test' ||
-            process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
+            process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
 
         if (isTest) {
             // Skip bundling for tests - just use the source directory
@@ -131,7 +131,7 @@ export class LambdaConstruct extends Construct {
             console.log('📦 Using Python bundling for deployment');
             return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`, {
                 bundling: {
-                    image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+                    image: lambda.Runtime.PYTHON_3_13.bundlingImage,
                     command: [
                         'bash', '-c', [
                             'pip install -r requirements.txt -t /asset-output',

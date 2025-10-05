@@ -101,7 +101,7 @@ jobs:
       - name: Extract Rust Lambda
         run: |
           unzip -o rust_lambda_deployment.zip
-          ls -la
+          ls -la rust_lambda_deployment
           echo "✅ Extracted Rust lambda artifact for testing!"
 
       - name: Setup Node.js
@@ -187,7 +187,7 @@ jobs:
       - name: Extract Rust Lambda
         run: |
           unzip -o rust_lambda_deployment.zip
-          ls -la
+          ls -la rust_lambda_deployment
           echo "✅ Extracted Rust lambda artifact - no compilation needed!"
 
       - name: Setup Node.js
@@ -329,7 +329,7 @@ jobs:
       - name: Extract Rust Lambda
         run: |
           unzip -o rust_lambda_deployment.zip
-          ls -la
+          ls -la rust_lambda_deployment
           echo "✅ Extracted Rust lambda artifact - no compilation needed!"
 
       - name: Setup Node.js
