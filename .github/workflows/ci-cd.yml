@@ -17,9 +17,9 @@ jobs:
   # BUILD RUST LAMBDA
   # ==========================================
   build-rust-lambda:
-    name: Build Rust Lambda
+    name: Build Rust Lambdas
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,11 +39,10 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            lambda/transformers/social_services/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+            lambda/target/
+          key: ${{ runner.os }}-cargo-workspace-${{ hashFiles('lambda/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-workspace-
 
       - name: Install cargo-lambda
         run: |
@@ -54,26 +53,30 @@ jobs:
       - name: Install Zig
         run: npm install -g @ziglang/cli
 
-      - name: Build Rust Lambda (no prompt)
-        working-directory: lambda/transformers/social_services
+      - name: Build All Rust Lambdas
+        working-directory: lambda
         run: |
-          echo "🚀 Building Rust lambda with caching..."
-          cargo lambda build --release --target x86_64-unknown-linux-gnu
-          echo "✅ Build complete - this will be cached for future runs!"
+          echo "🚀 Building all Rust lambdas with workspace..."
+          cargo lambda build --release --workspace --target x86_64-unknown-linux-gnu
+          echo "✅ All lambdas built!"
 
-      - name: Create deployment package
-        working-directory: lambda/transformers/social_services
+      - name: Create deployment packages
+        working-directory: lambda
         run: |
-          mkdir -p deployment
-          cp target/lambda/bootstrap/bootstrap deployment/
-          cd deployment
-          zip -r ../social-services-transformer.zip .
+          mkdir -p rust_lambda_deployment
+          mkdir -p rust_lambda_deployment/social-services-transformer
+          mkdir -p rust_lambda_deployment/population_municipal_greater_65
+          mkdir -p rust_lambda_deployment/population_municipal_greater_65_mart
+          cp target/lambda/social-services-transformer/bootstrap rust_lambda_deployment/social-services-transformer/bootstrap
+          cp target/lambda/population_municipal_greater_65/bootstrap rust_lambda_deployment/population_municipal_greater_65/bootstrap
+          cp target/lambda/population_municipal_greater_65_mart/bootstrap rust_lambda_deployment/population_municipal_greater_65_mart/bootstrap
+          zip -r rust_lambda_deployment.zip rust_lambda_deployment
 
-      - name: Upload Lambda artifact
+      - name: Upload Lambda artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rust-lambda-${{ github.sha }}
-          path: lambda/transformers/social_services/social-services-transformer.zip
+          name: rust-lambdas-${{ github.sha }}
+          path: rust_lambda_deployment.zip
           retention-days: 1
 
   # ==========================================
@@ -93,12 +96,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: rust-lambda-${{ github.sha }}
-          path: ./rust-lambda-build
+          path: .
 
       - name: Extract Rust Lambda
         run: |
-          cd rust-lambda-build
-          unzip -o social-services-transformer.zip
+          unzip -o rust_lambda_deployment.zip
           ls -la
           echo "✅ Extracted Rust lambda artifact for testing!"
 
@@ -164,7 +166,7 @@ jobs:
   deploy-development:
     name: Deploy to Development
     runs-on: ubuntu-latest
-    needs: [build-and-test, build-rust-lambda]
+    needs: [ build-and-test, build-rust-lambda ]
     if: |
       github.ref == 'refs/heads/develop' &&
       github.event_name == 'push' &&
@@ -179,13 +181,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: rust-lambda-${{ github.sha }}
-          path: ./rust-lambda-build
+          path: .
 
       # Extract the ZIP so CDK can find the bootstrap file
       - name: Extract Rust Lambda
         run: |
-          cd rust-lambda-build
-          unzip -o social-services-transformer.zip
+          unzip -o rust_lambda_deployment.zip
           ls -la
           echo "✅ Extracted Rust lambda artifact - no compilation needed!"
 
@@ -308,7 +309,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [build-and-test, build-rust-lambda]
+    needs: [ build-and-test, build-rust-lambda ]
     if: |
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
@@ -322,13 +323,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: rust-lambda-${{ github.sha }}
-          path: ./rust-lambda-build
+          path: .
 
       # Extract the ZIP so CDK can find the bootstrap file
       - name: Extract Rust Lambda
         run: |
-          cd rust-lambda-build
-          unzip -o social-services-transformer.zip
+          unzip -o rust_lambda_deployment.zip
           ls -la
           echo "✅ Extracted Rust lambda artifact - no compilation needed!"
 
