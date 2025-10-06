@@ -120,38 +120,35 @@ export class LambdaConstruct extends Construct {
      * Gets the appropriate Python Lambda code, skipping bundling for tests
      */
     private getPythonLambdaCode(extractor_directory: string): lambda.Code {
-        const isTest = (process.env.CDK_LOCAL_BUILD_AND_TEST ?? 'false') === 'true';
+        const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
 
-        if (isTest) {
-            // Skip bundling for tests - just use the source directory
-            console.log('🧪 Skipping Python bundling for tests');
-            return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`);
-        } else {
-            // Use bundling for real deployments
-            console.log('📦 Using Python bundling for deployment');
-            return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`, {
-                bundling: {
-                    local: {
-                      tryBundle(outputDir: string) {
-                        try {
-                          execSync(`pip install -r ../lambda/extractors/${extractor_directory}/requirements.txt -t ${outputDir}`);
-                          execSync(`cp -au . ${outputDir}`);
-                          return true; // success
-                        } catch {
-                          return false; // fallback to Docker
-                        }
-                      }
-                    },
-                    image: lambda.Runtime.PYTHON_3_13.bundlingImage,
-                    command: [
-                        'bash', '-c', [
-                            'pip install -r requirements.txt -t /asset-output',
-                            'cp -au . /asset-output'
-                        ].join(' && ')
-                    ],
+        // Use bundling for real deployments
+        console.log('📦 Using Python bundling for deployment');
+        return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`, {
+            bundling: {
+                local: {
+
+                    tryBundle(outputDir: string) {
+                        if (isAct) {
+                            try {
+                                execSync(`pip install -r ../lambda/extractors/${extractor_directory}/requirements.txt -t ${outputDir}`);
+                                execSync(`cp -au . ${outputDir}`);
+                                return true; // success
+                            } catch {
+                                return false; // fallback to Docker
+                            }
+                        } else { return false; }
+                    }
                 },
-            });
-        }
+                image: lambda.Runtime.PYTHON_3_13.bundlingImage,
+                command: [
+                    'bash', '-c', [
+                        'pip install -r requirements.txt -t /asset-output',
+                        'cp -au . /asset-output'
+                    ].join(' && ')
+                ],
+            },
+        });
     }
 
     /**

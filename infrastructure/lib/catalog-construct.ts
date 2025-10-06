@@ -55,16 +55,16 @@ export class CatalogConstruct extends Construct {
     // Create simplified catalog infrastructure
     this.catalogBucket = this.createCatalogBucket(environmentName, projectName);
     this.serviceTypeCatalogLambda = this.createServiceTypeCatalogLambda({
-          environmentName,
-          projectName,
-          config,
-          dataBucketName: props.dataBucketName,
-          athenaDatabaseName: props.athenaDatabaseName,
-          lambdaPrefix,
-          account,
-          region,
-          catalogExecutorRole: props.catalogExecutorRole
-        });
+      environmentName,
+      projectName,
+      config,
+      dataBucketName: props.dataBucketName,
+      athenaDatabaseName: props.athenaDatabaseName,
+      lambdaPrefix,
+      account,
+      region,
+      catalogExecutorRole: props.catalogExecutorRole
+    });
     this.municipalsCatalogLambda = this.createMunicipalsCatalogLambda({
       environmentName,
       projectName,
@@ -77,16 +77,16 @@ export class CatalogConstruct extends Construct {
       catalogExecutorRole: props.catalogExecutorRole
     });
     this.serviceQualificationCatalogLambda = this.createServiceQualificationCatalogLambda({
-     environmentName,
-     projectName,
-     config,
-     dataBucketName: props.dataBucketName,
-     athenaDatabaseName: props.athenaDatabaseName,
-     lambdaPrefix,
-     account,
-     region,
-     catalogExecutorRole: props.catalogExecutorRole
-   });
+      environmentName,
+      projectName,
+      config,
+      dataBucketName: props.dataBucketName,
+      athenaDatabaseName: props.athenaDatabaseName,
+      lambdaPrefix,
+      account,
+      region,
+      catalogExecutorRole: props.catalogExecutorRole
+    });
   }
 
   /**
@@ -155,43 +155,42 @@ export class CatalogConstruct extends Construct {
 
     return catalogBucket;
   }
-    /**
-     * Gets the appropriate Python Lambda code, skipping bundling for tests
-     */
-    private getPythonLambdaCode(extractor_directory: string): lambda.Code {
-        const isTest = (process.env.CDK_LOCAL_BUILD_AND_TEST ?? 'false') === 'true';
+  /**
+   * Gets the appropriate Python Lambda code, skipping bundling for tests
+   */
+  private getPythonLambdaCode(extractor_directory: string): lambda.Code {
+    const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
+    // Use bundling for real deployments
+    console.log('📦 Using Python bundling for deployment');
+    return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`, {
+      bundling: {
+        local: {
 
-        if (isTest) {
-            // Skip bundling for tests - just use the source directory
-            console.log('🧪 Skipping Python bundling for tests');
-            return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`);
-        } else {
-            // Use bundling for real deployments
-            console.log('📦 Using Python bundling for deployment');
-            return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`, {
-                bundling: {
-                    local: {
-                      tryBundle(outputDir: string) {
-                        try {
-                          execSync(`pip install pandas fastparquet -t ${outputDir}`);
-                          execSync(`cp -au . ${outputDir}`);
-                          return true; // success
-                        } catch {
-                          return false; // fallback to Docker
-                        }
-                      }
-                    },
-                    image: lambda.Runtime.PYTHON_3_13.bundlingImage,
-                    command: [
-                        'bash', '-c', [
-                            'pip install pandas fastparquet -t /asset-output',
-                            'cp -au . /asset-output'
-                        ].join(' && ')
-                    ],
-                },
-            });
-        }
-    }
+          tryBundle(outputDir: string) {
+            if (isAct) {
+              try {
+                execSync(`pip install pandas fastparquet -t ${outputDir}`);
+                execSync(`cp -au . ${outputDir}`);
+                return true;
+              } catch {
+                return false;
+              }
+            } else {
+              return false;
+            }
+          }
+
+        },
+        image: lambda.Runtime.PYTHON_3_13.bundlingImage,
+        command: [
+          'bash', '-c', [
+            'pip install pandas fastparquet -t /asset-output',
+            'cp -au . /asset-output'
+          ].join(' && ')
+        ],
+      },
+    });
+  }
   /**
    * Creates a simplified Lambda function for creating raw parquet files
    */
@@ -326,7 +325,7 @@ export class CatalogConstruct extends Construct {
     return serviceTypeCatalogLambda;
   }
 
-private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
+  private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
     const {
       environmentName,
       projectName,
@@ -348,22 +347,22 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
 
 
     const municipalsCatalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
-          functionName: `${lambdaPrefix}-municipals-catalog`,
-          runtime: lambda.Runtime.PYTHON_3_13,
-          handler: 'municipals_initializer.lambda_handler',
-          code: this.getPythonLambdaCode('municipals'),
-          timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
-          memorySize: 512, // Reduced memory for simple parquet creation
-          role: catalogRole,
-          environment: {
-            CATALOG_BUCKET_NAME: this.catalogBucketName,
-            SEMANTIC_IDENTIFIER: 'municipals',
-            DATASET_IDENTIFIER: '9aju-tpwc',
-            ENVIRONMENT: environmentName,
-            REGION: region
-          },
-          description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
-        });
+      functionName: `${lambdaPrefix}-municipals-catalog`,
+      runtime: lambda.Runtime.PYTHON_3_13,
+      handler: 'municipals_initializer.lambda_handler',
+      code: this.getPythonLambdaCode('municipals'),
+      timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
+      memorySize: 512, // Reduced memory for simple parquet creation
+      role: catalogRole,
+      environment: {
+        CATALOG_BUCKET_NAME: this.catalogBucketName,
+        SEMANTIC_IDENTIFIER: 'municipals',
+        DATASET_IDENTIFIER: '9aju-tpwc',
+        ENVIRONMENT: environmentName,
+        REGION: region
+      },
+      description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
+    });
 
     // ========================================
     // Tags and Outputs
