@@ -3,6 +3,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { EnvironmentConfig, ConfigHelper } from './config';
+import { execSync } from 'child_process';
 
 export interface LambdaConstructProps {
     environmentName: string;
@@ -119,8 +120,7 @@ export class LambdaConstruct extends Construct {
      * Gets the appropriate Python Lambda code, skipping bundling for tests
      */
     private getPythonLambdaCode(extractor_directory: string): lambda.Code {
-        const isTest = process.env.NODE_ENV === 'test' ||
-            process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
+        const isTest = (process.env.CDK_LOCAL_BUILD_AND_TEST ?? 'false') === 'true';
 
         if (isTest) {
             // Skip bundling for tests - just use the source directory
@@ -131,6 +131,17 @@ export class LambdaConstruct extends Construct {
             console.log('📦 Using Python bundling for deployment');
             return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`, {
                 bundling: {
+                    local: {
+                      tryBundle(outputDir: string) {
+                        try {
+                          execSync(`pip install -r ../lambda/extractors/${extractor_directory}/requirements.txt -t ${outputDir}`);
+                          execSync(`cp -au . ${outputDir}`);
+                          return true; // success
+                        } catch {
+                          return false; // fallback to Docker
+                        }
+                      }
+                    },
                     image: lambda.Runtime.PYTHON_3_13.bundlingImage,
                     command: [
                         'bash', '-c', [
