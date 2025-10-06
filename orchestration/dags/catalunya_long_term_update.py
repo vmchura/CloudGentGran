@@ -51,6 +51,7 @@ config = ENV_CONFIG.get(ENVIRONMENT)
 def extract_source_prefix(**context):
     task_instance = context['task_instance']
     extractor_response = task_instance.xcom_pull(task_ids='population_municipal_greater_65_initializer')
+    extractor_response = json.loads(extractor_response) if isinstance(extractor_response, str) else extractor_response
     if not extractor_response or not extractor_response.get('success'):
         raise AirflowException("Extractor failed or returned invalid response")
     return {
@@ -60,6 +61,7 @@ def extract_source_prefix(**context):
 def extract_transformer_target(**context):
     task_instance = context['task_instance']
     transformer_response = task_instance.xcom_pull(task_ids='population_municipal_greater_65_transformer')
+    transformer_response = json.loads(transformer_response) if isinstance(transformer_response, str) else transformer_response
     if not transformer_response or transformer_response.get('status') != 'succeeded':
         raise AirflowException("Transformer failed or returned invalid response")
     return {
@@ -69,6 +71,7 @@ def extract_transformer_target(**context):
 def validate_mart_completion(**context):
     task_instance = context['task_instance']
     mart_response = task_instance.xcom_pull(task_ids='population_municipal_greater_65_mart')
+    mart_response = json.loads(mart_response) if isinstance(mart_response, str) else mart_response
     if not mart_response or mart_response.get('status') != 'succeeded':
         raise AirflowException("Mart failed or returned invalid response")
     logger.info(f"Mart completed successfully. Target: {mart_response.get('target_prefix')}")
@@ -104,7 +107,6 @@ population_municipal_greater_65_initializer = LambdaInvokeFunctionOperator(
 prepare_transformer_payload = PythonOperator(
     task_id='prepare_transformer_payload',
     python_callable=extract_source_prefix,
-    provide_context=True,
     dag=dag
 )
 
@@ -120,7 +122,6 @@ population_municipal_greater_65_transformer = LambdaInvokeFunctionOperator(
 prepare_mart_payload = PythonOperator(
     task_id='prepare_mart_payload',
     python_callable=extract_transformer_target,
-    provide_context=True,
     dag=dag
 )
 
@@ -136,7 +137,6 @@ population_municipal_greater_65_mart = LambdaInvokeFunctionOperator(
 validate_mart = PythonOperator(
     task_id='validate_mart',
     python_callable=validate_mart_completion,
-    provide_context=True,
     dag=dag
 )
 
