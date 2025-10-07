@@ -68,6 +68,8 @@ AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_DEFAULT_REGION=eu-west-1
 AWS_ENDPOINT_URL=$LOCALSTACK_ENDPOINT
+AWS_ENDPOINT_URL_S3=$LOCALSTACK_ENDPOINT
+CDK_DEFAULT_ACCOUNT: '000000000000'
 EOF
         echo "Created .secrets file with LocalStack credentials"
     else
@@ -93,16 +95,18 @@ run_full_workflow() {
     echo -e "${YELLOW}🎬 Running full workflow with LocalStack...${NC}"
 
     # Set environment variables for LocalStack
-    act push -b develop\
+    act push --defaultbranch develop \
         --artifact-server-path "$ARTIFACTS_DIR" \
         --container-architecture linux/amd64 \
         --env AWS_ACCESS_KEY_ID=test \
         --env AWS_SECRET_ACCESS_KEY=test \
         --env AWS_DEFAULT_REGION=eu-west-1 \
         --env AWS_ENDPOINT_URL="$LOCALSTACK_ENDPOINT" \
+        --env AWS_ENDPOINT_URL_S3="$LOCALSTACK_ENDPOINT" \
         --env CDK_DEFAULT_ACCOUNT=000000000000 \
         --env CDK_DEFAULT_REGION=eu-west-1 \
         --secret-file .secrets \
+        -e .github/tests/push-merge.json \
         --rm \
         "$@" || {
             echo -e "${YELLOW}⚠️ Some steps may have failed (expected with LocalStack)${NC}"

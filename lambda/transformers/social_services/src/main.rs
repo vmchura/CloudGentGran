@@ -241,7 +241,7 @@ async fn process_files_for_date(
             Ok((df, records)) => {
                 total_raw_records += records;
 
-                dfs.push(df.select(&[
+                dfs.push(df.select([
                     "registre",
                     "tipologia",
                     "inscripcio",
@@ -322,7 +322,7 @@ async fn process_single_file(
     let df = JsonReader::new(cursor)
         .finish()
         .map_err(|e| anyhow!("Error reading {}: {}", key, e))?
-        .select(&[
+        .select([
             "registre",
             "tipologia",
             "inscripcio",
@@ -407,20 +407,8 @@ async fn load_catalog_data(
 
     let data = obj.body.collect().await?.into_bytes();
 
-    // Create temporary file for parquet reading using std approach
-    let temp_path = format!(
-        "/tmp/catalog_{}_{}.parquet",
-        catalog_name,
-        std::process::id()
-    );
-    std::fs::write(&temp_path, &data)?;
-
-    // Load parquet into Polars
-    let df = LazyFrame::scan_parquet(&temp_path, ScanArgsParquet::default())?.collect()?;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&temp_path);
-
+    let cursor = Cursor::new(data);
+    let df = ParquetReader::new(cursor).finish()?;
     println!("Loaded catalog {} with {} rows", catalog_name, df.height());
     Ok(df)
 }
@@ -509,8 +497,14 @@ fn transform_social_services_data(
     let mut errors = Vec::new();
 
     // Check service types mapping
-    let tipologia_series = df.column("tipologia")?;
-    let service_type_desc_series = service_types_df.column("service_type_description")?;
+    let tipologia_series = df
+        .column("tipologia")?
+        .as_series()
+        .ok_or_else(|| anyhow!(""))?;
+    let service_type_desc_series = service_types_df
+        .column("service_type_description")?
+        .as_series()
+        .ok_or_else(|| anyhow!(""))?;
     errors.extend(has_unmapped_element(
         tipologia_series,
         service_type_desc_series,
@@ -519,9 +513,14 @@ fn transform_social_services_data(
     )?);
 
     // Check service qualification mapping
-    let qualificacio_series = df.column("qualificacio")?;
-    let service_qual_desc_series =
-        service_qualification_df.column("service_qualification_description")?;
+    let qualificacio_series = df
+        .column("qualificacio")?
+        .as_series()
+        .ok_or_else(|| anyhow!(""))?;
+    let service_qual_desc_series = service_qualification_df
+        .column("service_qualification_description")?
+        .as_series()
+        .ok_or_else(|| anyhow!(""))?;
     errors.extend(has_unmapped_element(
         qualificacio_series,
         service_qual_desc_series,
@@ -544,6 +543,7 @@ fn transform_social_services_data(
         ["tipologia"],
         ["service_type_description"],
         JoinArgs::new(JoinType::Left),
+        None
     )?;
 
     // Join with service qualification
@@ -552,10 +552,11 @@ fn transform_social_services_data(
         ["qualificacio"],
         ["service_qualification_description"],
         JoinArgs::new(JoinType::Left),
+        None
     )?;
 
     // Select intermediate columns
-    df = df.select(&[
+    df = df.select([
         "registre",
         "inscripcio",
         "capacitat",
@@ -573,11 +574,12 @@ fn transform_social_services_data(
         ["comarca"],
         ["nom_comarca"],
         JoinArgs::new(JoinType::Left),
+        None
     )?;
 
     // Calculate normalized strings and similarities using a simpler approach
-    let nom_series = df.column("nom")?;
-    let municipi_series = df.column("municipi")?;
+    let nom_series = df.column("nom")?.as_series().ok_or_else(|| anyhow!("Municipal series nom can not be serialized"))?;
+    let municipi_series = df.column("municipi")?.as_series().ok_or_else(|| anyhow!("Municipal codes can not be serialized"))?;
 
     let mut normalized_nom_strings: Vec<Option<String>> = Vec::new();
     let mut normalized_municipi_strings: Vec<Option<String>> = Vec::new();
@@ -603,10 +605,10 @@ fn transform_social_services_data(
     }
 
     // Create Series from the processed data and add to DataFrame using hstack
-    let nom_normalized_series = Series::new("nom_normalized", normalized_nom_strings);
+    let nom_normalized_series = Column::new("nom_normalized".into(), normalized_nom_strings);
     let municipi_normalized_series =
-        Series::new("municipi_normalized", normalized_municipi_strings);
-    let tokens_similar_series = Series::new("tokens_similar", similarities);
+        Column::new("municipi_normalized".into(), normalized_municipi_strings);
+    let tokens_similar_series = Column::new("tokens_similar".into(), similarities);
 
     // Create a new DataFrame with additional columns
     let additional_df = DataFrame::new(vec![
@@ -625,7 +627,7 @@ fn transform_social_services_data(
     )?;
 
     // Remove duplicates keeping first (highest tokens_similar due to sort)
-    df = df.unique(
+    df = df.unique::<Vec<String>, String>(
         Some(&[
             "registre".to_string(),
             "inscripcio".to_string(),
@@ -718,7 +720,6 @@ async fn upload_parquet_to_s3(
         .metadata("format", "parquet")
         .metadata("record_count", &df.height().to_string())
         .metadata("processed_timestamp", &Utc::now().to_rfc3339())
-        .metadata("columns", &df.get_column_names().join(","))
         .send()
         .await?;
 

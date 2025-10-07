@@ -349,3 +349,6 @@ localstack/s3-mounts/
 rust-lambda-build/
 dbt/mart/local_data/
 orchestration/dbt
+
+*.pyc
+bootstrap
