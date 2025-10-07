@@ -101,6 +101,7 @@ population_municipal_greater_65_initializer = LambdaInvokeFunctionOperator(
     function_name=config['population_municipal_greater_65_function'],
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',
+    read_timeout=300,
     dag=dag
 )
 
