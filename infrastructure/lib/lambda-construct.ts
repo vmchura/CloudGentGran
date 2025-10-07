@@ -424,7 +424,7 @@ export class LambdaConstruct extends Construct {
             account,
             region
         } = props;
-        let transformerRole: iam.IRole = props.executionRole;
+        let martRole: iam.IRole = props.executionRole;
 
         const lambdaFunction = new lambda.Function(this, 'PopulationMunicipalGreater65MartLambda', {
             functionName: `${lambdaPrefix}-population_municipal_greater_65-mart`,
@@ -433,7 +433,7 @@ export class LambdaConstruct extends Construct {
             code: lambda.Code.fromAsset('../rust_lambda_deployment/population_municipal_greater_65_mart'),
             timeout: cdk.Duration.seconds(config.lambdaTimeout),
             memorySize: config.lambdaMemory,
-            role: transformerRole,
+            role: martRole,
             environment: {
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
