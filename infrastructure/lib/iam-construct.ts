@@ -43,8 +43,8 @@ export class IamConstruct extends Construct {
     super(scope, id);
 
     const { environmentName, projectName, config, account, region, bucketName,
-            athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName,
-            catalogBucketName } = props;
+      athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName,
+      catalogBucketName } = props;
 
     // Common tags for all IAM resources
     const commonTags = ConfigHelper.getCommonTags(environmentName);
@@ -585,7 +585,10 @@ export class IamConstruct extends Construct {
     this.martExecutionRole = new iam.Role(this, 'MartExecutionRole', {
       roleName: `catalunya-mart-role-${environmentName}`,
       description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
-      assumedBy: new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
+        new iam.ServicePrincipal('lambda.amazonaws.com')
+      ),
       managedPolicies: [this.martExecutorPolicy],
     });
 
