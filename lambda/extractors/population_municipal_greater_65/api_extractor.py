@@ -103,7 +103,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                    'semantic_identifier': semantic_identifier,
                                    'extraction_completed_at': datetime.utcnow().isoformat()
                                })
-
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}")
         return create_response(False, f"Error: {str(e)}")
