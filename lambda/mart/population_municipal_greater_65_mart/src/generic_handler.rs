@@ -43,7 +43,7 @@ pub(crate) async fn function_handler(
         .await;
     let s3_client = Client::new(&shared_config);
     let target_key = format!(
-        "mart/{}/{}.parquet",
+        "marts/{}/{}.parquet",
         semantic_identifier, semantic_identifier
     );
 
