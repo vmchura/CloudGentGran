@@ -3,6 +3,6 @@ dbt-duckdb
 dbt-athena-community
 psycopg2-binary
 apache-airflow-providers-fab
-apache-airflow-providers-amazon>=8.15.0
+apache-airflow-providers-amazon==9.12.0
 boto3>=1.26.0
 botocore>=1.29.0
