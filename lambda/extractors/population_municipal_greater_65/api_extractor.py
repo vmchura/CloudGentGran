@@ -78,7 +78,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for single_year in all_years:
             print(single_year)
-            time.sleep(5)
+            time.sleep(3)
             with urllib.request.urlopen(
                     href_municipal_sex_and_age_by_large_groups + f"/data?SEX=TOTAL&AGE=Y_GE065,TOTAL&YEAR={single_year}") as http_response:
                 raw_json_bytes = http_response.read()
