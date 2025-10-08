@@ -114,10 +114,8 @@ def extract_epsg_from_prj(prj_content: str) -> int:
 def transform_coordinates(shape, transformer):
     if shape.shapeType in [5, 15, 25]:
         return [
-            [
-                [transformer.transform(x, y) for x, y in part]
-                for part in shape_parts_to_rings(shape)
-            ]
+            [transformer.transform(x, y) for x, y in part]
+            for part in shape_parts_to_rings(shape)
         ]
     elif shape.shapeType in [3, 13, 23]:
         return [
