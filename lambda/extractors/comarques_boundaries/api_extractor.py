@@ -71,7 +71,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             record = shape_record.record
 
             transformed_coords = transform_coordinates(shape, transformer)
-            print(dict(zip(fields, record)))
             feature = {
                 "id": f"{i}",
                 "type": "Feature",
@@ -84,8 +83,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             geojson["features"].append(feature)
 
         logger.info(f"Converted {len(geojson['features'])} features to GeoJSON CRS 4326")
-        with open('comarca_transformed_shape.json', 'w') as f:
-            json.dump(geojson, f)
 
         geojson_str = json.dumps(geojson, ensure_ascii=False)
         geojson_bytes = geojson_str.encode('utf-8')
