@@ -3,14 +3,14 @@ from unittest.mock import Mock, patch
 from io import BytesIO
 from zipfile import ZipFile
 from api_extractor import (
-           lambda_handler,
-           extract_epsg_from_prj,
-           transform_coordinates,
-           shape_parts_to_rings,
-           shape_type_to_geojson,
-           upload_to_s3,
-           create_response,
-           get_s3_client
+    lambda_handler,
+    extract_epsg_from_prj,
+    transform_coordinates,
+    shape_parts_to_rings,
+    shape_type_to_geojson,
+    upload_to_s3,
+    create_response,
+    get_s3_client
 )
 
 
@@ -19,33 +19,6 @@ def mock_env(monkeypatch):
     monkeypatch.setenv('BUCKET_NAME', 'test-bucket')
     monkeypatch.setenv('SEMANTIC_IDENTIFIER', 'test-comarca')
     monkeypatch.delenv('AWS_ENDPOINT_URL', raising=False)
-
-
-@pytest.fixture
-def mock_shapefile_data():
-    return {
-        'fields': [['DeletionFlag', 'C', 1, 0], ['NAME', 'C', 50, 0], ['CODE', 'N', 10, 0]],
-        'shapes': [
-            Mock(
-                shapeType=5,
-                points=[(420000.0, 4650000.0), (420100.0, 4650000.0), (420100.0, 4650100.0), (420000.0, 4650100.0), (420000.0, 4650000.0)],
-                parts=[0]
-            )
-        ],
-        'records': [['Test Comarca', 1]]
-    }
-
-
-@pytest.fixture
-def mock_zip_file():
-    zip_buffer = BytesIO()
-    with ZipFile(zip_buffer, 'w') as zf:
-        zf.writestr('comarques-1000000.shp', b'shp_content')
-        zf.writestr('comarques-1000000.shx', b'shx_content')
-        zf.writestr('comarques-1000000.dbf', b'dbf_content')
-        zf.writestr('comarques-1000000.prj', b'PROJCS["ETRS89"]')
-    zip_buffer.seek(0)
-    return zip_buffer
 
 
 def test_get_s3_client_default():
@@ -167,10 +140,10 @@ def test_create_response_failure():
     assert 'data' not in response
 
 
-@patch('lambda.extractors.comarques_boundaries.api_extractor.get_s3_client')
-def test_upload_to_s3_success(mock_get_s3):
+@patch('api_extractor.boto3.client')
+def test_upload_to_s3_success(mock_boto_client):
     mock_s3 = Mock()
-    mock_get_s3.return_value = mock_s3
+    mock_boto_client.return_value = mock_s3
 
     test_data = b'{"test": "data"}'
 
@@ -186,21 +159,21 @@ def test_upload_to_s3_success(mock_get_s3):
     assert call_args[1]['ContentType'] == 'application/json'
 
 
-@patch('lambda.extractors.comarques_boundaries.api_extractor.get_s3_client')
-def test_upload_to_s3_failure(mock_get_s3):
+@patch('api_extractor.boto3.client')
+def test_upload_to_s3_failure(mock_boto_client):
     mock_s3 = Mock()
     mock_s3.put_object.side_effect = Exception("S3 error")
-    mock_get_s3.return_value = mock_s3
+    mock_boto_client.return_value = mock_s3
 
     with pytest.raises(Exception, match="S3 error"):
         upload_to_s3('test-bucket', b'data', 'test-semantic')
 
 
-@patch('lambda.extractors.comarques_boundaries.api_extractor.urlopen')
-@patch('lambda.extractors.comarques_boundaries.api_extractor.get_s3_client')
-@patch('lambda.extractors.comarques_boundaries.api_extractor.shapefile.Reader')
-@patch('lambda.extractors.comarques_boundaries.api_extractor.Transformer')
-def test_lambda_handler_success(mock_transformer_cls, mock_shapefile, mock_get_s3, mock_urlopen, mock_env):
+@patch('api_extractor.Transformer')
+@patch('api_extractor.shapefile.Reader')
+@patch('api_extractor.boto3.client')
+@patch('api_extractor.urlopen')
+def test_lambda_handler_success(mock_urlopen, mock_boto_client, mock_shapefile, mock_transformer_cls, mock_env):
     mock_zip = BytesIO()
     with ZipFile(mock_zip, 'w') as zf:
         zf.writestr('comarques-1000000.shp', b'shp')
@@ -209,7 +182,9 @@ def test_lambda_handler_success(mock_transformer_cls, mock_shapefile, mock_get_s
         zf.writestr('comarques-1000000.prj', b'PROJCS["ETRS89"]')
     mock_zip.seek(0)
 
-    mock_urlopen.return_value.read.return_value = mock_zip.getvalue()
+    mock_response = Mock()
+    mock_response.read.return_value = mock_zip.getvalue()
+    mock_urlopen.return_value = mock_response
 
     mock_shape_record = Mock()
     mock_shape_record.shape = Mock(
@@ -231,7 +206,7 @@ def test_lambda_handler_success(mock_transformer_cls, mock_shapefile, mock_get_s
     mock_transformer_cls.from_crs.return_value = mock_transformer
 
     mock_s3 = Mock()
-    mock_get_s3.return_value = mock_s3
+    mock_boto_client.return_value = mock_s3
 
     response = lambda_handler({}, None)
 
@@ -242,7 +217,7 @@ def test_lambda_handler_success(mock_transformer_cls, mock_shapefile, mock_get_s
     mock_s3.put_object.assert_called_once()
 
 
-@patch('lambda.extractors.comarques_boundaries.api_extractor.urlopen')
+@patch('api_extractor.urlopen')
 def test_lambda_handler_download_failure(mock_urlopen, mock_env):
     mock_urlopen.side_effect = Exception("Download failed")
 
@@ -253,14 +228,16 @@ def test_lambda_handler_download_failure(mock_urlopen, mock_env):
     assert 'Download failed' in response['message']
 
 
-@patch('lambda.extractors.comarques_boundaries.api_extractor.urlopen')
+@patch('api_extractor.urlopen')
 def test_lambda_handler_missing_shapefile_components(mock_urlopen, mock_env):
     mock_zip = BytesIO()
     with ZipFile(mock_zip, 'w') as zf:
         zf.writestr('comarques-1000000.shp', b'shp')
     mock_zip.seek(0)
 
-    mock_urlopen.return_value.read.return_value = mock_zip.getvalue()
+    mock_response = Mock()
+    mock_response.read.return_value = mock_zip.getvalue()
+    mock_urlopen.return_value = mock_response
 
     response = lambda_handler({}, None)
 

@@ -29,7 +29,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         bucket_name = os.environ['BUCKET_NAME']
         semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
 
-        catalunya_zip_url = 'https://datacloud.icgc.cat/datacloud/divisions-administratives/shp/divisions-administratives-v2r1-20240705.zip'
+        catalunya_zip_url = 'https://datacloud.icgc.cat/datacloud/divisions-administratives/shp/divisions-administratives-v2r1-20250730.zip'
 
         file_response_by_request = urlopen(catalunya_zip_url)
         zip_file_memory = ZipFile(BytesIO(file_response_by_request.read()))
@@ -66,13 +66,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         fields = [field[0] for field in sf.fields[1:]]
 
-        for shape_record in sf.shapeRecords():
+        for i, shape_record in enumerate(sf.shapeRecords()):
             shape = shape_record.shape
             record = shape_record.record
 
             transformed_coords = transform_coordinates(shape, transformer)
-
+            print(dict(zip(fields, record)))
             feature = {
+                "id": f"{i}",
                 "type": "Feature",
                 "properties": dict(zip(fields, record)),
                 "geometry": {
@@ -83,6 +84,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             geojson["features"].append(feature)
 
         logger.info(f"Converted {len(geojson['features'])} features to GeoJSON CRS 4326")
+        with open('comarca_transformed_shape.json', 'w') as f:
+            json.dump(geojson, f)
 
         geojson_str = json.dumps(geojson, ensure_ascii=False)
         geojson_bytes = geojson_str.encode('utf-8')
@@ -142,7 +145,7 @@ def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str) -
     try:
         s3_client = get_s3_client()
 
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         s3_key = f"landing/{semantic_identifier}/{timestamp}.json"
 
         s3_client.put_object(
