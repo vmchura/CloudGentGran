@@ -51,13 +51,13 @@ def parse_extractor_response(**context):
     if not extractor_response or not extractor_response.get('success'):
         raise AirflowException("Extractor failed or returned invalid response")
 
-    s3_key = extractor_response['data']['s3_key']
-    logger.info(f"Extracted file at: {s3_key}")
+    list_s3_keys = extractor_response['data']['list_s3_keys']
+    logger.info(f"Extracted file at: {list_s3_keys}")
 
     return {
-        'source_key': s3_key,
-        'dest_staging_key': s3_key.replace('landing/', 'staging/'),
-        'dest_mart_key': s3_key.replace('landing/', 'mart/')
+        'source_multiple_keys': list_s3_keys,
+        'dest_staging_multiple_keys': [single_key.replace('landing/', 'staging/') for single_key in list_s3_keys ],
+        'dest_mart_multiple_keys': [single_key.replace('landing/', 'marts/') for single_key in list_s3_keys ]
     }
 
 dag = DAG(
@@ -99,9 +99,9 @@ copy_to_staging = S3CopyWithRoleOperator(
     aws_conn_id=config['aws_conn_id'],
     role_type='transformer',
     source_bucket_name=config['bucket_name'],
-    source_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['source_key'] }}",
+    source_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['source_multiple_keys'] }}",
     dest_bucket_name=config['bucket_name'],
-    dest_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['dest_staging_key'] }}",
+    dest_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['dest_staging_multiple_keys'] }}",
     dag=dag
 )
 
@@ -110,9 +110,9 @@ copy_to_mart = S3CopyWithRoleOperator(
     aws_conn_id=config['aws_conn_id'],
     role_type='mart',
     source_bucket_name=config['bucket_name'],
-    source_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['dest_staging_key'] }}",
+    source_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['dest_staging_multiple_keys'] }}",
     dest_bucket_name=config['bucket_name'],
-    dest_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['dest_mart_key'] }}",
+    dest_bucket_key="{{ task_instance.xcom_pull(task_ids='parse_response')['dest_mart_multiple_keys'] }}",
     dag=dag
 )
 

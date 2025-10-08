@@ -24,7 +24,7 @@ def get_s3_client():
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
-        logger.info(f"Starting comarques boundaries extraction at {datetime.utcnow()}")
+        logger.info(f"Starting comarques boundaries extraction at {datetime.now().isoformat()}")
 
         bucket_name = os.environ['BUCKET_NAME']
         semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
@@ -33,61 +33,73 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         file_response_by_request = urlopen(catalunya_zip_url)
         zip_file_memory = ZipFile(BytesIO(file_response_by_request.read()))
+        list_s3_keys = []
+        def process_level(level, properties_parser):
 
-        files_shape_selected = [file_name for file_name in zip_file_memory.namelist() if 'comarques-1000000' in file_name]
+            files_shape_selected = [file_name for file_name in zip_file_memory.namelist() if level in file_name]
 
-        shp_file = next((f for f in files_shape_selected if f.endswith('.shp')), None)
-        shx_file = next((f for f in files_shape_selected if f.endswith('.shx')), None)
-        dbf_file = next((f for f in files_shape_selected if f.endswith('.dbf')), None)
-        prj_file = next((f for f in files_shape_selected if f.endswith('.prj')), None)
+            shp_file = next((f for f in files_shape_selected if f.endswith('.shp')), None)
+            shx_file = next((f for f in files_shape_selected if f.endswith('.shx')), None)
+            dbf_file = next((f for f in files_shape_selected if f.endswith('.dbf')), None)
+            prj_file = next((f for f in files_shape_selected if f.endswith('.prj')), None)
 
-        if not all([shp_file, shx_file, dbf_file]):
-            raise Exception("Missing required shapefile components")
+            if not all([shp_file, shx_file, dbf_file]):
+                raise Exception("Missing required shapefile components")
 
-        shp_bytes = zip_file_memory.read(shp_file)
-        shx_bytes = zip_file_memory.read(shx_file)
-        dbf_bytes = zip_file_memory.read(dbf_file)
+            shp_bytes = zip_file_memory.read(shp_file)
+            shx_bytes = zip_file_memory.read(shx_file)
+            dbf_bytes = zip_file_memory.read(dbf_file)
 
-        sf = shapefile.Reader(shp=BytesIO(shp_bytes), shx=BytesIO(shx_bytes), dbf=BytesIO(dbf_bytes))
+            sf = shapefile.Reader(shp=BytesIO(shp_bytes), shx=BytesIO(shx_bytes), dbf=BytesIO(dbf_bytes))
 
-        logger.info(f"Loaded {len(sf.shapes())} geometries")
+            logger.info(f"Loaded {len(sf.shapes())} geometries")
 
-        prj_content = zip_file_memory.read(prj_file).decode('utf-8') if prj_file else None
-        source_epsg = extract_epsg_from_prj(prj_content) if prj_content else 25831
+            prj_content = zip_file_memory.read(prj_file).decode('utf-8') if prj_file else None
+            source_epsg = extract_epsg_from_prj(prj_content) if prj_content else 25831
 
-        logger.info(f"Source CRS detected: EPSG:{source_epsg}")
+            logger.info(f"Source CRS detected: EPSG:{source_epsg}")
 
-        transformer = Transformer.from_crs(f"EPSG:{source_epsg}", "EPSG:4326", always_xy=True)
+            transformer = Transformer.from_crs(f"EPSG:{source_epsg}", "EPSG:4326", always_xy=True)
 
-        geojson = {
-            "type": "FeatureCollection",
-            "features": []
-        }
-
-        fields = [field[0] for field in sf.fields[1:]]
-
-        for i, shape_record in enumerate(sf.shapeRecords()):
-            shape = shape_record.shape
-            record = shape_record.record
-
-            transformed_coords = transform_coordinates(shape, transformer)
-            feature = {
-                "id": f"{i}",
-                "type": "Feature",
-                "properties": dict(zip(fields, record)),
-                "geometry": {
-                    "type": shape_type_to_geojson(shape.shapeType),
-                    "coordinates": transformed_coords
-                }
+            geojson = {
+                "type": "FeatureCollection",
+                "features": []
             }
-            geojson["features"].append(feature)
 
-        logger.info(f"Converted {len(geojson['features'])} features to GeoJSON CRS 4326")
+            fields = [field[0] for field in sf.fields[1:]]
 
-        geojson_str = json.dumps(geojson, ensure_ascii=False)
-        geojson_bytes = geojson_str.encode('utf-8')
+            for i, shape_record in enumerate(sf.shapeRecords()):
+                shape = shape_record.shape
+                record = shape_record.record
 
-        s3_key = upload_to_s3(bucket_name, geojson_bytes, semantic_identifier)
+                transformed_coords = transform_coordinates(shape, transformer)
+                feature = {
+                    "id": f"{i}",
+                    "type": "Feature",
+                    "properties": properties_parser(dict(zip(fields, record))),
+                    "geometry": {
+                        "type": shape_type_to_geojson(shape.shapeType),
+                        "coordinates": transformed_coords
+                    }
+                }
+                geojson["features"].append(feature)
+
+            logger.info(f"Converted {len(geojson['features'])} features to GeoJSON CRS 4326")
+
+            geojson_str = json.dumps(geojson, ensure_ascii=False)
+            geojson_bytes = geojson_str.encode('utf-8')
+
+            return upload_to_s3(bucket_name, geojson_bytes, semantic_identifier, level)
+
+        for single_level in ['comarques-1000000', 'municipis-1000000']:
+
+            if 'comarques' in single_level:
+                parser_parameters = lambda current_properties: {'comarca_id': current_properties['CODICOMAR']}
+            else:
+                parser_parameters = lambda current_properties: {'municipal_id': current_properties['CODIMUNI']}
+
+            s3_key = process_level(single_level, parser_parameters)
+            list_s3_keys.append(s3_key)
 
         logger.info("Successfully completed extraction")
 
@@ -95,8 +107,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                {
                                    'bucket': bucket_name,
                                    'semantic_identifier': semantic_identifier,
-                                   's3_key': s3_key,
-                                   'extraction_completed_at': datetime.utcnow().isoformat()
+                                   'list_s3_keys': list_s3_keys,
+                                   'extraction_completed_at': datetime.now().isoformat()
                                })
 
     except Exception as e:
@@ -136,12 +148,11 @@ def shape_type_to_geojson(shape_type: int) -> str:
     }
     return mapping.get(shape_type, "Polygon")
 
-def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str) -> str:
+def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str, level: str) -> str:
     try:
         s3_client = get_s3_client()
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        s3_key = f"landing/{semantic_identifier}/{timestamp}.json"
+        s3_key = f"landing/{semantic_identifier}/{level}.json"
 
         s3_client.put_object(
             Bucket=bucket_name,
@@ -151,7 +162,7 @@ def upload_to_s3(bucket_name: str, json_data: bytes, semantic_identifier: str) -
             Metadata={
                 'extractor': 'comarques-boundaries-extractor',
                 'semantic_identifier': semantic_identifier,
-                'extraction_timestamp': datetime.utcnow().isoformat()
+                'extraction_timestamp': datetime.now().isoformat()
             }
         )
 
@@ -167,7 +178,7 @@ def create_response(success: bool, message: str, data: Dict[str, Any] = None) ->
         'statusCode': 200 if success else 500,
         'success': success,
         'message': message,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now().isoformat(),
         'extractor': 'comarques-boundaries-extractor'
     }
 

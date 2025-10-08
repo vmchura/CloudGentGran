@@ -1,6 +1,5 @@
 import os
 import logging
-from typing import Optional
 
 from airflow.models import BaseOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
@@ -18,9 +17,9 @@ class S3CopyWithRoleOperator(BaseOperator):
             aws_conn_id: str,
             role_type: str,
             source_bucket_name: str,
-            source_bucket_key: str,
+            source_bucket_key: list[str],
             dest_bucket_name: str,
-            dest_bucket_key: str,
+            dest_bucket_key: list[str],
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -31,7 +30,7 @@ class S3CopyWithRoleOperator(BaseOperator):
         self.dest_bucket_name = dest_bucket_name
         self.dest_bucket_key = dest_bucket_key
 
-    def execute(self, context: Context) -> str:
+    def execute(self, context: Context) -> list[str]:
         logger.info(f"S3 copy operation using {self.role_type} role")
         logger.info(f"Source: s3://{self.source_bucket_name}/{self.source_bucket_key}")
         logger.info(f"Destination: s3://{self.dest_bucket_name}/{self.dest_bucket_key}")
@@ -62,18 +61,20 @@ class S3CopyWithRoleOperator(BaseOperator):
         )
 
         try:
-            copy_source = {
-                'Bucket': self.source_bucket_name,
-                'Key': self.source_bucket_key
-            }
+            for source_bucket_key, dest_bucket_key in zip(self.source_bucket_key, self.dest_bucket_key):
+                copy_source = {
+                    'Bucket': self.source_bucket_name,
+                    'Key': source_bucket_key
+                }
 
-            s3_client.copy_object(
-                CopySource=copy_source,
-                Bucket=self.dest_bucket_name,
-                Key=self.dest_bucket_key
-            )
+                s3_client.copy_object(
+                    CopySource=copy_source,
+                    Bucket=self.dest_bucket_name,
+                    Key=dest_bucket_key
+                )
 
-            logger.info(f"Successfully copied object to s3://{self.dest_bucket_name}/{self.dest_bucket_key}")
+                logger.info(f"Successfully copied object to s3://{self.dest_bucket_name}/{dest_bucket_key}")
+
             return self.dest_bucket_key
 
         except Exception as e:
