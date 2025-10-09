@@ -48,7 +48,7 @@ class S3CopyWithRoleOperator(BaseOperator):
         account_id = sts_client.get_caller_identity()['Account']
 
         ENVIRONMENT = os.getenv('AIRFLOW_VAR_ENVIRONMENT')
-        role_arn = f"arn:aws:iam::{account_id}:role/catalunya-{self.role_type}-role-{ENVIRONMENT}"
+        role_arn = f"arn:aws:iam::{account_id}:role/catalunya-s3-copier-{self.role_type}-role-{ENVIRONMENT}"
 
         logger.info(f"Assuming role: {role_arn}")
 
