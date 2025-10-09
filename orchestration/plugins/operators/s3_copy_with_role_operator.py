@@ -5,7 +5,7 @@ from airflow.models import BaseOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.utils.context import Context
 from airflow.exceptions import AirflowException
-
+import ast
 logger = logging.getLogger(__name__)
 
 
@@ -17,9 +17,9 @@ class S3CopyWithRoleOperator(BaseOperator):
             aws_conn_id: str,
             role_type: str,
             source_bucket_name: str,
-            source_bucket_key: list[str],
+            source_bucket_key: str,
             dest_bucket_name: str,
-            dest_bucket_key: list[str],
+            dest_bucket_key: str,
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -34,6 +34,12 @@ class S3CopyWithRoleOperator(BaseOperator):
         logger.info(f"S3 copy operation using {self.role_type} role")
         logger.info(f"Source: s3://{self.source_bucket_name}/{self.source_bucket_key}")
         logger.info(f"Destination: s3://{self.dest_bucket_name}/{self.dest_bucket_key}")
+        if isinstance(self.source_bucket_key, str) and not self.source_bucket_key.startswith('{{'):
+            self.source_bucket_key = ast.literal_eval(self.source_bucket_key)
+        if isinstance(self.dest_bucket_key, str) and not self.dest_bucket_key.startswith('{{'):
+            self.dest_bucket_key = ast.literal_eval(self.dest_bucket_key)
+        logger.info(f"Parsing Source: s3://{self.source_bucket_name}/{self.source_bucket_key}")
+        logger.info(f"Parsing Destination: s3://{self.dest_bucket_name}/{self.dest_bucket_key}")
 
         hook = AwsBaseHook(aws_conn_id=self.aws_conn_id)
         session = hook.get_session()
