@@ -38,6 +38,7 @@ export class LambdaConstruct extends Construct {
     public readonly socialServicesTransformerLambda: lambda.Function;
     public readonly populationMunicipalGreater65Transformer: lambda.Function;
     public readonly populationMunicipalGreater65Mart: lambda.Function;
+    public readonly comarquesBoundariesExtractor: lambda.Function;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -113,6 +114,18 @@ export class LambdaConstruct extends Construct {
             account,
             region,
             executionRole: props.martExecutionRole
+        });
+
+        this.comarquesBoundariesExtractor = this.createComarquesBoundariesExtractor({
+            environmentName,
+            projectName,
+            config,
+            bucketName,
+            catalogBucketName,
+            lambdaPrefix,
+            account,
+            region,
+            executionRole: props.extractorExecutionRole
         });
     }
 
@@ -468,5 +481,57 @@ export class LambdaConstruct extends Construct {
 
         return lambdaFunction;
 
+    }
+
+    private createComarquesBoundariesExtractor(props: LambdaFunctionProps): lambda.Function {
+        const {
+            environmentName,
+            projectName,
+            config,
+            bucketName,
+            catalogBucketName,
+            lambdaPrefix,
+            account,
+            region
+        } = props;
+
+        const lambdaRole = props.executionRole;
+
+        const lambdaFunction = new lambda.Function(this, 'ComarquesBoundariesExtractor', {
+            functionName: `${lambdaPrefix}-comarques_boundaries`,
+            runtime: lambda.Runtime.PYTHON_3_13,
+            handler: 'api_extractor.lambda_handler',
+            code: this.getPythonLambdaCode('comarques_boundaries'),
+            timeout: cdk.Duration.seconds(config.lambdaTimeout),
+            memorySize: config.lambdaMemory,
+            role: lambdaRole,
+            environment: {
+                BUCKET_NAME: bucketName,
+                SEMANTIC_IDENTIFIER: 'comarques_boundaries',
+            },
+            description: `Comarques Boundaries Extractor for ${environmentName} environment`,
+        });
+
+        const commonTags = ConfigHelper.getCommonTags(environmentName);
+        Object.entries(commonTags).forEach(([key, value]) => {
+            cdk.Tags.of(lambdaFunction).add(key, value);
+        });
+
+        cdk.Tags.of(lambdaFunction).add('Purpose', 'DataExtraction');
+        cdk.Tags.of(lambdaFunction).add('Layer', 'Ingestion');
+
+        new cdk.CfnOutput(this, 'ComarquesBoundariesExtractorArn', {
+            value: lambdaFunction.functionArn,
+            description: 'ARN of the Comarques Boundaries Extractor',
+            exportName: `${projectName}-ComarquesBoundariesExtractorArn`,
+        });
+
+        new cdk.CfnOutput(this, 'ComarquesBoundariesExtractorName', {
+            value: lambdaFunction.functionName,
+            description: 'Name of the Comarques Boundaries Extractor',
+            exportName: `${projectName}-ComarquesBoundariesExtractorName`,
+        });
+
+        return lambdaFunction;
     }
 }
