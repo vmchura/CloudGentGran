@@ -24,6 +24,8 @@ export class IamConstruct extends Construct {
   public readonly monitoringExecutionRole: iam.Role;
   public readonly catalogExecutorRole: iam.Role;
   public readonly airflowCrossAccountRole: iam.Role;
+  public readonly s3CopierTransformerRole: iam.Role;
+  public readonly s3CopierMartRole: iam.Role;
 
   // Orchestration roles
   public readonly airflowUser: iam.User;
@@ -38,6 +40,8 @@ export class IamConstruct extends Construct {
   public readonly martExecutorPolicy: iam.ManagedPolicy;
   public readonly catalogExecutorPolicy: iam.ManagedPolicy;
   public readonly airflowCrossAccountPolicy: iam.ManagedPolicy;
+  public readonly s3CopierTransformerPolicy: iam.ManagedPolicy;
+  public readonly s3CopierMartPolicy: iam.ManagedPolicy;
 
   constructor(scope: Construct, id: string, props: IamConstructProps) {
     super(scope, id);
@@ -513,6 +517,8 @@ export class IamConstruct extends Construct {
             `arn:aws:iam::${account}:role/catalunya-lambda-extractor-role-${environmentName}`,
             `arn:aws:iam::${account}:role/catalunya-lambda-transformer-role-${environmentName}`,
             `arn:aws:iam::${account}:role/catalunya-mart-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-s3-copier-transformer-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-s3-copier-mart-role-${environmentName}`,
           ],
         }),
         // Invoke Lambda functions
@@ -556,6 +562,70 @@ export class IamConstruct extends Construct {
           resources: [
             `arn:aws:s3:::${bucketName}`,
             `arn:aws:s3:::${catalogBucketName}`,
+          ],
+        }),
+      ],
+    });
+
+    // S3 Copier Transformer Policy
+    this.s3CopierTransformerPolicy = new iam.ManagedPolicy(this, 'S3CopierTransformerPolicy', {
+      managedPolicyName: `CatalunyaS3CopierTransformerPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `S3 copy permissions for transformer layer (${environmentName})`,
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'S3ReadLandingLayer',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:GetObjectVersion',
+            's3:ListBucket',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${bucketName}/landing/*`,
+          ],
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3WriteStagingLayer',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:PutObject',
+            's3:PutObjectAcl',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}/staging/*`,
+          ],
+        }),
+      ],
+    });
+
+    // S3 Copier Mart Policy
+    this.s3CopierMartPolicy = new iam.ManagedPolicy(this, 'S3CopierMartPolicy', {
+      managedPolicyName: `CatalunyaS3CopierMartPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `S3 copy permissions for mart layer (${environmentName})`,
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'S3ReadStagingLayer',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:GetObjectVersion',
+            's3:ListBucket',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${bucketName}/staging/*`,
+          ],
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3WriteMartsLayer',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:PutObject',
+            's3:PutObjectAcl',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}/marts/*`,
           ],
         }),
       ],
@@ -679,6 +749,32 @@ export class IamConstruct extends Construct {
 
     cdk.Tags.of(this.airflowCrossAccountRole).add('ServiceType', 'Orchestration');
     cdk.Tags.of(this.airflowCrossAccountRole).add('RoleType', 'CrossAccount');
+
+    // ========================================
+    // S3 Copier Roles
+    // ========================================
+
+    this.s3CopierTransformerRole = new iam.Role(this, 'S3CopierTransformerRole', {
+      roleName: `catalunya-s3-copier-transformer-role-${environmentName}`,
+      description: `S3 copier role for transformer layer (${environmentName})`,
+      assumedBy: new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+      managedPolicies: [this.s3CopierTransformerPolicy],
+    });
+
+    this.s3CopierMartRole = new iam.Role(this, 'S3CopierMartRole', {
+      roleName: `catalunya-s3-copier-mart-role-${environmentName}`,
+      description: `S3 copier role for mart layer (${environmentName})`,
+      assumedBy: new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+      managedPolicies: [this.s3CopierMartPolicy],
+    });
+
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.s3CopierTransformerRole).add(key, value);
+      cdk.Tags.of(this.s3CopierMartRole).add(key, value);
+    });
+
+    cdk.Tags.of(this.s3CopierTransformerRole).add('ServiceType', 'S3Copier');
+    cdk.Tags.of(this.s3CopierMartRole).add('ServiceType', 'S3Copier');
 
     // ========================================
     // Human Data Engineer Role
