@@ -1,5 +1,4 @@
-import {S3Client, GetObjectCommand} from "@aws-sdk/client-s3";
-import {readParquet} from "parquet-wasm/node";
+import {S3Client, GetObjectCommand, ListObjectsV2Command} from "@aws-sdk/client-s3";
 
 const isLocal = process.env.AWS_PROFILE === "localstack";
 
@@ -25,9 +24,12 @@ async function streamToBuffer(stream) {
   return Buffer.concat(chunks);
 }
 
-export async function readParquetFromS3(bucket, key) {
-  console.error(bucket);
-  console.error(key);
+export async function downloadObjectAsBuffer(bucket, key) {
+  console.error(`Bucket: ${bucket}`);
+  console.error(`Key: ${key}`);
+  
+  console.error(`Treating as single file`);
+  console.error(`Downloading: s3://${bucket}/${key}`);
   const command = new GetObjectCommand({Bucket: bucket, Key: key});
   const response = await s3Client.send(command);
   const buffer = await streamToBuffer(response.Body);

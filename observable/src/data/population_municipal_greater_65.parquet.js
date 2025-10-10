@@ -1,4 +1,4 @@
-import {readParquetFromS3} from "./parquet-reader.js";
+import {readParquetFromS3} from "./s3-parquet-reader.js";
 
 const BUCKET = process.env.S3_BUCKET;
 
