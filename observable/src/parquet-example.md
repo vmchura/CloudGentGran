@@ -1,10 +1,14 @@
 # Parquet from S3 Example
 ```js
-const data = FileAttachment("data/example-parquet.json").json();
-display(Inputs.table(data))
+const population_municipal_greater_65_table = FileAttachment("data/population_municipal_greater_65.parquet").parquet();
+const comarques_boundaries = FileAttachment("data/comarques-1000000.json").json();
+const municipals_boundaries = FileAttachment("data/municipis-1000000.json").json();
+```
+
+```js
 Plot.plot({
   marks: [
-    Plot.dot(data, {x: "year", y: "population_ge65", tip: true})
+    Plot.dot(population_municipal_greater_65_table, {x: "year", y: "population_ge65", tip: true})
   ]
 })
 ```

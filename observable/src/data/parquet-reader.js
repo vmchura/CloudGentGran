@@ -26,9 +26,10 @@ async function streamToBuffer(stream) {
 }
 
 export async function readParquetFromS3(bucket, key) {
+  console.error(bucket);
+  console.error(key);
   const command = new GetObjectCommand({Bucket: bucket, Key: key});
   const response = await s3Client.send(command);
   const buffer = await streamToBuffer(response.Body);
-  const table = readParquet(new Uint8Array(buffer));
-  return table.toArray();
+  return buffer;
 }

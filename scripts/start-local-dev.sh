@@ -362,5 +362,5 @@ EOF
             ;;
     esac
 }
-
+# aws --endpoint-url=http://localhost:4566 s3 sync localstack/catalunya-data-dev s3://catalunya-data-dev/ --profile localstack
 main "$@"
