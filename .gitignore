@@ -227,7 +227,6 @@ $RECYCLE.BIN/
 *.parquet
 *.avro
 *.orc
-data/
 datasets/
 !data/.gitkeep
 !datasets/.gitkeep
