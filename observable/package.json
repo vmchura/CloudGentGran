@@ -9,11 +9,13 @@
     "observable": "observable"
   },
   "dependencies": {
-    "@observablehq/framework": "^1.13.3",
     "@aws-sdk/client-s3": "^3.651.1",
-    "parquet-wasm": "^0.6.1",
+    "@observablehq/framework": "^1.13.3",
+    "apache-arrow": "^21.1.0",
+    "arquero": "^8.0.3",
     "d3-dsv": "^3.0.1",
-    "d3-time-format": "^4.1.0"
+    "d3-time-format": "^4.1.0",
+    "parquet-wasm": "^0.6.1"
   },
   "devDependencies": {
     "rimraf": "^5.0.5"
