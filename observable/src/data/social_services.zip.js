@@ -78,7 +78,11 @@ await conn.run(`CREATE TABLE social_services_empty_last_year as
         FULL JOIN all_combinations AS a
         USING (municipal_id, service_type_id, year)
       )
-      select municipal_id, service_type_id, CAST(year as INT) as year, CAST(total_capacit as INT) as total_capacit, comarca_id from joined_social_services;`);
+      select municipal_id,
+      service_type_id,
+      CAST(year as INT) as year,
+      CAST(total_capacit as INT) as total_capacit,
+      comarca_id from joined_social_services order by year, comarca_id, municipal_id, service_type_id;`);
 
 console.error(`Processing: municipal_coverage`);
 await conn.run(`CREATE TABLE municipal_coverage as 
@@ -250,6 +254,7 @@ await conn.run(`CREATE TABLE comarca_coverage as
             select comarca_id, year, total_capacit*100.0 / population_ge65 as coverage_ratio, total_capacit, population_ge65 from complete_data
             )
           select comarca_id, CAST(year as INT) as year, ROUND(coverage_ratio, 2) as coverage_ratio from with_coverage order by comarca_id, year;`);
+
 
 const zip = new JSZip();
 

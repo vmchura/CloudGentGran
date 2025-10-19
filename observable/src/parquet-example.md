@@ -295,6 +295,116 @@ const plot_catalunya_map_aged_65 = (width) => {
 
 ```
 
+```js
+const service_tag_to_complete = new Map([["Servei de residència assistida", "Servei de residència assistida per a gent gran de caràcter temporal o permanent"],
+    ["Servei de centre de dia", "Servei de centre de dia per a gent gran de caràcter temporal o permanent"],
+    ["Servei de llar residència", "Servei de llar residència per a gent gran de caràcter temporal o permanent"],
+    ["Servei de tutela", "Servei de tutela per a gent gran"],
+    ["Servei d' habitatge tutelat", "Servei d' habitatge tutelat per a gent gran de caràcter temporal o permanent"]]);
+const colour_by_service = new Map([["Servei de centre de dia per a gent gran de caràcter temporal o permanent", "#a160af"],
+    ["Servei de residència assistida per a gent gran de caràcter temporal o permanent", "#ff9c38"],
+    ["Servei de llar residència per a gent gran de caràcter temporal o permanent", "#f794b9"],
+    ["Servei de tutela per a gent gran", "#61b0ff"],
+    ["Servei d' habitatge tutelat per a gent gran de caràcter temporal o permanent", "#a87a54"]])
+const all_services = Array.from(service_tag_to_complete.entries()).map(k => k[1]);
+```
+
+```js
+const serveis_residence_ratio_input = Inputs.radio(new Map([["Tots els  serveis", true], ["Taxa de cobertura de residència per a gent gran", false]]),
+    {value: true, label: null});
+const serveis_residence_ratio = Generators.input(serveis_residence_ratio_input)
+```
+```js
+
+const all_available_services = social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis}).filter((row, $) => (row.comarca_id === $.comarca_id) && (row.total_capacit > 0)).select('service_type_id').dedupe('service_type_id').array('service_type_id');
+
+```
+
+
+```js
+const plot_comarca_by_serveis = (width) => {
+    return Plot.plot({
+        marginLeft: 50,
+        width: width,
+        y: {
+            type: "linear",
+            grid: true,
+            label: "Places acumulativa del servei",
+        },
+        x: {
+            label: null,
+            grid: true,
+            tickFormat: d => d.toString(),
+            domain: [min_year_serveis, max_year_serveis],
+            interval: 1
+        },
+        marks: [
+            Plot.lineY(social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis}).filter((row, $) => (row.comarca_id === $.comarca_id)),
+            Plot.mapY(
+                "cumsum",
+                Plot.groupX(
+                { y: d => d3.sum(d, v => v.total_capacit) },
+                { x: "year", curve: "step-after", z: "service_type_id", stroke: "service_type_id", tip: true}
+                )
+            ))
+        ]
+    })
+};
+
+const plot_comarca_by_cobertura = (width) => {
+    return Plot.plot({
+        marginLeft: 50,
+        width: width,
+        y: {
+            type: "linear",
+            grid: true,
+            label: "Taxa de cobertura (%)",
+        },
+        color: {
+            legend: false,
+            columns: 1,
+        },
+        x: {
+            label: null,
+            grid: true,
+            tickFormat: d => d.toString(),
+            domain: [min_year_serveis, max_year_serveis]
+        },
+        marks: [
+            Plot.lineY(comarca_coverage.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis}).filter((row, $) => (row.comarca_id === $.comarca_id)),
+                {
+                    x: "year", y: "coverage_ratio", stroke: "#ff9c38", strokeWidth: 2
+                })
+        ]
+    })
+};
+```
+
+```js
+const plot_legend_trend_services = (width) => {
+    return serveis_residence_ratio ? Plot.legend({
+        width: width,
+        color: {
+            domain: all_available_services,
+            range: all_available_services.map(row => colour_by_service.get(row)),
+            legend: false,
+            columns: 1,
+            label: null,
+        }
+    }): Plot.legend({
+        width: width,
+        color: {
+            domain: ["Taxa de cobertura de residència per a gent gran (%)"],
+            range: ["#ff9c38"],
+            legend: false,
+            columns: 1,
+            label: null,
+        }
+    });
+}
+```
+
+
 <div class="grid grid-cols-3">
     <div class="card grid-colspan-2">
         <h2>${title_map_by_indicator}</h2>
