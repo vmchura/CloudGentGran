@@ -1,4 +1,4 @@
-# Parquet from S3 Example
+
 ```js
 import * as aq from "npm:arquero";
 const { op } = aq;
@@ -475,86 +475,158 @@ const plot_services_comarca_by_iniciatives = (width) => {
     });
 }
 ```
+# Envelliment i Atenció a la Gent Gran a Catalunya (2024)
+<div class="story-section">
+  <p class="intro">
+    [Introduce the story: Why is aging population important? Mention that we’ll explore if 
+    the growth of the elderly population is being matched by enough care and residence coverage.]
+  </p>
+</div>
+
+<hr/>
+
+<div class="story-section">
+    <h2>1️⃣ On viuen les persones grans a Catalunya?</h2>
+    <p>
+    [Explain briefly that the map shows the distribution of people aged 65+ by comarca,
+    and that the redder areas have a higher proportion. Highlight the average (19.5%).]
+    </p>
 
 <div class="grid grid-cols-3">
     <div class="card grid-colspan-2">
-        <h2>${title_map_by_indicator}</h2>
-${messages_by_indicator}
-<br/>
-<br/>
-${catalunya_indicator_or_variation_input}
-<br/>
+        <h3>${title_map_by_indicator}</h3>
+        ${messages_by_indicator}
+        <br/><br/>
+        ${catalunya_indicator_or_variation_input}
         <figure class="grafic" style="max-width: none;">
             ${resize((width) => plot_catalunya_map_aged_65(width))}
         </figure>
     </div>
     <div class="grid-colspan-1">
         <h2>Catalunya ${latest_year}</h2>
-        <div class="card">
-            <h3 class="big-number-header">Població de 65 anys i més</h3>
-            <span class="big grid-colspan-4">${Number(gent_gran_population_latest_year).toLocaleString('ca-ES')}</span>
-        </div>  
-        <div class="card">
-            <h3 class="big-number-header">Percentatge de la població de 65 anys i més</h3>
-            <span class="big grid-colspan-4">${Number(latest_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
-        </div>
-        <div class="card">
-            <h3 class="big-number-header">${`Variació % gent gran respecte a l'any ${reference_year}`}</h3>
-            <span class="big grid-colspan-4">${sign_difference_reference}${Number(latest_indicator_average_catalunya - reference_year_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
-        </div>
-        <div class="card">
-            <h3 class="big-number-header">Places de residència per a gent gran</h3>
-            <span class="big grid-colspan-4">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
-        </div>
-        <div class="card">
-            <h3 class="big-number-header">Taxa de cobertura de residència per a gent gran</h3>
-            <span class="big grid-colspan-4">${Number(catalunya_ratio_cobertura).toLocaleString('ca-ES')}%</span>
-        </div>
-        <div class="card">
-            <h3 class="big-number-header">${deficit_superavit} de places per cobertura del 4,11%</h3>
-            <span class="big grid-colspan-4">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
+        <div class="grid-colspan-1">
+            <h3>Catalunya ${latest_year}</h3>
+            <div class="card">
+                <h4>Població de 65 anys i més</h4>
+                <span class="big">${Number(gent_gran_population_latest_year).toLocaleString('ca-ES')}</span>
+            </div>  
+            <div class="card">
+                <h4>Percentatge de la població</h4>
+                <span class="big">${Number(latest_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
+            </div>
+            <div class="card">
+                <h4>Variació respecte a ${reference_year}</h4>
+                <span class="big">${sign_difference_reference}${Number(latest_indicator_average_catalunya - reference_year_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
+            </div>
         </div>
     </div>
 </div>
-
-<div class="grid grid-cols-3">
-    <h2 class="grid-colspan-2"> Tendència de la població de 65 anys i més i els serveis d'assistència per comarca. </h2>
-    <div class="grid-colspan-1" style="align-self: center;">${nom_comarca_input}</div>
+<p class="reflection">
+[Comment briefly on the demographic pattern. Example: “Most comarques inland have a higher 
+share of elderly population compared to coastal or metropolitan zones.”]
+</p>
 </div>
 
-<div class="grid grid-cols-3">
-    <div class="grid-colspan-1">
-        <h2>Tendència de la població de 65 anys i més</h2>
-            ${single_comarca_population_input}
-            ${resize((width) => plot_legend_trend_population(width))}
-    </div>
-    <div class="grid-colspan-1">
-        <h2>Serveis d'assistència</h2>
-            ${serveis_residence_ratio_input}
-            ${resize((width) => plot_legend_trend_services(width))}
-    </div>
-    <div class="grid-colspan-1">
-        <h2>Qualificaciò de los servei</h2>
-            ${serveis_input}
-            ${resize((width) => plot_legend_trend_iniciative(width))} 
-    </div>
+<div class="story-section">
+  <h2>2️⃣ Disposem de prou places de residència?</h2>
+  <p>
+    [Explain that the cards below summarize the total number of residence places, 
+    coverage rate, and existing deficit. Mention what 4.11% coverage means in context.]
+  </p>
+
+  <div class="grid grid-cols-3">
+      <div class="grid-colspan-1">
+          <div class="card">
+              <h4>Places de residència per a gent gran</h4>
+              <span class="big">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
+          </div>
+      </div>
+      <div class="grid-colspan-1">
+          <div class="card">
+              <h4>Taxa de cobertura</h4>
+              <span class="big">${Number(catalunya_ratio_cobertura).toLocaleString('ca-ES')}%</span>
+          </div>
+      </div>
+      <div class="grid-colspan-1">
+          <div class="card">
+              <h4>${deficit_superavit} de places (cobertura 4,11%)</h4>
+              <span class="big">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
+          </div>
+      </div>
+  </div>
+
+  <p class="reflection">
+    [Discuss what this implies — e.g. “Despite the growing elderly population, 
+    residence coverage remains below ideal levels, with a deficit of nearly 2,700 places.”]
+  </p>
 </div>
 
-<div class="grid grid-cols-3">
-    <div class="card grid-colspan-1">
-        <figure class="grafic" style="max-width: none;">
-            ${resize((width) => plot_trend_population_groups_by_comarca(width))}
-        </figure>
-    </div>
-    <div class="card grid-colspan-1">
-        <figure class="grafic" style="max-width: none;">
-            ${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width) : plot_comarca_by_cobertura(width))}
-        </figure>
-    </div>
-    <div class="card grid-colspan-1">
-        <figure class="grafic" style="max-width: none;">
-            ${resize((width) => plot_services_comarca_by_iniciatives(width))}
-        </figure>
-    </div>
+<hr/>
 
+<div class="story-section">
+  <h2>3️⃣ Com ha evolucionat aquesta situació al llarg dels anys?</h2>
+  <p>
+    [Introduce the section: show how both population and care services have evolved in each comarca.]
+  </p>
+
+  <div class="grid grid-cols-3">
+      <h3 class="grid-colspan-2">Tendència de la població i serveis per comarca</h3>
+      <div class="grid-colspan-1" style="align-self: center;">
+          ${nom_comarca_input}
+      </div>
+  </div>
+
+  <div class="grid grid-cols-3">
+      <div class="grid-colspan-1">
+          <h4>Evolució de la població de 65+</h4>
+          ${single_comarca_population_input}
+          ${resize((width) => plot_legend_trend_population(width))}
+      </div>
+      <div class="grid-colspan-1">
+          <h4>Serveis d'assistència</h4>
+          ${serveis_residence_ratio_input}
+          ${resize((width) => plot_legend_trend_services(width))}
+      </div>
+      <div class="grid-colspan-1">
+          <h4>Qualificació dels serveis</h4>
+          ${serveis_input}
+          ${resize((width) => plot_legend_trend_iniciative(width))} 
+      </div>
+  </div>
+
+  <div class="grid grid-cols-3">
+      <div class="card grid-colspan-1">
+          <figure>${resize((width) => plot_trend_population_groups_by_comarca(width))}</figure>
+      </div>
+      <div class="card grid-colspan-1">
+          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width) : plot_comarca_by_cobertura(width))}</figure>
+      </div>
+      <div class="card grid-colspan-1">
+          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width))}</figure>
+      </div>
+  </div>
+
+  <p class="reflection">
+    [Here summarize key trends: e.g. “In Alt Camp, the elderly population increased steadily, 
+    but care places only grew significantly after 2010.”]
+  </p>
 </div>
+
+<hr/>
+
+<div class="story-section">
+  <h2>4️⃣ Què ens diu tot això?</h2>
+  <p class="conclusion">
+    [Wrap up the story. Discuss whether Catalonia is aging faster than it expands care capacity,
+    mention regional inequalities, and suggest potential implications for policymakers.]
+  </p>
+</div>
+
+<style>
+.story-section { margin-bottom: 3rem; }
+h1, h2, h3, h4 { font-weight: 600; }
+.intro, .reflection, .conclusion { font-size: 1.1em; line-height: 1.6; color: #444; margin-top: 1em; }
+.card { background: #fff; padding: 1em; border-radius: 1em; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.big { font-size: 1.6em; font-weight: bold; color: #333; }
+hr { border: none; border-top: 1px solid #ddd; margin: 2rem 0; }
+</style>
