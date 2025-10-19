@@ -62,10 +62,16 @@ await conn.run(`CREATE TABLE social_services_empty_last_year as
         SELECT DISTINCT service_type_id
         FROM social_services
       ),
+      service_qualification_types AS (
+        SELECT DISTINCT service_qualification_id
+        FROM social_services
+      ),
       all_combinations AS (
-        SELECT m.municipal_id, ss.service_type_id, m.codi_comarca, 2025 as year
+        SELECT m.municipal_id, ss.service_type_id, m.codi_comarca, sqs.service_qualification_id, y.year as year
         FROM municipals AS m
         CROSS JOIN social_service_types AS ss
+        CROSS JOIN service_qualification_types AS sqs
+        CROSS JOIN generate_series(1975, 2025) AS y(year)
       ),
       joined_social_services AS (
         SELECT
@@ -74,6 +80,7 @@ await conn.run(`CREATE TABLE social_services_empty_last_year as
           COALESCE(a.year, ss.year) as year,
           COALESCE(ss.total_capacit, 0) as total_capacit,
           COALESCE(a.codi_comarca, ss.comarca_id) as comarca_id,
+          COALESCE(a.service_qualification_id, ss.service_qualification_id) as service_qualification_id
         FROM social_services AS ss
         FULL JOIN all_combinations AS a
         USING (municipal_id, service_type_id, year)
@@ -82,7 +89,9 @@ await conn.run(`CREATE TABLE social_services_empty_last_year as
       service_type_id,
       CAST(year as INT) as year,
       CAST(total_capacit as INT) as total_capacit,
-      comarca_id from joined_social_services order by year, comarca_id, municipal_id, service_type_id;`);
+      comarca_id,
+      service_qualification_id
+      from joined_social_services order by year, comarca_id, municipal_id, service_type_id;`);
 
 console.error(`Processing: municipal_coverage`);
 await conn.run(`CREATE TABLE municipal_coverage as 

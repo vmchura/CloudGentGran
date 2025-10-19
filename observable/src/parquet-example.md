@@ -315,9 +315,9 @@ const serveis_residence_ratio_input = Inputs.radio(new Map([["Tots els  serveis"
 const serveis_residence_ratio = Generators.input(serveis_residence_ratio_input)
 ```
 ```js
+const social_services_comarca = social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca}).filter((row, $) => (row.comarca_id === $.comarca_id));
 
-const all_available_services = social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis}).filter((row, $) => (row.comarca_id === $.comarca_id) && (row.total_capacit > 0)).select('service_type_id').dedupe('service_type_id').array('service_type_id');
-
+const all_available_services = social_services_comarca.filter(row =>  row.total_capacit > 0).select('service_type_id').dedupe('service_type_id').array('service_type_id');
 ```
 
 
@@ -404,6 +404,81 @@ const plot_legend_trend_services = (width) => {
 }
 ```
 
+```js
+const serveis_input = Inputs.select(all_available_services, {
+    value: [all_available_services[0]],
+    label: "Servei"
+})
+const serveis_selected = Generators.input(serveis_input)
+```
+```js
+const map_inciative_color = new Map([["Entitat privada d'iniciativa mercantil", "#ed393f"],
+    ["Entitat privada d'iniciativa social", "#5ca34b"],
+    ["Entitat d'iniciativa pública", "#3b5fc0"]])
+```
+```js
+const serveis_by_iniciative = social_services_comarca.params({service_type_id: serveis_selected}).filter((row, $) => (row.service_type_id === $.service_type_id))
+```
+```js
+console.log(serveis_by_iniciative);
+```
+```js
+const domain_iniciatives = serveis_by_iniciative.select('service_qualification_id').dedupe('service_qualification_id').array('service_qualification_id');
+```
+
+```js
+const plot_legend_trend_iniciative = (width) => {
+    return Plot.legend({
+        width: width,
+        color: {
+            domain: domain_iniciatives,
+            range: domain_iniciatives.map(row => map_inciative_color.get(row)),
+            columns: 1,
+            rows: 3,
+            label: "Age Groups",
+        }
+    });
+}
+```
+
+```js
+const plot_services_comarca_by_iniciatives = (width) => {
+    return Plot.plot({
+        marginLeft: 50,
+        width: width,
+        y: {
+            type: "linear",
+            grid: true,
+            label: "Places acumulativa del servei",
+        },
+        x: {
+            label: null,
+            grid: true,
+            tickFormat: d => d.toString(),
+            domain: [min_year_serveis, max_year_serveis],
+            interval: 1
+        },
+        marks: [
+            Plot.areaY(social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected}).filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id)).orderby('service_qualification_id', 'year'),
+            Plot.mapY(
+                "cumsum",
+                Plot.groupX(
+                { y: d => d3.sum(d, v => v.total_capacit) },
+                { x: "year",
+                  curve: "step-after",
+                  fill: "service_qualification_id",
+                  stroke: "service_qualification_id",
+                  tip: true}
+                )
+            ))
+        ]
+    });
+}
+```
+
+```js
+Inputs.table(social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected}).filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id)).orderby('service_qualification_id', 'year'))
+```
 
 <div class="grid grid-cols-3">
     <div class="card grid-colspan-2">
