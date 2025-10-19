@@ -7,7 +7,7 @@ const s3Client = new S3Client(
   isLocal
     ? {
         endpoint: "http://localhost:4566",
-        region: "us-east-1",
+        region: "us-west-1",
         forcePathStyle: true,
         credentials: {
           accessKeyId: "test",
