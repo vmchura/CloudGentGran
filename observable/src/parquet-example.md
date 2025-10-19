@@ -171,17 +171,79 @@ const comarques_reference_population = Object.fromEntries(
 );
 ```
 ```js
-const nom_comarca_input = Inputs.select(
-    nom_comarques,
-    {
-        sort: true,
-        unique: true,
-        label: null,
-        value: "Alt Camp"
-    }
-);
+const nom_comarca_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Select one", format: x => x.nom_comarca, unique: true})
 const nom_comarca = Generators.input(nom_comarca_input);
+
 ```
+```js
+
+const all_year_serveis_selected = social_services_empty_last_year.params({codi_comarca: nom_comarca.codi_comarca}).filter((d, $) => d.comarca_id == $.codi_comarca).select('year').array('year');
+const max_year_serveis = Math.max(...all_year_serveis_selected);
+const min_year_serveis = Math.min(...all_year_serveis_selected);
+console.log(min_year_serveis);
+console.log(max_year_serveis);
+```
+
+```js
+const single_comarca_population_input = Inputs.radio(new Map([["Tendència de la població de 65 anys i més", true],
+        ["Tendència de l'indicador de població de 65 anys i més", false]]),
+    {value: true, label: null});
+const single_comarca_population = Generators.input(single_comarca_population_input);
+```
+```js
+const plot_legend_trend_population = (width) => {
+    return Plot.legend({
+        width: width,
+        color: {
+            domain: single_comarca_population ? ["population_over_65"] : ["indicator_elderly"],
+            range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
+            legend: false,
+            columns: 1,
+            rows: 2,
+            label: null,
+            tickFormat: d => d === "population_over_65" ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més"
+        }
+    });
+}
+```
+
+
+```js
+const plot_trend_population_groups_by_comarca = (width) => {
+    return Plot.plot({
+        marginLeft: 50,
+        width: width,
+        y: {
+            grid: true,
+            label: single_comarca_population ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més",
+        },
+        color: {
+            domain: single_comarca_population ? ["population_over_65"] : ["indicator_elderly"],
+            range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
+            legend: false,
+            columns: 1,
+            rows: 2,
+            label: null,
+            tickFormat: d => d === "population_over_65" ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més"
+        },
+        x: {
+            grid: true,
+            tickFormat: d => d.toString(),
+            interval: 1,
+            label: null,
+            domain: [min_year_serveis, max_year_serveis]
+        },
+        marks: [
+            Plot.lineY(comarca_population.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis}).filter((row, $) => ((row.comarca_id == $.comarca_id) && (row.year >= $.min_year_serveis))),
+                {x: "year",
+                 y: (single_comarca_population ? "population_ge65" : "elderly_indicator"),
+                 strokeWidth: 4}),
+            Plot.ruleY([0])
+        ]
+    })
+}
+```
+
 
 ```js
 
@@ -272,4 +334,46 @@ ${catalunya_indicator_or_variation_input}
             <span class="big grid-colspan-4">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
         </div>
     </div>
+</div>
+
+<div class="grid grid-cols-3">
+    <h2 class="grid-colspan-2"> Tendència de la població de 65 anys i més i els serveis d'assistència per comarca. </h2>
+    <div class="grid-colspan-1" style="align-self: center;">${nom_comarca_input}</div>
+</div>
+
+<div class="grid grid-cols-3">
+    <div class="grid-colspan-1">
+        <h2>Tendència de la població de 65 anys i més</h2>
+            ${single_comarca_population_input}
+            ${resize((width) => plot_legend_trend_population(width))}
+    </div>
+    <div class="grid-colspan-1">
+        <h2>Serveis d'assistència</h2>
+            ${serveis_residence_ratio_input}
+            ${resize((width) => plot_legend_trend_services(width))}
+    </div>
+    <div class="grid-colspan-1">
+        <h2>Qualificaciò de los servei</h2>
+            ${serveis_input}
+            ${resize((width) => plot_legend_trend_iniciative(width))} 
+    </div>
+</div>
+
+<div class="grid grid-cols-3">
+    <div class="card grid-colspan-1">
+        <figure class="grafic" style="max-width: none;">
+            ${resize((width) => plot_trend_population_groups_by_comarca(width))}
+        </figure>
+    </div>
+    <div class="card grid-colspan-1">
+        <figure class="grafic" style="max-width: none;">
+            ${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width) : plot_comarca_by_cobertura(width))}
+        </figure>
+    </div>
+    <div class="card grid-colspan-1">
+        <figure class="grafic" style="max-width: none;">
+            ${resize((width) => plot_services_comarca_by_iniciatives(width))}
+        </figure>
+    </div>
+
 </div>

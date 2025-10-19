@@ -165,11 +165,20 @@ await conn.run(`CREATE TABLE comarca_population as
         join municipal as m on p.municipal_code = m.codi
           ),
         comarca_population_aggregated AS (
-        select p.codi_comarca as comarca_id, SUM(p.population_ge65) as population_ge65, SUM(p.population) as 'population', p.year
+        select p.codi_comarca as comarca_id,
+        SUM(p.population_ge65) as population_ge65,
+        SUM(p.population) as 'population',
+        ROUND(SUM(p.population_ge65) / SUM(p.population), 2) as elderly_indicator,
+        p.year
         from population_with_comarca p
         GROUP BY p.codi_comarca, p.year
         )
-        select comarca_id, CAST(population_ge65 as INT) as population_ge65, cast(year as INT) as year, CAST(population as INT) as population from comarca_population_aggregated order by comarca_id, year;`);
+        select comarca_id,
+        CAST(population_ge65 as INT) as population_ge65,
+        cast(year as INT) as year,
+        CAST(population as INT) as population,
+        elderly_indicator
+        from comarca_population_aggregated order by comarca_id, year;`);
 
 console.error(`Processing: comarca_coverage`);      
 await conn.run(`CREATE TABLE comarca_coverage as 
