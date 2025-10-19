@@ -252,6 +252,8 @@ const comarca_population = await conn.runAndReadAll("SELECT *  FROM comarca_popu
 zip.file("comarca_population.json", JSON.stringify(comarca_population.getRowObjectsJson()));
 const comarca_coverage = await conn.runAndReadAll("SELECT *  FROM comarca_coverage");
 zip.file("comarca_coverage.json", JSON.stringify(comarca_coverage.getRowObjectsJson()));
+const municipal = await conn.runAndReadAll("SELECT *  FROM municipal");
+zip.file("municipal.json", JSON.stringify(municipal.getRowObjectsJson()));
 
 
 zip
