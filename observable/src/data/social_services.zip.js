@@ -66,32 +66,59 @@ await conn.run(`CREATE TABLE social_services_empty_last_year as
         SELECT DISTINCT service_qualification_id
         FROM social_services
       ),
+      relevant_combinations AS (
+        SELECT DISTINCT
+          municipal_id,
+          service_type_id,
+          service_qualification_id
+        FROM social_services
+        WHERE total_capacit > 0
+      ),
       all_combinations AS (
-        SELECT m.municipal_id, ss.service_type_id, m.codi_comarca, sqs.service_qualification_id, y.year as year
-        FROM municipals AS m
-        CROSS JOIN social_service_types AS ss
-        CROSS JOIN service_qualification_types AS sqs
+        SELECT 
+          rc.municipal_id,
+          rc.service_type_id,
+          rc.service_qualification_id,
+          m.codi_comarca,
+          y.year AS year
+        FROM relevant_combinations rc
+        JOIN municipals m USING (municipal_id)
         CROSS JOIN generate_series(1975, 2025) AS y(year)
       ),
-      joined_social_services AS (
+      joined AS (
         SELECT
-          COALESCE(a.municipal_id, ss.municipal_id) as municipal_id,
-          COALESCE(a.service_type_id, ss.service_type_id) as service_type_id,
-          COALESCE(a.year, ss.year) as year,
-          COALESCE(ss.total_capacit, 0) as total_capacit,
-          COALESCE(a.codi_comarca, ss.comarca_id) as comarca_id,
-          COALESCE(a.service_qualification_id, ss.service_qualification_id) as service_qualification_id
-        FROM social_services AS ss
-        FULL JOIN all_combinations AS a
-        USING (municipal_id, service_type_id, year)
+          ac.municipal_id,
+          ac.service_type_id,
+          ac.service_qualification_id,
+          ac.codi_comarca AS comarca_id,
+          ac.year,
+          COALESCE(ss.total_capacit, 0) AS total_capacit
+        FROM all_combinations ac
+        LEFT JOIN social_services ss
+          USING (municipal_id, service_type_id, service_qualification_id, year)
+      ),
+      first_nonzero AS (
+        SELECT
+          municipal_id,
+          service_type_id,
+          service_qualification_id,
+          MIN(year) AS first_year
+        FROM joined
+        WHERE total_capacit > 0
+        GROUP BY municipal_id,service_type_id,service_qualification_id
       )
-      select municipal_id,
-      service_type_id,
-      CAST(year as INT) as year,
-      CAST(total_capacit as INT) as total_capacit,
-      comarca_id,
-      service_qualification_id
-      from joined_social_services order by year, comarca_id, municipal_id, service_type_id;`);
+      SELECT
+        j.municipal_id,
+        j.service_type_id,
+        j.service_qualification_id,
+        j.comarca_id,
+        CAST(j.year AS INT) AS year,
+        CAST(j.total_capacit AS INT) AS total_capacit
+      FROM joined j
+      JOIN first_nonzero f
+        USING (municipal_id, service_type_id, service_qualification_id)
+      WHERE j.year >= f.first_year
+      ORDER BY year, comarca_id, municipal_id, service_type_id;`);
 
 console.error(`Processing: municipal_coverage`);
 await conn.run(`CREATE TABLE municipal_coverage as 

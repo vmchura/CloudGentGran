@@ -476,10 +476,6 @@ const plot_services_comarca_by_iniciatives = (width) => {
 }
 ```
 
-```js
-Inputs.table(social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected}).filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id)).orderby('service_qualification_id', 'year'))
-```
-
 <div class="grid grid-cols-3">
     <div class="card grid-colspan-2">
         <h2>${title_map_by_indicator}</h2>
