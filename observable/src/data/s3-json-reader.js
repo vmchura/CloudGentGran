@@ -27,7 +27,7 @@ async function streamToBuffer(stream) {
 export async function downloadObjectAsBuffer(bucket, key) {
   console.error(`Bucket: ${bucket}`);
   console.error(`Key: ${key}`);
-  
+
   console.error(`Treating as single file`);
   console.error(`Downloading: s3://${bucket}/${key}`);
   const command = new GetObjectCommand({Bucket: bucket, Key: key});
