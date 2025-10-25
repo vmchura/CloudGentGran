@@ -6,10 +6,11 @@ export function set(input, value) {
 }
 
 export function plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation,
-  comarques_latest_population, comarques_reference_population, ratio_attention_latest_year,
-  color_catalunya_map, nom_comarques, nom_comarca_input) {
+  comarques_latest_population, comarques_reference_population,
+  color_catalunya_map, plot_title) {
 
   return Plot.plot({
+    title: plot_title,
     projection: {
       type: "conic-conformal",
       domain: comarques_boundaries
@@ -30,11 +31,11 @@ export function plot_catalunya_map_aged_65(width, comarques_boundaries, cataluny
   });
 }
 
-export function plot_catalunya_map_coverage(width, comarques_boundaries, catalunya_indicator_or_variation,
-  comarques_latest_population, comarques_reference_population, ratio_attention_latest_year,
-  color_catalunya_map, nom_comarques, nom_comarca_input) {
+export function plot_catalunya_map_coverage(width, comarques_boundaries,
+  ratio_attention_latest_year, plot_title) {
 
   return Plot.plot({
+    title: plot_title,
     projection: {
       type: "conic-conformal",
       domain: comarques_boundaries

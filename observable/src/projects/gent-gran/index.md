@@ -62,20 +62,19 @@ const {
 const nom_comarques = municipal.select('nom_comarca').dedupe('nom_comarca').array('nom_comarca');
 ```
 ```js
-const catalunya_indicator_or_variation_input = Inputs.radio(new Map([["Percentatge de la població de 65 anys i més", 1],
-        [`Variació % població 65 anys i més entre els anys ${latest_year} i ${reference_year}`, 2]]),
-    {value: 1, label: "Indicador"});
+const catalunya_indicator_or_variation_input = Inputs.radio(new Map([
+    ["Percentatge de la població de 65 anys i més", 1],
+    [`Variació percentual entre els anys ${reference_year} i ${latest_year}`, 2]]),
+    {value: 1});
 const catalunya_indicator_or_variation = Generators.input(catalunya_indicator_or_variation_input);
 ```
 ```js
 const all_title_map_by_indicator = ["Percentatge de la població de 65 anys i més",
-    `Variació % població 65 anys i més entre els anys ${latest_year} i ${reference_year}`];
-const all_messages_by_indicator = [`El següent mapa de Catalunya mostra cada comarca amb aquest indicador analitzat per a l'any ${latest_year}.
-El valor central representa la mitjana de Catalunya, que és del ${latest_indicator_average_catalunya}% d'aquest indicador.
-Com a referència addicional, la mediana global se situa en el 10%.`,
-    `El següent mapa de Catalunya mostra la variació percentual de la població de 65 anys i més a cada comarca entre els anys ${latest_year} i ${reference_year}.`];
+    `Variació percentual de la població de 65 anys i més entre els anys ${reference_year} i ${latest_year}`];
 const title_map_by_indicator = all_title_map_by_indicator[catalunya_indicator_or_variation - 1];
-const messages_by_indicator = all_messages_by_indicator[catalunya_indicator_or_variation - 1];
+const all_sub_title_map_by_indicator = ["Nombre de persones de 65 anys i més dividit pel total de la població.",
+    `Diferència entre el percentatge de població de 65 anys i més l’any ${latest_year} i el corresponent a l’any ${reference_year}.`];
+const sub_title_map_by_indicator = all_sub_title_map_by_indicator[catalunya_indicator_or_variation - 1];
 ```
 ```js
 const color_catalunya_map = getColorCatalunyaMap(catalunya_indicator_or_variation, latest_indicator_average_catalunya_integer, range_colours_indicator);
@@ -133,28 +132,26 @@ const domain_iniciatives = serveis_by_iniciative.select('service_qualification_i
 <hr/>
 
 <div class="story-section">
-    <h2>1️⃣ On viuen les persones grans a Catalunya?</h2>
+    <h2>On viuen les persones grans a Catalunya?</h2>
     <p>
-    [Explain briefly that the map shows the distribution of people aged 65+ by comarca,
-    and that the redder areas have a higher proportion. Highlight the average (19.5%).]
+    Per comprendre la distribució territorial de les persones grans a Catalunya, s’utilitzen dos indicadors que permeten identificar on es concentra la població de 65 anys i més i com ha evolucionat al llarg del temps:
     </p>
+    ${catalunya_indicator_or_variation_input}
 
 <div class="grid grid-cols-3">
-    <div class="card grid-colspan-2">
-        <h3>${title_map_by_indicator}</h3>
-        ${messages_by_indicator}
-        <br/><br/>
-        ${catalunya_indicator_or_variation_input}
+    <div class="grid-colspan-2">
         <figure class="grafic" style="max-width: none;">
             ${resize((width) => plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation, 
-              comarques_latest_population, comarques_reference_population, ratio_attention_latest_year, 
-              color_catalunya_map, nom_comarques, nom_comarca_input))}
+              comarques_latest_population, comarques_reference_population, 
+              color_catalunya_map, title_map_by_indicator))}
         </figure>
+<div class="note">
+    <bold>${title_map_by_indicator}</bold>: ${sub_title_map_by_indicator}
+</div>
     </div>
     <div class="grid-colspan-1">
         <h2>Catalunya ${latest_year}</h2>
         <div class="grid-colspan-1">
-            <h3>Catalunya ${latest_year}</h3>
             <div class="card">
                 <h4>Població de 65 anys i més</h4>
                 <span class="big">${Number(gent_gran_population_latest_year).toLocaleString('ca-ES')}</span>
@@ -170,14 +167,10 @@ const domain_iniciatives = serveis_by_iniciative.select('service_qualification_i
         </div>
     </div>
 </div>
-<p class="reflection">
-[Comment briefly on the demographic pattern. Example: "Most comarques inland have a higher 
-share of elderly population compared to coastal or metropolitan zones."]
-</p>
 </div>
 
 <div class="story-section">
-  <h2>2️⃣ Disposem de prou places de residència?</h2>
+  <h2>Disposem de prou places de residència?</h2>
   <p>
     [Explain that the cards below summarize the total number of residence places, 
     coverage rate, and existing deficit. Mention what 4.11% coverage means in context.]
@@ -185,14 +178,10 @@ share of elderly population compared to coastal or metropolitan zones."]
 
   <div class="grid grid-cols-3">
     <div class="card grid-colspan-2">
-        <h3>Porcentatge taxa de cobertura de residència per a gent gran</h3>
         La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent
-        <br/><br/>
-        ${catalunya_indicator_or_variation_input}
         <figure class="grafic" style="max-width: none;">
-            ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, catalunya_indicator_or_variation, 
-              comarques_latest_population, comarques_reference_population, ratio_attention_latest_year, 
-              color_catalunya_map, nom_comarques, nom_comarca_input))}
+            ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, 
+              ratio_attention_latest_year, "Porcentatge taxa de cobertura de residència per a gent gran"))}
         </figure>
     </div>
     <div class="grid-colspan-1">
@@ -280,9 +269,4 @@ share of elderly population compared to coastal or metropolitan zones."]
 
 <style>
 .story-section { margin-bottom: 3rem; }
-h1, h2, h3, h4 { font-weight: 600; }
-.intro, .reflection, .conclusion { font-size: 1.1em; line-height: 1.6; color: #444; margin-top: 1em; }
-.card { background: #fff; padding: 1em; border-radius: 1em; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-.big { font-size: 1.6em; font-weight: bold; color: #333; }
-hr { border: none; border-top: 1px solid #ddd; margin: 2rem 0; }
 </style>
