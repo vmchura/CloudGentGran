@@ -5,7 +5,11 @@ const municipals_boundaries = FileAttachment("./data/municipis-1000000.json").js
   
 import {loadData} from "./components/data-loader.js";
 import {calculateIndicators} from "./components/indicators.js";
-import {getColorCatalunyaMap, plot_catalunya_map_aged_65} from "./components/catalunya-map.js";
+import {
+    getColorCatalunyaMap,
+    plot_catalunya_map_aged_65,
+    plot_catalunya_map_coverage
+} from "./components/catalunya-map.js";
 
 import {
   plot_trend_population_groups_by_comarca,
@@ -59,20 +63,17 @@ const nom_comarques = municipal.select('nom_comarca').dedupe('nom_comarca').arra
 ```
 ```js
 const catalunya_indicator_or_variation_input = Inputs.radio(new Map([["Percentatge de la població de 65 anys i més", 1],
-        [`Variació % població 65 anys i més entre els anys ${latest_year} i ${reference_year}`, 2],
-        [`Taxa de cobertura de residència per a gent gran`, 3]]),
+        [`Variació % població 65 anys i més entre els anys ${latest_year} i ${reference_year}`, 2]]),
     {value: 1, label: "Indicador"});
 const catalunya_indicator_or_variation = Generators.input(catalunya_indicator_or_variation_input);
 ```
 ```js
 const all_title_map_by_indicator = ["Percentatge de la població de 65 anys i més",
-    `Variació % població 65 anys i més entre els anys ${latest_year} i ${reference_year}`,
-    "Porcentatge taxa de cobertura de residència per a gent gran"];
+    `Variació % població 65 anys i més entre els anys ${latest_year} i ${reference_year}`];
 const all_messages_by_indicator = [`El següent mapa de Catalunya mostra cada comarca amb aquest indicador analitzat per a l'any ${latest_year}.
 El valor central representa la mitjana de Catalunya, que és del ${latest_indicator_average_catalunya}% d'aquest indicador.
 Com a referència addicional, la mediana global se situa en el 10%.`,
-    `El següent mapa de Catalunya mostra la variació percentual de la població de 65 anys i més a cada comarca entre els anys ${latest_year} i ${reference_year}.`,
-    "La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent"];
+    `El següent mapa de Catalunya mostra la variació percentual de la població de 65 anys i més a cada comarca entre els anys ${latest_year} i ${reference_year}.`];
 const title_map_by_indicator = all_title_map_by_indicator[catalunya_indicator_or_variation - 1];
 const messages_by_indicator = all_messages_by_indicator[catalunya_indicator_or_variation - 1];
 ```
@@ -183,24 +184,31 @@ share of elderly population compared to coastal or metropolitan zones."]
   </p>
 
   <div class="grid grid-cols-3">
-      <div class="grid-colspan-1">
-          <div class="card">
-              <h4>Places de residència per a gent gran</h4>
-              <span class="big">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
-          </div>
+    <div class="card grid-colspan-2">
+        <h3>Porcentatge taxa de cobertura de residència per a gent gran</h3>
+        La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent
+        <br/><br/>
+        ${catalunya_indicator_or_variation_input}
+        <figure class="grafic" style="max-width: none;">
+            ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, catalunya_indicator_or_variation, 
+              comarques_latest_population, comarques_reference_population, ratio_attention_latest_year, 
+              color_catalunya_map, nom_comarques, nom_comarca_input))}
+        </figure>
+    </div>
+    <div class="grid-colspan-1">
+      <div class="card">
+          <h4>Places de residència per a gent gran</h4>
+          <span class="big">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
       </div>
-      <div class="grid-colspan-1">
-          <div class="card">
-              <h4>Taxa de cobertura</h4>
-              <span class="big">${Number(catalunya_ratio_cobertura).toLocaleString('ca-ES')}%</span>
-          </div>
+      <div class="card">
+          <h4>Taxa de cobertura</h4>
+          <span class="big">${Number(catalunya_ratio_cobertura).toLocaleString('ca-ES')}%</span>
       </div>
-      <div class="grid-colspan-1">
-          <div class="card">
-              <h4>${deficit_superavit} de places (cobertura 4,11%)</h4>
-              <span class="big">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
-          </div>
+      <div class="card">
+          <h4>${deficit_superavit} de places (cobertura 4,11%)</h4>
+          <span class="big">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
       </div>
+    </div>
   </div>
 
   <p class="reflection">
