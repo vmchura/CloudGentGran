@@ -1,3 +1,5 @@
+import * as Plot from "@observablehq/plot";
+
 export function set(input, value) {
   input.value = value;
   input.dispatchEvent(new Event("input", {bubbles: true}));
@@ -20,7 +22,7 @@ export function plot_catalunya_map_aged_65(width, comarques_boundaries, cataluny
   comarques_latest_population, comarques_reference_population, ratio_attention_latest_year,
   color_catalunya_map, nom_comarques, nom_comarca_input) {
 
-  let plot = Plot.plot({
+  return Plot.plot({
     projection: {
       type: "conic-conformal",
       domain: comarques_boundaries
@@ -41,25 +43,6 @@ export function plot_catalunya_map_aged_65(width, comarques_boundaries, cataluny
       })
     ]
   });
-
-  d3.select(plot)
-    .selectAll("path")
-    .on("mouseover", function () {
-      d3.select(this).attr("stroke-width", 4.0);
-    })
-    .on("mouseout", function () {
-      d3.select(this).attr("stroke-width", 1.0);
-    });
-
-  d3.select(plot)
-    .on("pointerenter", function () {
-      d3.select(plot).selectAll("path").attr("stroke-width", 1.0);
-    })
-    .on("pointerleave", function () {
-      d3.select(plot).selectAll("path").attr("stroke-width", 1.0);
-    });
-
-  return plot;
 }
 
 export function getColorCatalunyaMap(catalunya_indicator_or_variation, latest_indicator_average_catalunya_integer, range_colours_indicator) {

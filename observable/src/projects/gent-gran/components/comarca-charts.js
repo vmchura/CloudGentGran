@@ -1,4 +1,6 @@
 import * as aq from "npm:arquero";
+import * as Plot from "@observablehq/plot";
+import * as d3 from "d3";
 
 export const service_tag_to_complete = new Map([
   ["Servei de residència assistida", "Servei de residència assistida per a gent gran de caràcter temporal o permanent"],

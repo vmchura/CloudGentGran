@@ -5,7 +5,8 @@ const municipals_boundaries = FileAttachment("./data/municipis-1000000.json").js
   
 import {loadData} from "./components/data-loader.js";
 import {calculateIndicators} from "./components/indicators.js";
-import {plot_catalunya_map_aged_65, getColorCatalunyaMap} from "./components/catalunya-map.js";
+import {getColorCatalunyaMap, plot_catalunya_map_aged_65} from "./components/catalunya-map.js";
+
 import {
   plot_trend_population_groups_by_comarca,
   plot_comarca_by_serveis,
@@ -118,6 +119,7 @@ const serveis_by_iniciative = social_services_comarca.params({service_type_id: s
 ```js
 const domain_iniciatives = serveis_by_iniciative.select('service_qualification_id').dedupe('service_qualification_id').array('service_qualification_id');
 ```
+
 
 # Envelliment i Atenció a la Gent Gran a Catalunya (2024)
 <div class="story-section">

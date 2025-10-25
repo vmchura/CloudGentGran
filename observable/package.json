@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.651.1",
     "@duckdb/node-api": "^1.4.1-r.4",
     "@observablehq/framework": "^1.13.3",
+    "@observablehq/plot": "^0.6.17",
     "apache-arrow": "^21.1.0",
     "arquero": "^8.0.3",
     "d3-dsv": "^3.0.1",
