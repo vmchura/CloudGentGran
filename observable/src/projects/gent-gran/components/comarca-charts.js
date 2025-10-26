@@ -181,7 +181,6 @@ export function plot_legend_trend_population(width, single_comarca_population) {
 }
 
 export function plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, service_type) {
-  console.log(service_type);
   return serveis_residence_ratio ? Plot.legend({
     width: width,
     color: {
