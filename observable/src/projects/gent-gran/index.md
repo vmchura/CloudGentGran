@@ -20,7 +20,6 @@ import {
   plot_legend_trend_services,
   plot_legend_trend_iniciative,
   service_tag_to_complete,
-  colour_by_service,
   map_inciative_color
 } from "./components/comarca-charts.js";
 ```
@@ -31,7 +30,9 @@ const {
   social_services_empty_last_year,
   municipal_coverage,
   comarca_coverage,
-  municipal
+  municipal,
+  service_type,
+  service_qualification
 } = data;
 ```
 ```js
@@ -229,7 +230,7 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
       <div class="grid-colspan-1">
           <h4>Serveis d'assistència</h4>
           ${serveis_residence_ratio_input}
-          ${resize((width) => plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, colour_by_service))}
+          ${resize((width) => plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, service_type))}
       </div>
       <div class="grid-colspan-1">
           <h4>Qualificació dels serveis</h4>
@@ -243,7 +244,7 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
           <figure>${resize((width) => plot_trend_population_groups_by_comarca(width, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population))}</figure>
       </div>
       <div class="card grid-colspan-1">
-          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis) : plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis))}</figure>
+          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis))}</figure>
       </div>
       <div class="card grid-colspan-1">
           <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis))}</figure>

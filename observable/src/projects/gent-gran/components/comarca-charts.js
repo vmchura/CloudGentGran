@@ -11,11 +11,11 @@ export const service_tag_to_complete = new Map([
 ]);
 
 export const colour_by_service = new Map([
-  ["Servei de centre de dia per a gent gran de caràcter temporal o permanent", "#a160af"],
-  ["Servei de residència assistida per a gent gran de caràcter temporal o permanent", "#ff9c38"],
-  ["Servei de llar residència per a gent gran de caràcter temporal o permanent", "#f794b9"],
-  ["Servei de tutela per a gent gran", "#61b0ff"],
-  ["Servei d' habitatge tutelat per a gent gran de caràcter temporal o permanent", "#a87a54"]
+  ["DAY-001", "#a160af"],
+  ["RES-003", "#ff9c38"],
+  ["RES-002", "#f794b9"],
+  ["TUT-001", "#61b0ff"],
+  ["RES-001", "#a87a54"]
 ]);
 
 export const map_inciative_color = new Map([
@@ -62,7 +62,7 @@ export function plot_trend_population_groups_by_comarca(width, comarca_populatio
   });
 }
 
-export function plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis) {
+export function plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_services) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -70,6 +70,13 @@ export function plot_comarca_by_serveis(width, social_services_empty_last_year, 
       type: "linear",
       grid: true,
       label: "Places acumulativa del servei",
+    },
+    color: {
+      domain: all_services,
+      range: all_services.map(row => colour_by_service.get(row)),
+      legend: false,
+      columns: 1,
+      label: "Age Groups",
     },
     x: {
       label: null,
@@ -173,11 +180,12 @@ export function plot_legend_trend_population(width, single_comarca_population) {
   });
 }
 
-export function plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, colour_by_service) {
+export function plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, service_type) {
+  console.log(service_type);
   return serveis_residence_ratio ? Plot.legend({
     width: width,
     color: {
-      domain: all_available_services,
+      domain: all_available_services.map(row => service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(row)]),
       range: all_available_services.map(row => colour_by_service.get(row)),
       legend: false,
       columns: 1,
