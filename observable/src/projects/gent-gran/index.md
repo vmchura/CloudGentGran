@@ -108,7 +108,7 @@ const all_available_services = social_services_comarca.filter(row =>  row.total_
 const all_services = Array.from(service_tag_to_complete.entries()).map(k => k[1]);
 ```
 ```js
-const serveis_input = Inputs.select(all_available_services, {
+const serveis_input = Inputs.select(new Map(all_available_services.map(s => [service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(s)], s])), {
     value: [all_available_services[0]],
     label: "Servei"
 })
@@ -235,7 +235,7 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
       <div class="grid-colspan-1">
           <h4>Qualificació dels serveis</h4>
           ${serveis_input}
-          ${resize((width) => plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color))} 
+          ${resize((width) => plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color, service_qualification))} 
       </div>
   </div>
 
@@ -247,7 +247,7 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
           <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis))}</figure>
       </div>
       <div class="card grid-colspan-1">
-          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis))}</figure>
+          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis, all_available_services))}</figure>
       </div>
   </div>
 

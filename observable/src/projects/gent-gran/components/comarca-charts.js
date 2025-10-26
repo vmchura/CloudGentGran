@@ -19,9 +19,9 @@ export const colour_by_service = new Map([
 ]);
 
 export const map_inciative_color = new Map([
-  ["Entitat privada d'iniciativa mercantil", "#ed393f"],
-  ["Entitat privada d'iniciativa social", "#5ca34b"],
-  ["Entitat d'iniciativa pública", "#3b5fc0"]
+  ["PRV-001", "#ed393f"],
+  ["PRV-002", "#5ca34b"],
+  ["PUB-001", "#3b5fc0"]
 ]);
 
 export function plot_trend_population_groups_by_comarca(width, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population) {
@@ -137,6 +137,17 @@ export function plot_services_comarca_by_iniciatives(width, social_services_empt
       grid: true,
       label: "Places acumulativa del servei",
     },
+    color: {
+      domain: [
+        "PRV-001",
+        "PRV-002",
+        "PUB-001"],
+      range: ["#ed393f", "#5ca34b", "#3b5fc0"],
+      legend: false,
+      columns: 1,
+      rows: 3,
+      label: "Age Groups",
+    },
     x: {
       label: null,
       grid: true,
@@ -202,11 +213,11 @@ export function plot_legend_trend_services(width, serveis_residence_ratio, all_a
   });
 }
 
-export function plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color) {
+export function plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color, service_qualification) {
   return Plot.legend({
     width: width,
     color: {
-      domain: domain_iniciatives,
+      domain: domain_iniciatives.map(row => service_qualification._data['service_qualification_description'][service_qualification._data['service_qualification_id'].indexOf(row)]),
       range: domain_iniciatives.map(row => map_inciative_color.get(row)),
       columns: 1,
       rows: 3,
