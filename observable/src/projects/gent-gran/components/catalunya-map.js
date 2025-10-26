@@ -62,6 +62,37 @@ export function plot_catalunya_map_coverage(width, comarques_boundaries,
     ]
   });
 }
+export function plot_catalunya_map_coverage_municipal(width, single_comarque_boundaries,
+  ratio_attention_latest_year, plot_title) {
+
+  return Plot.plot({
+    title: plot_title,
+    projection: {
+      type: "conic-conformal",
+      domain: single_comarque_boundaries
+    },
+    color: {
+               type: "threshold",
+               domain: [3, 4.11, 5],
+               scheme: "blues",
+               legend: true,
+               pivot: 4.11,
+               n: 10,
+               unknown: "grey",
+             },
+    width: width,
+    marks: [
+      Plot.geo(single_comarque_boundaries, {
+        fill: (d) => ratio_attention_latest_year[d.properties.municipal_id],
+        title: d => d.properties.municipal_id,
+        strokeOpacity: 1.0,
+        strokeWidth: 1,
+        stroke: "black",
+        tip: true
+      })
+    ]
+  });
+}
 
 export function getColorCatalunyaMap(catalunya_indicator_or_variation, latest_indicator_average_catalunya_integer, range_colours_indicator) {
   return catalunya_indicator_or_variation == 1 ? {

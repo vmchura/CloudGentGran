@@ -8,7 +8,8 @@ import {calculateIndicators} from "./components/indicators.js";
 import {
     getColorCatalunyaMap,
     plot_catalunya_map_aged_65,
-    plot_catalunya_map_coverage
+    plot_catalunya_map_coverage,
+    plot_catalunya_map_coverage_municipal
 } from "./components/catalunya-map.js";
 
 import {
@@ -120,7 +121,19 @@ const serveis_by_iniciative = social_services_comarca.params({service_type_id: s
 ```js
 const domain_iniciatives = serveis_by_iniciative.select('service_qualification_id').dedupe('service_qualification_id').array('service_qualification_id');
 ```
-
+```js
+const comarca_name_for_distrit_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Comarca: ", format: x => x.nom_comarca, unique: true, value: "01"})
+const comarca_code_for_distrit_value = Generators.input(comarca_name_for_distrit_input);
+```
+```js
+const valid_municipal_codes = municipal.params({codi_comarca: comarca_code_for_distrit_value.codi_comarca}).filter((d, $) => d.codi_comarca === $.codi_comarca).array("codi");
+const single_comarca_map = {
+  ...municipals_boundaries,
+  features: municipals_boundaries.features.filter(
+    f => valid_municipal_codes.includes(f.properties.municipal_id )
+  )
+};
+```
 
 # Envelliment i Atenció a la Gent Gran a Catalunya (2024)
 <div class="story-section">
@@ -256,11 +269,13 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
 <hr/>
 
 <div class="story-section">
-  <h2>4️⃣ Què ens diu tot això?</h2>
-  <p class="conclusion">
-    [Wrap up the story. Discuss whether Catalonia is aging faster than it expands care capacity,
-    mention regional inequalities, and suggest potential implications for policymakers.]
-  </p>
+  <h2>Indicators by district</h2>
+  ${comarca_name_for_distrit_input}
+  <div class="grid grid-cols-3">
+    <div class="grid-colspan-2">
+    <figure>${resize((width) => plot_catalunya_map_coverage_municipal(width, single_comarca_map, ratio_attention_latest_year, "Holas"))}</figure>
+    </div>
+  </div>
 </div>
 
 <style>
