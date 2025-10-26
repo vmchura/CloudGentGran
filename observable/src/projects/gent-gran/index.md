@@ -80,7 +80,7 @@ const sub_title_map_by_indicator = all_sub_title_map_by_indicator[catalunya_indi
 const color_catalunya_map = getColorCatalunyaMap(catalunya_indicator_or_variation, latest_indicator_average_catalunya_integer, range_colours_indicator);
 ```
 ```js
-const nom_comarca_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Select one", format: x => x.nom_comarca, unique: true})
+const nom_comarca_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Comarca: ", format: x => x.nom_comarca, unique: true})
 const nom_comarca = Generators.input(nom_comarca_input);
 ```
 ```js
@@ -170,19 +170,22 @@ const domain_iniciatives = serveis_by_iniciative.select('service_qualification_i
 </div>
 
 <div class="story-section">
-  <h2>Disposem de prou places de residència?</h2>
+  <h2>Suficiència de places residencials per a la població gran</h2>
   <p>
-    [Explain that the cards below summarize the total number of residence places, 
-    coverage rate, and existing deficit. Mention what 4.11% coverage means in context.]
+    Amb l’objectiu d’avaluar l’adequació de l’oferta de places residencials per a persones grans a Catalunya, s’analitza la ràtio de cobertura de llits o places destinades a la població de 65 anys i més.
+Segons l’<a href="https://www.acra.cat/estudio-socioecon%C3%B3mico-de-la-atenci%C3%B3n-para-personas-en-situaci%C3%B3n-de-dependencia-en-espa%C3%B1a-informe-final_1123083.pdf">Estudio socioeconómico de la atención para personas en situación de dependencia en España</a>, la ràtio de referència és de 4,11 i 5 places per cada 100 persones majors de 65 anys, valor que orienta la planificació futura dels serveis d’atenció residencial.
+Aquesta anàlisi permet identificar els territoris amb una cobertura insuficient i aquells que presenten una oferta més equilibrada respecte a la seva població gran.
   </p>
 
   <div class="grid grid-cols-3">
-    <div class="card grid-colspan-2">
-        La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent
+    <div class="grid-colspan-2">
         <figure class="grafic" style="max-width: none;">
             ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, 
               ratio_attention_latest_year, "Porcentatge taxa de cobertura de residència per a gent gran"))}
         </figure>
+        <div class="note">
+        La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent
+        </div>
     </div>
     <div class="grid-colspan-1">
       <div class="card">
@@ -199,19 +202,15 @@ const domain_iniciatives = serveis_by_iniciative.select('service_qualification_i
       </div>
     </div>
   </div>
-
-  <p class="reflection">
-    [Discuss what this implies — e.g. "Despite the growing elderly population, 
-    residence coverage remains below ideal levels, with a deficit of nearly 2,700 places."]
-  </p>
 </div>
 
 <hr/>
 
 <div class="story-section">
-  <h2>3️⃣ Com ha evolucionat aquesta situació al llarg dels anys?</h2>
+  <h2>Evolució de la població gran i dels serveis d’atenció al llarg del temps</h2>
   <p>
-    [Introduce the section: show how both population and care services have evolved in each comarca.]
+    Els indicadors permeten observar com han variat la disponibilitat de places residencials, la distribució dels diferents tipus de serveis i la seva titularitat (pública, privada o social).
+Aquesta anàlisi temporal facilita la identificació de tendències i desequilibris territorials en la provisió de serveis destinats a la població gran.
   </p>
 
   <div class="grid grid-cols-3">
@@ -251,10 +250,6 @@ const domain_iniciatives = serveis_by_iniciative.select('service_qualification_i
       </div>
   </div>
 
-  <p class="reflection">
-    [Here summarize key trends: e.g. "In Alt Camp, the elderly population increased steadily, 
-    but care places only grew significantly after 2010."]
-  </p>
 </div>
 
 <hr/>

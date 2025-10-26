@@ -33,13 +33,13 @@ export function plot_trend_population_groups_by_comarca(width, comarca_populatio
       label: single_comarca_population ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més",
     },
     color: {
-      domain: single_comarca_population ? ["population_over_65"] : ["indicator_elderly"],
+      domain: single_comarca_population ? ["population_ge65"] : ["elderly_indicator"],
       range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
       legend: false,
       columns: 1,
       rows: 2,
       label: null,
-      tickFormat: d => d === "population_over_65" ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més"
+      tickFormat: d => d === "population_ge65" ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més"
     },
     x: {
       grid: true,
@@ -49,11 +49,12 @@ export function plot_trend_population_groups_by_comarca(width, comarca_populatio
       domain: [min_year_serveis, max_year_serveis]
     },
     marks: [
-      Plot.lineY(comarca_population.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis})
+      Plot.lineY(comarca_population.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
         .filter((row, $) => ((row.comarca_id == $.comarca_id) && (row.year >= $.min_year_serveis))),
         {
           x: "year",
           y: (single_comarca_population ? "population_ge65" : "elderly_indicator"),
+          stroke: single_comarca_population ? "#ffd754" : "#3b5fc0",
           strokeWidth: 4
         }),
       Plot.ruleY([0])
@@ -78,13 +79,13 @@ export function plot_comarca_by_serveis(width, social_services_empty_last_year, 
       interval: 1
     },
     marks: [
-      Plot.lineY(social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis})
+      Plot.lineY(social_services_empty_last_year.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
         .filter((row, $) => (row.comarca_id === $.comarca_id)),
         Plot.mapY(
           "cumsum",
           Plot.groupX(
             { y: d => d3.sum(d, v => v.total_capacit) },
-            { x: "year", curve: "step-after", z: "service_type_id", stroke: "service_type_id", tip: true}
+            { x: "year", curve: "step-after", z: "service_type_id", stroke: "service_type_id", tip: true }
           )
         ))
     ]
@@ -111,7 +112,7 @@ export function plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, 
       domain: [min_year_serveis, max_year_serveis]
     },
     marks: [
-      Plot.lineY(comarca_coverage.params({comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis})
+      Plot.lineY(comarca_coverage.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
         .filter((row, $) => (row.comarca_id === $.comarca_id)),
         {
           x: "year", y: "coverage_ratio", stroke: "#ff9c38", strokeWidth: 2
@@ -137,7 +138,7 @@ export function plot_services_comarca_by_iniciatives(width, social_services_empt
       interval: 1
     },
     marks: [
-      Plot.areaY(social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected})
+      Plot.areaY(social_services_empty_last_year.params({ comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected })
         .filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id))
         .orderby('service_qualification_id', 'year'),
         Plot.mapY(

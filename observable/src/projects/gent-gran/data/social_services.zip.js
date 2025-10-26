@@ -50,7 +50,11 @@ await conn.run(`
     CREATE TABLE municipal AS
     SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/municipals/*');
     CREATE TABLE social_services AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/social_services_by_service_municipal/*');`);
+    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/social_services_by_service_municipal/*');
+    CREATE TABLE service_qualification AS
+    SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/service_qualification/*');
+    CREATE TABLE service_type AS
+    SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/service_type/*');`);
 
 console.error(`Processing: social_services_empty_last_year`);
 await conn.run(`CREATE TABLE social_services_empty_last_year as 
@@ -304,6 +308,10 @@ const comarca_coverage = await conn.runAndReadAll("SELECT *  FROM comarca_covera
 zip.file("comarca_coverage.json", JSON.stringify(comarca_coverage.getRowObjectsJson()));
 const municipal = await conn.runAndReadAll("SELECT *  FROM municipal");
 zip.file("municipal.json", JSON.stringify(municipal.getRowObjectsJson()));
+const service_type = await conn.runAndReadAll("SELECT *  FROM service_type");
+zip.file("service_type.json", JSON.stringify(service_type.getRowObjectsJson()));
+const service_qualification = await conn.runAndReadAll("SELECT *  FROM service_qualification");
+zip.file("service_qualification.json", JSON.stringify(service_qualification.getRowObjectsJson()));
 
 
 zip
