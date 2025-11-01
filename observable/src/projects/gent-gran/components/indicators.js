@@ -49,20 +49,20 @@ export function calculateIndicators(population, comarca_population, social_servi
   const deficit_superavit = deficit_camas_residencia > 0 ? "Dèficit" : "Superàvit";
 
   const ratio_attention_latest_year = Object.fromEntries(
-    comarca_coverage.params({latest_year: latest_year})
+    comarca_coverage.params({ latest_year: latest_year })
       .filter(d => d.year === latest_year)
       .objects()
       .map(d => [d.comarca_id, d.coverage_ratio])
   );
   const ratio_attention_municipal_latest_year = Object.fromEntries(
-      municipal_coverage.params({latest_year: latest_year})
-        .filter(d => d.year === latest_year)
-        .objects()
-        .map(d => [d.municipal_id, d.coverage_ratio])
-    );
+    municipal_coverage.params({ latest_year: latest_year })
+      .filter(d => d.year === latest_year)
+      .objects()
+      .map(d => [d.municipal_id, d.coverage_ratio])
+  );
 
   const comarques_latest_population = Object.fromEntries(
-    comarca_population.params({latest_year: latest_year})
+    comarca_population.params({ latest_year: latest_year })
       .filter((d, $) => d.year === $.latest_year)
       .select("comarca_id", "population_ge65", "population")
       .objects()
@@ -73,7 +73,7 @@ export function calculateIndicators(population, comarca_population, social_servi
   );
 
   const municipal_latest_population = Object.fromEntries(
-    population.params({latest_year: latest_year})
+    population.params({ latest_year: latest_year })
       .filter((d, $) => d.year === $.latest_year)
       .select("municipal_code", "population_ge65", "population")
       .objects()
@@ -84,7 +84,7 @@ export function calculateIndicators(population, comarca_population, social_servi
   );
 
   const comarques_reference_population = Object.fromEntries(
-    comarca_population.params({reference_year: reference_year})
+    comarca_population.params({ reference_year: reference_year })
       .filter((d, $) => d.year === $.reference_year)
       .select("comarca_id", "population_ge65", "population")
       .objects()

@@ -201,7 +201,7 @@ await conn.run(`CREATE TABLE municipal_coverage as
         )
       select municipal_id, CAST(year as INT) as year, ROUND(coverage_ratio, 2) as coverage_ratio from with_coverage order by municipal_id, year;`);
 
-console.error(`Processing: comarca_population`);      
+console.error(`Processing: comarca_population`);
 await conn.run(`CREATE TABLE comarca_population as
         WITH population_with_comarca as (
           select p.population_ge65 , p.population, p.year, m.codi_comarca
@@ -224,7 +224,7 @@ await conn.run(`CREATE TABLE comarca_population as
         elderly_indicator
         from comarca_population_aggregated order by comarca_id, year;`);
 
-console.error(`Processing: comarca_coverage`);      
+console.error(`Processing: comarca_coverage`);
 await conn.run(`CREATE TABLE comarca_coverage as 
           WITH comarcas AS (
             SELECT DISTINCT codi_comarca AS comarca_id

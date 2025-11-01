@@ -2,7 +2,7 @@ import * as Plot from "@observablehq/plot";
 
 export function set(input, value) {
   input.value = value;
-  input.dispatchEvent(new Event("input", {bubbles: true}));
+  input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 export function plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation,
@@ -68,7 +68,7 @@ export function plot_catalunya_map_coverage_municipal(width, single_comarque_bou
     width: width,
     marks: [
       Plot.geo(single_comarque_boundaries, {
-        fill: (d) => catalunya_indicator_type == "POPULATION_INDICATOR" ?  municipal_latest_population[d.properties.municipal_id] : ratio_attention_latest_year[d.properties.municipal_id],
+        fill: (d) => catalunya_indicator_type == "POPULATION_INDICATOR" ? municipal_latest_population[d.properties.municipal_id] : ratio_attention_latest_year[d.properties.municipal_id],
         title: d => d.properties.municipal_id,
         strokeOpacity: 1.0,
         strokeWidth: 1,
@@ -80,9 +80,9 @@ export function plot_catalunya_map_coverage_municipal(width, single_comarque_bou
 }
 
 export function getColorCatalunyaMap(indicator_type, latest_indicator_average_catalunya_integer, range_colours_indicator) {
-  switch(indicator_type) {
+  switch (indicator_type) {
     case "POPULATION_INDICATOR":
-        return {
+      return {
         type: "threshold",
         scheme: "buylrd",
         legend: true,
@@ -92,7 +92,7 @@ export function getColorCatalunyaMap(indicator_type, latest_indicator_average_ca
         domain: range_colours_indicator,
       };
 
-  case "POPULATION_INDICATOR_VARIATION":
+    case "POPULATION_INDICATOR_VARIATION":
       return {
         type: "diverging",
         scheme: "buylrd",
@@ -101,15 +101,16 @@ export function getColorCatalunyaMap(indicator_type, latest_indicator_average_ca
         n: 10,
         unknown: "grey"
       };
-   case "RESIDENCE_COVERAGE":
-       return {
-                             type: "threshold",
-                             domain: [3, 4.11, 5, 7],
-                             scheme: "rdylbu",
-                             legend: true,
-                             pivot: 4.11,
-                             n: 10,
-                             unknown: "grey",
-                           };
-   default: return {};}
+    case "RESIDENCE_COVERAGE":
+      return {
+        type: "threshold",
+        domain: [3, 4.11, 5, 7],
+        scheme: "rdylbu",
+        legend: true,
+        pivot: 4.11,
+        n: 10,
+        unknown: "grey",
+      };
+    default: return {};
+  }
 }
