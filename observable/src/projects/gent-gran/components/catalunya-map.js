@@ -41,14 +41,14 @@ export function plot_catalunya_map_coverage(width, comarques_boundaries,
       domain: comarques_boundaries
     },
     color: {
-               type: "threshold",
-               domain: [3, 4.11, 5],
-               scheme: "blues",
-               legend: true,
-               pivot: 4.11,
-               n: 10,
-               unknown: "grey",
-             },
+                   type: "threshold",
+                   domain: [3, 4.11, 5, 7],
+                   scheme: "rdylbu",
+                   legend: true,
+                   pivot: 4.11,
+                   n: 10,
+                   unknown: "grey",
+                 },
     width: width,
     marks: [
       Plot.geo(comarques_boundaries, {
@@ -73,8 +73,8 @@ export function plot_catalunya_map_coverage_municipal(width, single_comarque_bou
     },
     color: {
                type: "threshold",
-               domain: [3, 4.11, 5],
-               scheme: "blues",
+               domain: [3, 4.11, 5, 7],
+               scheme: "rdylbu",
                legend: true,
                pivot: 4.11,
                n: 10,

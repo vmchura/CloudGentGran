@@ -37,7 +37,7 @@ const {
 } = data;
 ```
 ```js
-const indicators = calculateIndicators(comarca_population, social_services_empty_last_year, comarca_coverage);
+const indicators = calculateIndicators(comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage);
 const {
   all_years,
   latest_year,
@@ -57,7 +57,8 @@ const {
   deficit_superavit,
   ratio_attention_latest_year,
   comarques_latest_population,
-  comarques_reference_population
+  comarques_reference_population,
+  ratio_attention_municipal_latest_year
 } = indicators;
 ```
 ```js
@@ -133,6 +134,9 @@ const single_comarca_map = {
     f => valid_municipal_codes.includes(f.properties.municipal_id )
   )
 };
+```
+```js
+const municipal_plot = plot_catalunya_map_coverage_municipal(500, single_comarca_map, ratio_attention_municipal_latest_year, "Municipal");
 ```
 
 # Envelliment i Atenció a la Gent Gran a Catalunya (2024)
@@ -273,7 +277,7 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
   ${comarca_name_for_distrit_input}
   <div class="grid grid-cols-3">
     <div class="grid-colspan-2">
-    <figure>${resize((width) => plot_catalunya_map_coverage_municipal(width, single_comarca_map, ratio_attention_latest_year, "Holas"))}</figure>
+        <fig>${municipal_plot}</fig>
     </div>
   </div>
 </div>

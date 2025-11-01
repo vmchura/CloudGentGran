@@ -1,6 +1,6 @@
 import * as aq from "npm:arquero";
 
-export function calculateIndicators(comarca_population, social_services_empty_last_year, comarca_coverage) {
+export function calculateIndicators(comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage) {
   const all_years = comarca_population.dedupe('year').array('year');
   const latest_year = Math.max(...all_years);
 
@@ -54,6 +54,12 @@ export function calculateIndicators(comarca_population, social_services_empty_la
       .objects()
       .map(d => [d.comarca_id, d.coverage_ratio])
   );
+  const ratio_attention_municipal_latest_year = Object.fromEntries(
+      municipal_coverage.params({latest_year: latest_year})
+        .filter(d => d.year === latest_year)
+        .objects()
+        .map(d => [d.municipal_id, d.coverage_ratio])
+    );
 
   const comarques_latest_population = Object.fromEntries(
     comarca_population.params({latest_year: latest_year})
@@ -96,6 +102,7 @@ export function calculateIndicators(comarca_population, social_services_empty_la
     deficit_superavit,
     ratio_attention_latest_year,
     comarques_latest_population,
-    comarques_reference_population
+    comarques_reference_population,
+    ratio_attention_municipal_latest_year
   };
 }
