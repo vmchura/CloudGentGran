@@ -33,11 +33,12 @@ const {
   comarca_coverage,
   municipal,
   service_type,
-  service_qualification
+  service_qualification,
+  population
 } = data;
 ```
 ```js
-const indicators = calculateIndicators(comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage);
+const indicators = calculateIndicators(population, comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage);
 const {
   all_years,
   latest_year,
@@ -58,7 +59,8 @@ const {
   ratio_attention_latest_year,
   comarques_latest_population,
   comarques_reference_population,
-  ratio_attention_municipal_latest_year
+  ratio_attention_municipal_latest_year,
+  municipal_latest_population
 } = indicators;
 ```
 ```js
@@ -66,21 +68,39 @@ const nom_comarques = municipal.select('nom_comarca').dedupe('nom_comarca').arra
 ```
 ```js
 const catalunya_indicator_or_variation_input = Inputs.radio(new Map([
-    ["Percentatge de la població de 65 anys i més", 1],
-    [`Variació percentual entre els anys ${reference_year} i ${latest_year}`, 2]]),
-    {value: 1});
+    ["Percentatge de la població de 65 anys i més", "POPULATION_INDICATOR"],
+    [`Variació percentual entre els anys ${reference_year} i ${latest_year}`, "POPULATION_INDICATOR_VARIATION"]]),
+    {value: "POPULATION_INDICATOR"});
 const catalunya_indicator_or_variation = Generators.input(catalunya_indicator_or_variation_input);
 ```
+
 ```js
-const all_title_map_by_indicator = ["Percentatge de la població de 65 anys i més",
-    `Variació percentual de la població de 65 anys i més entre els anys ${reference_year} i ${latest_year}`];
-const title_map_by_indicator = all_title_map_by_indicator[catalunya_indicator_or_variation - 1];
-const all_sub_title_map_by_indicator = ["Nombre de persones de 65 anys i més dividit pel total de la població.",
-    `Diferència entre el percentatge de població de 65 anys i més l’any ${latest_year} i el corresponent a l’any ${reference_year}.`];
-const sub_title_map_by_indicator = all_sub_title_map_by_indicator[catalunya_indicator_or_variation - 1];
+const municipal_indicator_type_input = Inputs.radio(new Map([
+    [`Taxa de cobertura de residència per a gent gran`, "RESIDENCE_COVERAGE"],
+    ["Percentatge de la població de 65 anys i més", "POPULATION_INDICATOR"]]),
+    {value: "RESIDENCE_COVERAGE"});
+const municipal_indicator_type = Generators.input(municipal_indicator_type_input);
+```
+```js
+const all_title_map_by_indicator = new Map([
+["POPULATION_INDICATOR", "Percentatge de la població de 65 anys i més"],
+["POPULATION_INDICATOR_VARIATION", `Variació percentual de la població de 65 anys i més entre els anys ${reference_year} i ${latest_year}`],
+["RESIDENCE_COVERAGE", "Porcentatge taxa de cobertura de residència per a gent gran"]]);
+
+const all_sub_title_map_by_indicator = new Map([
+["POPULATION_INDICATOR", "Nombre de persones de 65 anys i més dividit pel total de la població."],
+["POPULATION_INDICATOR_VARIATION", `Diferència entre el percentatge de població de 65 anys i més l’any ${latest_year} i el corresponent a l’any ${reference_year}.`],
+["RESIDENCE_COVERAGE", "La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent."]]);
+```
+```js
+const title_map_by_indicator = all_title_map_by_indicator.get(catalunya_indicator_or_variation);
+const sub_title_map_by_indicator = all_sub_title_map_by_indicator.get(catalunya_indicator_or_variation);
 ```
 ```js
 const color_catalunya_map = getColorCatalunyaMap(catalunya_indicator_or_variation, latest_indicator_average_catalunya_integer, range_colours_indicator);
+```
+```js
+const color_municipal_map = getColorCatalunyaMap(municipal_indicator_type, latest_indicator_average_catalunya_integer, range_colours_indicator);
 ```
 ```js
 const nom_comarca_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Comarca: ", format: x => x.nom_comarca, unique: true})
@@ -136,7 +156,9 @@ const single_comarca_map = {
 };
 ```
 ```js
-const municipal_plot = plot_catalunya_map_coverage_municipal(500, single_comarca_map, ratio_attention_municipal_latest_year, "Municipal");
+const municipal_plot = plot_catalunya_map_coverage_municipal(500, single_comarca_map,
+ratio_attention_municipal_latest_year, municipal_latest_population, municipal_indicator_type,
+color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type));
 ```
 
 # Envelliment i Atenció a la Gent Gran a Catalunya (2024)
@@ -274,10 +296,16 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
 
 <div class="story-section">
   <h2>Indicators by district</h2>
-  ${comarca_name_for_distrit_input}
+  ${comarca_name_for_distrit_input} 
+  ${municipal_indicator_type_input}
   <div class="grid grid-cols-3">
     <div class="grid-colspan-2">
         <fig>${municipal_plot}</fig>
+<div class="note">
+    <bold>${all_title_map_by_indicator.get(municipal_indicator_type)}</bold>: ${all_sub_title_map_by_indicator.get(municipal_indicator_type)}
+<br/>
+    Grey areas indicate no data available.
+</div>
     </div>
   </div>
 </div>

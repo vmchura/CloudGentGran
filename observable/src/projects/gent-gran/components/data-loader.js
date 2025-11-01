@@ -8,6 +8,7 @@ export async function loadData(social_services_zip_data) {
   const municipal = aq.fromJSON(await social_services_zip_data.file("municipal.json").json());
   const service_type = aq.fromJSON(await social_services_zip_data.file("service_type.json").json());
   const service_qualification = aq.fromJSON(await social_services_zip_data.file("service_qualification.json").json());
+  const population = aq.fromJSON(await social_services_zip_data.file("population.json").json());
 
   return {
     comarca_population,
@@ -16,6 +17,7 @@ export async function loadData(social_services_zip_data) {
     comarca_coverage,
     municipal,
     service_type,
-    service_qualification
+    service_qualification,
+    population
   };
 }
