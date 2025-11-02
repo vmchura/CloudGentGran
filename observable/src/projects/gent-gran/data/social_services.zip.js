@@ -197,9 +197,12 @@ await conn.run(`CREATE TABLE municipal_coverage as
         USING (municipal_id, year)
       ),
         with_coverage as (
-        select municipal_id, year, total_capacit*100.0 / population_ge65 as coverage_ratio from complete_data
+        select municipal_id, year, total_capacit, population_ge65, total_capacit*100.0 / population_ge65 as coverage_ratio from complete_data
         )
-      select municipal_id, CAST(year as INT) as year, ROUND(coverage_ratio, 2) as coverage_ratio from with_coverage order by municipal_id, year;`);
+      select municipal_id, CAST(year as INT) as year,
+          CAST(total_capacit as INT) as total_capacit,
+          CAST(population_ge65 as INT) as population_ge65,
+          ROUND(coverage_ratio, 2) as coverage_ratio from with_coverage order by municipal_id, year;`);
 
 console.error(`Processing: comarca_population`);
 await conn.run(`CREATE TABLE comarca_population as
@@ -291,9 +294,12 @@ await conn.run(`CREATE TABLE comarca_coverage as
             USING (comarca_id, year)
           ),
             with_coverage as (
-            select comarca_id, year, total_capacit*100.0 / population_ge65 as coverage_ratio, total_capacit, population_ge65 from complete_data
+            select comarca_id, year, total_capacit, population_ge65, total_capacit*100.0 / population_ge65 as coverage_ratio, total_capacit, population_ge65 from complete_data
             )
-          select comarca_id, CAST(year as INT) as year, ROUND(coverage_ratio, 2) as coverage_ratio from with_coverage order by comarca_id, year;`);
+          select comarca_id, CAST(year as INT) as year,
+          CAST(total_capacit as INT) as total_capacit,
+          CAST(population_ge65 as INT) as population_ge65,
+          ROUND(coverage_ratio, 2) as coverage_ratio from with_coverage order by comarca_id, year;`);
 
 
 const zip = new JSZip();
