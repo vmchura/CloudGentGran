@@ -180,7 +180,7 @@ const single_comarca_map = {
 };
 ```
 ```js
-const municipal_plot = plot_catalunya_map_coverage_municipal(500, single_comarca_map,
+const municipal_plot = plot_catalunya_map_coverage_municipal(500, locale_value, single_comarca_map,
 ratio_attention_municipal_latest_year, municipal_latest_population, municipal_indicator_type,
 color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
 municipal_name_label);
@@ -207,7 +207,7 @@ municipal_name_label);
 <div class="grid grid-cols-3">
     <div class="grid-colspan-2">
         <figure class="grafic" style="max-width: none;">
-            ${resize((width) => plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation, 
+            ${resize((width) => plot_catalunya_map_aged_65(width, locale_value, comarques_boundaries, catalunya_indicator_or_variation, 
               comarques_latest_population, comarques_reference_population, 
               color_catalunya_map, title_map_by_indicator,
               comarca_name_label, census_latest_year, reference_year))}
@@ -224,7 +224,7 @@ municipal_name_label);
                 <span class="big">${Number(gent_gran_population_latest_year).toLocaleString('ca-ES')}</span>
             </div>  
             <div class="card">
-                <h4>${t(locale_value, "POPULATION_PERCENTAGE")}</h4>
+                <h4>${t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")}</h4>
                 <span class="big">${Number(latest_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
             </div>
             <div class="card">
@@ -246,7 +246,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
   <div class="grid grid-cols-3">
     <div class="grid-colspan-2">
         <figure class="grafic" style="max-width: none;">
-            ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, 
+            ${resize((width) => plot_catalunya_map_coverage(width, locale_value, comarques_boundaries, 
               ratio_attention_latest_year, t(locale_value, "RESIDENCE_COVERAGE_PERCENTAGE"),
               comarca_name_label))}
         </figure>
@@ -348,7 +348,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
             <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.population_ge65).toLocaleString('ca-ES')}</span>
         </div>  
         <div class="card">
-            <h4>${t(locale_value, "POPULATION_PERCENTAGE")}</h4>
+            <h4>${t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")}</h4>
             <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.elderly_indicator).toLocaleString('ca-ES')}%</span>
         </div>
         <div class="card">

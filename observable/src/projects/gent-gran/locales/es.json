@@ -7,7 +7,6 @@
   "POPULATION_65_PLUS_PERCENTAGE": "Porcentaje de la población de 65 años y más",
   "PERCENTAGE_VARIATION_YEARS": "Variación porcentual entre los años {referenceYear} y {latestYear}",
   "POPULATION_65_PLUS": "Población de 65 años y más",
-  "POPULATION_PERCENTAGE": "Porcentaje de la población",
   "VARIATION_RESPECT_TO": "Variación respecto a {year}",
   "RESIDENTIAL_PLACES_SUFFICIENCY": "Suficiencia de plazas residenciales para la población mayor",
   "RESIDENTIAL_PLACES_DESC": "Con el objetivo de evaluar la adecuación de la oferta de plazas residenciales para personas mayores en Cataluña, se analiza la ratio de cobertura de camas o plazas destinadas a la población de 65 años y más.",
@@ -45,5 +44,6 @@
   "COVERAGE_RATE_DESC": "La tasa de cobertura se obtiene a partir del cociente entre el total de población de 65 años y más y el total de oferta de plazas. Se expresa en tanto por ciento.",
   "PLACES_DEFICIT_SURPLUS": "{deficitSurplus} de plazas (cobertura 4,11%)",
   "LANGUAGE_LABEL": "Idioma",
-  "CATALONIA": "Cataluña"
+  "CATALONIA": "Cataluña",
+  "POPULATION": "Población"
 }

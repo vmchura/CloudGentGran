@@ -1,11 +1,12 @@
 import * as Plot from "@observablehq/plot";
+import {t} from "./i18n.js";
 
 export function set(input, value) {
   input.value = value;
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-export function plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation,
+export function plot_catalunya_map_aged_65(width, locale_value, comarques_boundaries, catalunya_indicator_or_variation,
   comarques_latest_population, comarques_reference_population,
   color_catalunya_map, plot_title,
   comarca_name_label, current_year, reference_year) {
@@ -23,10 +24,10 @@ export function plot_catalunya_map_aged_65(width, comarques_boundaries, cataluny
         fill: (d) => catalunya_indicator_or_variation == "POPULATION_INDICATOR" ? comarques_latest_population[d.properties.comarca_id]?.elderly_indicator :
           (comarques_latest_population[d.properties.comarca_id]?.elderly_indicator - comarques_reference_population[d.properties.comarca_id]?.elderly_indicator),
         title: d => `${comarca_name_label[d.properties.comarca_id]}
-Population: ${comarques_latest_population[d.properties.comarca_id]?.population}
-Population +65 years old: ${comarques_latest_population[d.properties.comarca_id]?.population_ge65}
-Elderly ratio: ${comarques_latest_population[d.properties.comarca_id]?.elderly_indicator}
-Variation (reference ${reference_year}): ${Math.round(comarques_latest_population[d.properties.comarca_id]?.elderly_indicator - comarques_reference_population[d.properties.comarca_id]?.elderly_indicator)}%`,
+${t(locale_value, "POPULATION")}: ${comarques_latest_population[d.properties.comarca_id]?.population}
+${t(locale_value, "POPULATION_65_PLUS")}: ${comarques_latest_population[d.properties.comarca_id]?.population_ge65}
+${t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")}: ${comarques_latest_population[d.properties.comarca_id]?.elderly_indicator}
+${t(locale_value, "VARIATION_RESPECT_TO", {year: reference_year})}: ${Math.round(comarques_latest_population[d.properties.comarca_id]?.elderly_indicator - comarques_reference_population[d.properties.comarca_id]?.elderly_indicator)}%`,
         strokeOpacity: 1.0,
         strokeWidth: 1,
         stroke: "black",
@@ -36,7 +37,7 @@ Variation (reference ${reference_year}): ${Math.round(comarques_latest_populatio
   });
 }
 
-export function plot_catalunya_map_coverage(width, comarques_boundaries,
+export function plot_catalunya_map_coverage(width, locale_value, comarques_boundaries,
   ratio_attention_latest_year, plot_title,
   comarca_name_label) {
 
@@ -52,9 +53,9 @@ export function plot_catalunya_map_coverage(width, comarques_boundaries,
       Plot.geo(comarques_boundaries, {
         fill: (d) => ratio_attention_latest_year[d.properties.comarca_id]?.coverage_ratio,
         title: d => `${comarca_name_label[d.properties.comarca_id]}
-Population +65 years old: ${ratio_attention_latest_year[d.properties.comarca_id]?.population_ge65}
-Residential capacity: ${ratio_attention_latest_year[d.properties.comarca_id]?.total_capacit}
-Coverage ratio: ${ratio_attention_latest_year[d.properties.comarca_id]?.coverage_ratio}`,
+${t(locale_value, "POPULATION_65_PLUS")}: ${ratio_attention_latest_year[d.properties.comarca_id]?.population_ge65}
+${t(locale_value, "RESIDENCE_PLACES_ELDERLY")}: ${ratio_attention_latest_year[d.properties.comarca_id]?.total_capacit}
+${t(locale_value, "COVERAGE_RATE")}: ${ratio_attention_latest_year[d.properties.comarca_id]?.coverage_ratio}`,
         strokeOpacity: 1.0,
         strokeWidth: 1,
         stroke: "black",
@@ -63,7 +64,7 @@ Coverage ratio: ${ratio_attention_latest_year[d.properties.comarca_id]?.coverage
     ]
   });
 }
-export function plot_catalunya_map_coverage_municipal(width, single_comarque_boundaries,
+export function plot_catalunya_map_coverage_municipal(width, locale_value, single_comarque_boundaries,
   ratio_attention_latest_year, municipal_latest_population, catalunya_indicator_type,
   color_catalunya_map, plot_title,
   municipal_name_label) {
@@ -80,11 +81,11 @@ export function plot_catalunya_map_coverage_municipal(width, single_comarque_bou
       Plot.geo(single_comarque_boundaries, {
         fill: (d) => catalunya_indicator_type == "POPULATION_INDICATOR" ? municipal_latest_population[d.properties.municipal_id]?.elderly_indicator : ratio_attention_latest_year[d.properties.municipal_id]?.coverage_ratio,
         title: d => `${municipal_name_label[d.properties.municipal_id]}
-Population: ${municipal_latest_population[d.properties.municipal_id]?.population}
-Population +65 years old: ${municipal_latest_population[d.properties.municipal_id]?.population_ge65}
-Elderly ratio: ${municipal_latest_population[d.properties.municipal_id]?.elderly_indicator}
-Residential capacity: ${ratio_attention_latest_year[d.properties.municipal_id]?.total_capacit}
-Coverage ratio: ${ratio_attention_latest_year[d.properties.municipal_id]?.coverage_ratio}`,
+${t(locale_value, "POPULATION")}: ${municipal_latest_population[d.properties.municipal_id]?.population}
+${t(locale_value, "POPULATION_65_PLUS")}: ${municipal_latest_population[d.properties.municipal_id]?.population_ge65}
+${t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")}: ${municipal_latest_population[d.properties.municipal_id]?.elderly_indicator}
+${t(locale_value, "RESIDENCE_PLACES_ELDERLY")}: ${ratio_attention_latest_year[d.properties.municipal_id]?.total_capacit}
+${t(locale_value, "COVERAGE_RATE")}: ${ratio_attention_latest_year[d.properties.municipal_id]?.coverage_ratio}`,
         strokeOpacity: 1.0,
         strokeWidth: 1,
         stroke: "black",

@@ -7,7 +7,6 @@
   "POPULATION_65_PLUS_PERCENTAGE": "Percentage of population aged 65 and over",
   "PERCENTAGE_VARIATION_YEARS": "Percentage variation between years {referenceYear} and {latestYear}",
   "POPULATION_65_PLUS": "Population aged 65 and over",
-  "POPULATION_PERCENTAGE": "Percentage of population",
   "VARIATION_RESPECT_TO": "Variation compared to {year}",
   "RESIDENTIAL_PLACES_SUFFICIENCY": "Sufficiency of residential places for the elderly population",
   "RESIDENTIAL_PLACES_DESC": "To evaluate the adequacy of residential places for elderly people in Catalonia, the coverage ratio of beds or places for the population aged 65 and over is analyzed.",
@@ -45,5 +44,6 @@
   "COVERAGE_RATE_DESC": "The coverage rate is obtained from the quotient between the total population aged 65 and over and the total supply of places. It is expressed as a percentage.",
   "PLACES_DEFICIT_SURPLUS": "Places {deficitSurplus} (4.11% coverage)",
   "LANGUAGE_LABEL": "Language",
-  "CATALONIA": "Catalonia"
+  "CATALONIA": "Catalonia",
+  "POPULATION": "Population"
 }
