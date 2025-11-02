@@ -11,7 +11,7 @@ const locale_input = Inputs.select(new Map([['Català', ca_translations],
 ['Español', es_translations],
 ['English', en_translations]]), {
   value: ca_translations,
-  label: "Language"
+  label: t(ca_translations, "LANGUAGE_LABEL")
 });
 ```
 ```js
@@ -92,16 +92,16 @@ const nom_comarques = municipal.select('nom_comarca').dedupe('nom_comarca').arra
 ```
 ```js
 const catalunya_indicator_or_variation_input = Inputs.radio(new Map([
-    ["Percentatge de la població de 65 anys i més", "POPULATION_INDICATOR"],
-    [`Variació percentual entre els anys ${reference_year} i ${census_latest_year}`, "POPULATION_INDICATOR_VARIATION"]]),
+    [t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"), "POPULATION_INDICATOR"],
+    [t(locale_value, "PERCENTAGE_VARIATION_YEARS", {referenceYear: reference_year, latestYear: census_latest_year}), "POPULATION_INDICATOR_VARIATION"]]),
     {value: "POPULATION_INDICATOR"});
 const catalunya_indicator_or_variation = Generators.input(catalunya_indicator_or_variation_input);
 ```
 
 ```js
 const municipal_indicator_type_input = Inputs.radio(new Map([
-    [`Taxa de cobertura de residència per a gent gran`, "RESIDENCE_COVERAGE"],
-    ["Percentatge de la població de 65 anys i més", "POPULATION_INDICATOR"]]),
+    [t(locale_value, "RESIDENCE_COVERAGE_RATE"), "RESIDENCE_COVERAGE"],
+    [t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"), "POPULATION_INDICATOR"]]),
     {value: "RESIDENCE_COVERAGE"});
 const municipal_indicator_type = Generators.input(municipal_indicator_type_input);
 ```
@@ -127,7 +127,7 @@ const color_catalunya_map = getColorCatalunyaMap(catalunya_indicator_or_variatio
 const color_municipal_map = getColorCatalunyaMap(municipal_indicator_type, latest_indicator_average_catalunya_integer, range_colours_indicator);
 ```
 ```js
-const nom_comarca_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Comarca: ", format: x => x.nom_comarca, unique: true})
+const nom_comarca_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.nom_comarca, unique: true})
 const nom_comarca = Generators.input(nom_comarca_input);
 ```
 ```js
@@ -136,13 +136,13 @@ const max_year_serveis = Math.max(...all_year_serveis_selected);
 const min_year_serveis = Math.min(...all_year_serveis_selected);
 ```
 ```js
-const single_comarca_population_input = Inputs.radio(new Map([["Tendència de la població de 65 anys i més", true],
-        ["Tendència de l'indicador de població de 65 anys i més", false]]),
+const single_comarca_population_input = Inputs.radio(new Map([[t(locale_value, "TREND_POPULATION_65_PLUS"), true],
+        [t(locale_value, "TREND_INDICATOR_POPULATION_65_PLUS"), false]]),
     {value: true, label: null});
 const single_comarca_population = Generators.input(single_comarca_population_input);
 ```
 ```js
-const serveis_residence_ratio_input = Inputs.radio(new Map([["Tots els  serveis", true], ["Taxa de cobertura de residència per a gent gran", false]]),
+const serveis_residence_ratio_input = Inputs.radio(new Map([[t(locale_value, "ALL_SERVICES"), true], [t(locale_value, "RESIDENCE_COVERAGE_RATE"), false]]),
     {value: true, label: null});
 const serveis_residence_ratio = Generators.input(serveis_residence_ratio_input)
 ```
@@ -156,7 +156,7 @@ const all_services = Array.from(service_tag_to_complete.entries()).map(k => k[1]
 ```js
 const serveis_input = Inputs.select(new Map(all_available_services.map(s => [service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(s)], s])), {
     value: [all_available_services[0]],
-    label: "Servei"
+    label: t(locale_value, "SERVICE_LABEL")
 })
 const serveis_selected = Generators.input(serveis_input)
 ```
@@ -167,7 +167,7 @@ const serveis_by_iniciative = social_services_comarca.params({service_type_id: s
 const domain_iniciatives = serveis_by_iniciative.select('service_qualification_id').dedupe('service_qualification_id').array('service_qualification_id');
 ```
 ```js
-const comarca_name_for_distrit_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: "Comarca: ", format: x => x.nom_comarca, unique: true, value: "01"})
+const comarca_name_for_distrit_input = Inputs.select(municipal.select('nom_comarca', 'codi_comarca').dedupe('nom_comarca', 'codi_comarca').orderby('nom_comarca'), {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.nom_comarca, unique: true, value: "01"})
 const comarca_code_for_distrit_value = Generators.input(comarca_name_for_distrit_input);
 ```
 ```js
@@ -185,21 +185,22 @@ ratio_attention_municipal_latest_year, municipal_latest_population, municipal_in
 color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
 municipal_name_label);
 ```
+# ${t(locale_value, "TITLE")} (${coverage_latest_year})
+
 <div>${locale_input}</div>
 
-# ${t(locale_value, "title")} (${coverage_latest_year})
 <div class="story-section">
   <p class="intro">
-    La percepció que a Catalunya hi ha moltes persones grans em va despertar la curiositat de comprovar-ho amb dades. Volia saber si aquesta impressió responia a una coincidència o a una realitat demogràfica. A més, en parlar amb professionals de residències, sovint comenten que hi ha llista d’espera per accedir-hi. Aquestes observacions van motivar l’anàlisi per entendre millor la distribució de la població gran i la disponibilitat de places residencials al territori.
+    ${t(locale_value, "INTRO_TEXT")}
   </p>
 </div>
 
 <hr/>
 
 <div class="story-section">
-    <h2>On viuen les persones grans a Catalunya?</h2>
+    <h2>${t(locale_value, "WHERE_ELDERLY_LIVE")}</h2>
     <p>
-    Per comprendre la distribució territorial de les persones grans a Catalunya, s’utilitzen dos indicadors que permeten identificar on es concentra la població de 65 anys i més i com ha evolucionat al llarg del temps:
+    ${t(locale_value, "WHERE_ELDERLY_LIVE_DESC")}
     </p>
     ${catalunya_indicator_or_variation_input}
 
@@ -219,15 +220,15 @@ municipal_name_label);
         <h2>Catalunya ${census_latest_year}</h2>
         <div class="grid-colspan-1">
             <div class="card">
-                <h4>Població de 65 anys i més</h4>
+                <h4>${t(locale_value, "POPULATION_65_PLUS")}</h4>
                 <span class="big">${Number(gent_gran_population_latest_year).toLocaleString('ca-ES')}</span>
             </div>  
             <div class="card">
-                <h4>Percentatge de la població</h4>
+                <h4>${t(locale_value, "POPULATION_PERCENTAGE")}</h4>
                 <span class="big">${Number(latest_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
             </div>
             <div class="card">
-                <h4>Variació respecte a ${reference_year}</h4>
+                <h4>${t(locale_value, "VARIATION_RESPECT_TO", {year: reference_year})}</h4>
                 <span class="big">${sign_difference_reference}${Number(latest_indicator_average_catalunya - reference_year_indicator_average_catalunya).toLocaleString('ca-ES')}%</span>
             </div>
         </div>
@@ -236,36 +237,35 @@ municipal_name_label);
 </div>
 
 <div class="story-section">
-  <h2>Suficiència de places residencials per a la població gran</h2>
+  <h2>${t(locale_value, "RESIDENTIAL_PLACES_SUFFICIENCY")}</h2>
   <p>
-    Amb l’objectiu d’avaluar l’adequació de l’oferta de places residencials per a persones grans a Catalunya, s’analitza la ràtio de cobertura de llits o places destinades a la població de 65 anys i més.
-Segons l’<a href="https://www.acra.cat/estudio-socioecon%C3%B3mico-de-la-atenci%C3%B3n-para-personas-en-situaci%C3%B3n-de-dependencia-en-espa%C3%B1a-informe-final_1123083.pdf">Estudio socioeconómico de la atención para personas en situación de dependencia en España</a>, la ràtio de referència és de 4,11 i 5 places per cada 100 persones majors de 65 anys, valor que orienta la planificació futura dels serveis d’atenció residencial.
-Aquesta anàlisi permet identificar els territoris amb una cobertura insuficient i aquells que presenten una oferta més equilibrada respecte a la seva població gran.
+    ${t(locale_value, "ACCORDING_TO")}<a href="https://www.acra.cat/estudio-socioecon%C3%B3mico-de-la-atenci%C3%B3n-para-personas-en-situaci%C3%B3n-de-dependencia-en-espa%C3%B1a-informe-final_1123083.pdf">Estudio socioeconómico de la atención para personas en situación de dependencia en España</a>, ${t(locale_value, "REFERENCE_RATIO_DESC")} 
+${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
   </p>
 
   <div class="grid grid-cols-3">
     <div class="grid-colspan-2">
         <figure class="grafic" style="max-width: none;">
             ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, 
-              ratio_attention_latest_year, "Porcentatge taxa de cobertura de residència per a gent gran",
+              ratio_attention_latest_year, t(locale_value, "RESIDENCE_COVERAGE_PERCENTAGE"),
               comarca_name_label))}
         </figure>
         <div class="note">
-        La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent
+        ${t(locale_value, "COVERAGE_RATE_DESC")}
         </div>
     </div>
     <div class="grid-colspan-1">
       <h2>Catalunya ${coverage_latest_year}</h2>
       <div class="card">
-          <h4>Places de residència per a gent gran</h4>
+          <h4>${t(locale_value, "RESIDENCE_PLACES_ELDERLY")}</h4>
           <span class="big">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
       </div>
       <div class="card">
-          <h4>Taxa de cobertura</h4>
+          <h4>${t(locale_value, "COVERAGE_RATE")}</h4>
           <span class="big">${Number(catalunya_ratio_cobertura).toLocaleString('ca-ES')}%</span>
       </div>
       <div class="card">
-          <h4>${deficit_superavit} de places (cobertura 4,11%)</h4>
+          <h4>${deficit_camas_residencia > 0? t(locale_value, "SURPLUS_PLACES") : t(locale_value, "DEFICIT_PLACES")}</h4>
           <span class="big">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
       </div>
     </div>
@@ -275,14 +275,14 @@ Aquesta anàlisi permet identificar els territoris amb una cobertura insuficient
 <hr/>
 
 <div class="story-section">
-  <h2>Evolució de la població gran i dels serveis d’atenció al llarg del temps</h2>
+  <h2>${t(locale_value, "EVOLUTION_POPULATION_SERVICES")}</h2>
   <p>
-    Els indicadors permeten observar com han variat la disponibilitat de places residencials, la distribució dels diferents tipus de serveis i la seva titularitat (pública, privada o social).
-Aquesta anàlisi temporal facilita la identificació de tendències i desequilibris territorials en la provisió de serveis destinats a la població gran.
+    ${t(locale_value, "EVOLUTION_DESC")}
+    ${t(locale_value, "TEMPORAL_ANALYSIS_DESC")}
   </p>
 
   <div class="grid grid-cols-3">
-      <h3 class="grid-colspan-2">Tendència de la població i serveis per comarca</h3>
+      <h3 class="grid-colspan-2">${t(locale_value, "TREND_POPULATION_SERVICES_COMARCA")}</h3>
       <div class="grid-colspan-1" style="align-self: center;">
           ${nom_comarca_input}
       </div>
@@ -290,17 +290,17 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
 
   <div class="grid grid-cols-3">
       <div class="grid-colspan-1">
-          <h4>Evolució de la població de 65+</h4>
+          <h4>${t(locale_value, "EVOLUTION_POPULATION_65_PLUS")}</h4>
           ${single_comarca_population_input}
           ${resize((width) => plot_legend_trend_population(width, single_comarca_population))}
       </div>
       <div class="grid-colspan-1">
-          <h4>Serveis d'assistència</h4>
+          <h4>${t(locale_value, "ASSISTANCE_SERVICES")}</h4>
           ${serveis_residence_ratio_input}
           ${resize((width) => plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, service_type))}
       </div>
       <div class="grid-colspan-1">
-          <h4>Qualificació dels serveis</h4>
+          <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
           ${serveis_input}
           ${resize((width) => plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color, service_qualification))} 
       </div>
@@ -325,10 +325,10 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
 <div class="story-section">
   <h2>Detall territorial per comarca</h2>
   <p>
-    Aquesta secció permet explorar cada comarca i analitzar, a escala municipal, la ràtio de població gran i la cobertura de places residencials.
+    ${t(locale_value, "TERRITORIAL_DETAIL_DESC")}
   </p>
   <p>
-  En alguns municipis no es disposa de dades sobre places residencials per a persones grans, fet que pot indicar una manca d’oferta o l’absència de registre en les fonts disponibles.
+  ${t(locale_value, "NO_DATA_MUNICIPALITIES")}
 </p>
   ${comarca_name_for_distrit_input} 
   ${municipal_indicator_type_input}
@@ -338,29 +338,29 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
         <div class="note">
             <bold>${all_title_map_by_indicator.get(municipal_indicator_type)}</bold>: ${all_sub_title_map_by_indicator.get(municipal_indicator_type)}
         <br/>
-            Grey areas indicate no data available.
+            ${t(locale_value, "GREY_AREAS_NOTE")}
         </div>
     </div>
     <div class="grid-colspan-1">
         <h2>${comarca_code_for_distrit_value.nom_comarca} ${coverage_latest_year}</h2>
         <div class="card">
-            <h4>Població de 65 anys i més</h4>
+            <h4>${t(locale_value, "POPULATION_65_PLUS")}</h4>
             <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.population_ge65).toLocaleString('ca-ES')}</span>
         </div>  
         <div class="card">
-            <h4>Percentatge de la població</h4>
+            <h4>${t(locale_value, "POPULATION_PERCENTAGE")}</h4>
             <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.elderly_indicator).toLocaleString('ca-ES')}%</span>
         </div>
         <div class="card">
-          <h4>Places de residència per a gent gran</h4>
+          <h4>${t(locale_value, "RESIDENCE_PLACES_ELDERLY")}</h4>
           <span class="big">${Number(ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.total_capacit).toLocaleString('ca-ES')}</span>
         </div>
         <div class="card">
-            <h4>Taxa de cobertura</h4>
+            <h4>${t(locale_value, "COVERAGE_RATE")}</h4>
             <span class="big">${Number(ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.coverage_ratio).toLocaleString('ca-ES')}%</span>
         </div>
         <div class="card">
-            <h4>${ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.deficit_411 > 0 ? "Dèficit" : "Superàvit"} de places (cobertura 4,11%)</h4>
+            <h4>${ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.deficit_411 < 0 ? t(locale_value, "SURPLUS_PLACES") : t(locale_value, "DEFICIT_PLACES")}</h4>
             <span class="big">${Number(Math.abs(ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.deficit_411)).toLocaleString('ca-ES')}</span>
         </div>
     </div>
