@@ -304,7 +304,13 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
 <hr/>
 
 <div class="story-section">
-  <h2>Indicators by district</h2>
+  <h2>Detall territorial per comarca</h2>
+  <p>
+    Aquesta secció permet explorar cada comarca i analitzar, a escala municipal, la ràtio de població gran i la cobertura de places residencials.
+  </p>
+  <p>
+  En alguns municipis no es disposa de dades sobre places residencials per a persones grans, fet que pot indicar una manca d’oferta o l’absència de registre en les fonts disponibles.
+</p>
   ${comarca_name_for_distrit_input} 
   ${municipal_indicator_type_input}
   <div class="grid grid-cols-3">
