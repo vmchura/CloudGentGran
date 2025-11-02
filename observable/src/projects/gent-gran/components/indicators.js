@@ -52,13 +52,14 @@ export function calculateIndicators(population, comarca_population, social_servi
     comarca_coverage.params({ latest_year: latest_year })
       .filter(d => d.year === latest_year)
       .objects()
-      .map(d => [d.comarca_id, {...d, coverage_ratio:d.coverage_ratio}])
+      .map(d => [d.comarca_id, { ...d, coverage_ratio: d.coverage_ratio,
+        deficit_411: Math.round(0.0411*d.population_ge65 - d.total_capacit) }])
   );
   const ratio_attention_municipal_latest_year = Object.fromEntries(
     municipal_coverage.params({ latest_year: latest_year })
       .filter(d => d.year === latest_year)
       .objects()
-      .map(d => [d.municipal_id, {...d, coverage_ratio: d.coverage_ratio}])
+      .map(d => [d.municipal_id, { ...d, coverage_ratio: d.coverage_ratio }])
   );
 
   const comarques_latest_population = Object.fromEntries(
@@ -68,8 +69,9 @@ export function calculateIndicators(population, comarca_population, social_servi
       .objects()
       .map(d => [
         d.comarca_id,
-        {...d,
-           elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
+        {
+          ...d,
+          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
         }
       ])
   );
@@ -81,8 +83,9 @@ export function calculateIndicators(population, comarca_population, social_servi
       .objects()
       .map(d => [
         d.municipal_code,
-        {...d,
-        elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0,
+        {
+          ...d,
+          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0,
         }
       ])
   );
@@ -94,8 +97,9 @@ export function calculateIndicators(population, comarca_population, social_servi
       .objects()
       .map(d => [
         d.comarca_id,
-        {...d,
-           elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
+        {
+          ...d,
+          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
         }
       ])
   );

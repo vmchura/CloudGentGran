@@ -308,11 +308,34 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
   <div class="grid grid-cols-3">
     <div class="grid-colspan-2">
         <fig>${municipal_plot}</fig>
-<div class="note">
-    <bold>${all_title_map_by_indicator.get(municipal_indicator_type)}</bold>: ${all_sub_title_map_by_indicator.get(municipal_indicator_type)}
-<br/>
-    Grey areas indicate no data available.
-</div>
+        <div class="note">
+            <bold>${all_title_map_by_indicator.get(municipal_indicator_type)}</bold>: ${all_sub_title_map_by_indicator.get(municipal_indicator_type)}
+        <br/>
+            Grey areas indicate no data available.
+        </div>
+    </div>
+    <div class="grid-colspan-1">
+        <h2>${comarca_code_for_distrit_value.nom_comarca} ${latest_year}</h2>
+        <div class="card">
+            <h4>Població de 65 anys i més</h4>
+            <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.population_ge65).toLocaleString('ca-ES')}</span>
+        </div>  
+        <div class="card">
+            <h4>Percentatge de la població</h4>
+            <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.elderly_indicator).toLocaleString('ca-ES')}%</span>
+        </div>
+        <div class="card">
+          <h4>Places de residència per a gent gran</h4>
+          <span class="big">${Number(ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.total_capacit).toLocaleString('ca-ES')}</span>
+        </div>
+        <div class="card">
+            <h4>Taxa de cobertura</h4>
+            <span class="big">${Number(ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.coverage_ratio).toLocaleString('ca-ES')}%</span>
+        </div>
+        <div class="card">
+            <h4>${ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.deficit_411 > 0 ? "Dèficit" : "Superàvit"} de places (cobertura 4,11%)</h4>
+            <span class="big">${Number(Math.abs(ratio_attention_latest_year[comarca_code_for_distrit_value.codi_comarca]?.deficit_411)).toLocaleString('ca-ES')}</span>
+        </div>
     </div>
   </div>
 </div>
