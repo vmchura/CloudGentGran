@@ -2,10 +2,12 @@ import * as aq from "npm:arquero";
 
 export function calculateIndicators(population, comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage) {
   const all_years = comarca_population.dedupe('year').array('year');
-  const latest_year = Math.max(...all_years);
+  const census_latest_year = Math.max(...all_years);
+  const all_coverage_years = comarca_coverage.dedupe('year').array('year');
+  const coverage_latest_year = Math.max(...all_coverage_years);
 
   const population_latest_year = comarca_population
-    .params({ latest_year })
+    .params({ latest_year: census_latest_year })
     .filter((d, $) => d.year == $.latest_year);
 
   const total_population_latest_year = population_latest_year
@@ -49,21 +51,21 @@ export function calculateIndicators(population, comarca_population, social_servi
   const deficit_superavit = deficit_camas_residencia > 0 ? "Dèficit" : "Superàvit";
 
   const ratio_attention_latest_year = Object.fromEntries(
-    comarca_coverage.params({ latest_year: latest_year })
-      .filter(d => d.year === latest_year)
+    comarca_coverage.params({ latest_year: census_latest_year })
+      .filter((d, $) => d.year === $.latest_year)
       .objects()
       .map(d => [d.comarca_id, { ...d, coverage_ratio: d.coverage_ratio,
         deficit_411: Math.round(0.0411*d.population_ge65 - d.total_capacit) }])
   );
   const ratio_attention_municipal_latest_year = Object.fromEntries(
-    municipal_coverage.params({ latest_year: latest_year })
-      .filter(d => d.year === latest_year)
+    municipal_coverage.params({ latest_year: census_latest_year })
+      .filter((d, $) => d.year === $.latest_year)
       .objects()
       .map(d => [d.municipal_id, { ...d, coverage_ratio: d.coverage_ratio }])
   );
 
   const comarques_latest_population = Object.fromEntries(
-    comarca_population.params({ latest_year: latest_year })
+    comarca_population.params({ latest_year: census_latest_year })
       .filter((d, $) => d.year === $.latest_year)
       .select("comarca_id", "population_ge65", "population")
       .objects()
@@ -77,7 +79,7 @@ export function calculateIndicators(population, comarca_population, social_servi
   );
 
   const municipal_latest_population = Object.fromEntries(
-    population.params({ latest_year: latest_year })
+    population.params({ latest_year: census_latest_year })
       .filter((d, $) => d.year === $.latest_year)
       .select("municipal_code", "population_ge65", "population")
       .objects()
@@ -106,7 +108,7 @@ export function calculateIndicators(population, comarca_population, social_servi
 
   return {
     all_years,
-    latest_year,
+    census_latest_year,
     reference_year,
     latest_indicator_average_catalunya,
     latest_indicator_average_catalunya_integer,
@@ -125,6 +127,7 @@ export function calculateIndicators(population, comarca_population, social_servi
     comarques_latest_population,
     comarques_reference_population,
     ratio_attention_municipal_latest_year,
-    municipal_latest_population
+    municipal_latest_population,
+    coverage_latest_year
   };
 }

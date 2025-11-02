@@ -45,7 +45,7 @@ const {municipal_name_label, comarca_name_label} = build_labels(municipal);
 const indicators = calculateIndicators(population, comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage);
 const {
   all_years,
-  latest_year,
+  census_latest_year,
   reference_year,
   latest_indicator_average_catalunya,
   latest_indicator_average_catalunya_integer,
@@ -64,7 +64,8 @@ const {
   comarques_latest_population,
   comarques_reference_population,
   ratio_attention_municipal_latest_year,
-  municipal_latest_population
+  municipal_latest_population,
+  coverage_latest_year
 } = indicators;
 ```
 ```js
@@ -73,7 +74,7 @@ const nom_comarques = municipal.select('nom_comarca').dedupe('nom_comarca').arra
 ```js
 const catalunya_indicator_or_variation_input = Inputs.radio(new Map([
     ["Percentatge de la població de 65 anys i més", "POPULATION_INDICATOR"],
-    [`Variació percentual entre els anys ${reference_year} i ${latest_year}`, "POPULATION_INDICATOR_VARIATION"]]),
+    [`Variació percentual entre els anys ${reference_year} i ${census_latest_year}`, "POPULATION_INDICATOR_VARIATION"]]),
     {value: "POPULATION_INDICATOR"});
 const catalunya_indicator_or_variation = Generators.input(catalunya_indicator_or_variation_input);
 ```
@@ -88,12 +89,12 @@ const municipal_indicator_type = Generators.input(municipal_indicator_type_input
 ```js
 const all_title_map_by_indicator = new Map([
 ["POPULATION_INDICATOR", "Percentatge de la població de 65 anys i més"],
-["POPULATION_INDICATOR_VARIATION", `Variació percentual de la població de 65 anys i més entre els anys ${reference_year} i ${latest_year}`],
+["POPULATION_INDICATOR_VARIATION", `Variació percentual de la població de 65 anys i més entre els anys ${reference_year} i ${census_latest_year}`],
 ["RESIDENCE_COVERAGE", "Porcentatge taxa de cobertura de residència per a gent gran"]]);
 
 const all_sub_title_map_by_indicator = new Map([
 ["POPULATION_INDICATOR", "Nombre de persones de 65 anys i més dividit pel total de la població."],
-["POPULATION_INDICATOR_VARIATION", `Diferència entre el percentatge de població de 65 anys i més l’any ${latest_year} i el corresponent a l’any ${reference_year}.`],
+["POPULATION_INDICATOR_VARIATION", `Diferència entre el percentatge de població de 65 anys i més l’any ${census_latest_year} i el corresponent a l’any ${reference_year}.`],
 ["RESIDENCE_COVERAGE", "La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent."]]);
 ```
 ```js
@@ -166,7 +167,7 @@ color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
 municipal_name_label);
 ```
 
-# Envelliment i Atenció a la Gent Gran a Catalunya (${latest_year})
+# Envelliment i Atenció a la Gent Gran a Catalunya (${coverage_latest_year})
 <div class="story-section">
   <p class="intro">
     [Introduce the story: Why is aging population important? Mention that we'll explore if 
@@ -189,14 +190,14 @@ municipal_name_label);
             ${resize((width) => plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation, 
               comarques_latest_population, comarques_reference_population, 
               color_catalunya_map, title_map_by_indicator,
-              comarca_name_label, latest_year, reference_year))}
+              comarca_name_label, census_latest_year, reference_year))}
         </figure>
 <div class="note">
     <bold>${title_map_by_indicator}</bold>: ${sub_title_map_by_indicator}
 </div>
     </div>
     <div class="grid-colspan-1">
-        <h2>Catalunya ${latest_year}</h2>
+        <h2>Catalunya ${census_latest_year}</h2>
         <div class="grid-colspan-1">
             <div class="card">
                 <h4>Població de 65 anys i més</h4>
@@ -235,6 +236,7 @@ Aquesta anàlisi permet identificar els territoris amb una cobertura insuficient
         </div>
     </div>
     <div class="grid-colspan-1">
+      <h2>Catalunya ${coverage_latest_year}</h2>
       <div class="card">
           <h4>Places de residència per a gent gran</h4>
           <span class="big">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
@@ -315,7 +317,7 @@ Aquesta anàlisi temporal facilita la identificació de tendències i desequilib
         </div>
     </div>
     <div class="grid-colspan-1">
-        <h2>${comarca_code_for_distrit_value.nom_comarca} ${latest_year}</h2>
+        <h2>${comarca_code_for_distrit_value.nom_comarca} ${coverage_latest_year}</h2>
         <div class="card">
             <h4>Població de 65 anys i més</h4>
             <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.codi_comarca]?.population_ge65).toLocaleString('ca-ES')}</span>
