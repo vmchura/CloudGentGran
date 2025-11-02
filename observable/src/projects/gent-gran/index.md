@@ -1,4 +1,23 @@
 ```js
+const ca_translations = FileAttachment("./locales/ca.json").json();
+const es_translations = FileAttachment("./locales/es.json").json();
+const en_translations = FileAttachment("./locales/en.json").json();
+```
+```js
+import {t} from "./components/i18n.js";
+```
+```js
+const locale_input = Inputs.select(new Map([['Català', ca_translations],
+['Español', es_translations],
+['English', en_translations]]), {
+  value: ca_translations,
+  label: "Language"
+});
+```
+```js
+const locale_value = Generators.input(locale_input);
+```
+```js
 const social_services_zip_data = FileAttachment("./data/social_services.zip").zip();
 const comarques_boundaries = FileAttachment("./data/comarques-1000000.json").json();
 const municipals_boundaries = FileAttachment("./data/municipis-1000000.json").json();
@@ -166,8 +185,9 @@ ratio_attention_municipal_latest_year, municipal_latest_population, municipal_in
 color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
 municipal_name_label);
 ```
+<div>${locale_input}</div>
 
-# Envelliment i Atenció a la Gent Gran a Catalunya (${coverage_latest_year})
+# ${t(locale_value, "title")} (${coverage_latest_year})
 <div class="story-section">
   <p class="intro">
     La percepció que a Catalunya hi ha moltes persones grans em va despertar la curiositat de comprovar-ho amb dades. Volia saber si aquesta impressió responia a una coincidència o a una realitat demogràfica. A més, en parlar amb professionals de residències, sovint comenten que hi ha llista d’espera per accedir-hi. Aquestes observacions van motivar l’anàlisi per entendre millor la distribució de la població gran i la disponibilitat de places residencials al territori.
