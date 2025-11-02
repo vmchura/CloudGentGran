@@ -170,8 +170,7 @@ municipal_name_label);
 # Envelliment i Atenció a la Gent Gran a Catalunya (${coverage_latest_year})
 <div class="story-section">
   <p class="intro">
-    [Introduce the story: Why is aging population important? Mention that we'll explore if 
-    the growth of the elderly population is being matched by enough care and residence coverage.]
+    La percepció que a Catalunya hi ha moltes persones grans em va despertar la curiositat de comprovar-ho amb dades. Volia saber si aquesta impressió responia a una coincidència o a una realitat demogràfica. A més, en parlar amb professionals de residències, sovint comenten que hi ha llista d’espera per accedir-hi. Aquestes observacions van motivar l’anàlisi per entendre millor la distribució de la població gran i la disponibilitat de places residencials al territori.
   </p>
 </div>
 
