@@ -1,3 +1,7 @@
+---
+title: Gent-gran
+---
+
 ```js
 const ca_translations = FileAttachment("./locales/ca.json").json();
 const es_translations = FileAttachment("./locales/es.json").json();
@@ -8,7 +12,7 @@ import {t} from "./components/i18n.js";
 ```
 ```js
 const locale_input = Inputs.select(new Map([['Català', ca_translations],
-['Español', es_translations],
+['Castellano', es_translations],
 ['English', en_translations]]), {
   value: ca_translations,
   label: t(ca_translations, "LANGUAGE_LABEL")
