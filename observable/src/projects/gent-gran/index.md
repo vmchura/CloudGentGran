@@ -5,6 +5,7 @@ const municipals_boundaries = FileAttachment("./data/municipis-1000000.json").js
   
 import {loadData} from "./components/data-loader.js";
 import {calculateIndicators} from "./components/indicators.js";
+import {build_labels} from "./components/municipal_comarca_labels.js";
 import {
     getColorCatalunyaMap,
     plot_catalunya_map_aged_65,
@@ -36,6 +37,9 @@ const {
   service_qualification,
   population
 } = data;
+```
+```js
+const {municipal_name_label, comarca_name_label} = build_labels(municipal);
 ```
 ```js
 const indicators = calculateIndicators(population, comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage);
@@ -158,10 +162,11 @@ const single_comarca_map = {
 ```js
 const municipal_plot = plot_catalunya_map_coverage_municipal(500, single_comarca_map,
 ratio_attention_municipal_latest_year, municipal_latest_population, municipal_indicator_type,
-color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type));
+color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
+municipal_name_label);
 ```
 
-# Envelliment i Atenció a la Gent Gran a Catalunya (2024)
+# Envelliment i Atenció a la Gent Gran a Catalunya (${latest_year})
 <div class="story-section">
   <p class="intro">
     [Introduce the story: Why is aging population important? Mention that we'll explore if 
@@ -183,7 +188,8 @@ color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type));
         <figure class="grafic" style="max-width: none;">
             ${resize((width) => plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation, 
               comarques_latest_population, comarques_reference_population, 
-              color_catalunya_map, title_map_by_indicator))}
+              color_catalunya_map, title_map_by_indicator,
+              comarca_name_label, latest_year, reference_year))}
         </figure>
 <div class="note">
     <bold>${title_map_by_indicator}</bold>: ${sub_title_map_by_indicator}
@@ -221,7 +227,8 @@ Aquesta anàlisi permet identificar els territoris amb una cobertura insuficient
     <div class="grid-colspan-2">
         <figure class="grafic" style="max-width: none;">
             ${resize((width) => plot_catalunya_map_coverage(width, comarques_boundaries, 
-              ratio_attention_latest_year, "Porcentatge taxa de cobertura de residència per a gent gran"))}
+              ratio_attention_latest_year, "Porcentatge taxa de cobertura de residència per a gent gran",
+              comarca_name_label))}
         </figure>
         <div class="note">
         La taxa de cobertura de s'obté a partir del quocient entre el total de població de 65 anys i més i el total oferta de places. S'expressa en tant per cent

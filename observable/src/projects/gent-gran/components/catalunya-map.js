@@ -7,7 +7,8 @@ export function set(input, value) {
 
 export function plot_catalunya_map_aged_65(width, comarques_boundaries, catalunya_indicator_or_variation,
   comarques_latest_population, comarques_reference_population,
-  color_catalunya_map, plot_title) {
+  color_catalunya_map, plot_title,
+  comarca_name_label, current_year, reference_year) {
 
   return Plot.plot({
     title: plot_title,
@@ -21,7 +22,15 @@ export function plot_catalunya_map_aged_65(width, comarques_boundaries, cataluny
       Plot.geo(comarques_boundaries, {
         fill: (d) => catalunya_indicator_or_variation == "POPULATION_INDICATOR" ? comarques_latest_population[d.properties.comarca_id] :
           (comarques_latest_population[d.properties.comarca_id] - comarques_reference_population[d.properties.comarca_id]),
-        title: d => d.properties.comarca_id,
+        title: d => `${comarca_name_label[d.properties.comarca_id]}
+${current_year}        
+Population: ${1}
+Population 65+: ${2}
+Indicator elderly population: ${comarques_latest_population[d.properties.comarca_id]}
+${reference_year}        
+Population: ${1}
+Population 65+: ${2}
+Indicator elderly population: ${comarques_reference_population[d.properties.comarca_id]}`,
         strokeOpacity: 1.0,
         strokeWidth: 1,
         stroke: "black",
@@ -32,7 +41,8 @@ export function plot_catalunya_map_aged_65(width, comarques_boundaries, cataluny
 }
 
 export function plot_catalunya_map_coverage(width, comarques_boundaries,
-  ratio_attention_latest_year, plot_title) {
+  ratio_attention_latest_year, plot_title,
+  comarca_name_label) {
 
   return Plot.plot({
     title: plot_title,
@@ -45,7 +55,10 @@ export function plot_catalunya_map_coverage(width, comarques_boundaries,
     marks: [
       Plot.geo(comarques_boundaries, {
         fill: (d) => ratio_attention_latest_year[d.properties.comarca_id],
-        title: d => d.properties.comarca_id,
+        title: d => `${comarca_name_label[d.properties.comarca_id]}
+Population 65+: ${2}
+Places residential: ${4}
+Coverage residential service: ${ratio_attention_latest_year[d.properties.comarca_id]}`,
         strokeOpacity: 1.0,
         strokeWidth: 1,
         stroke: "black",
@@ -56,7 +69,8 @@ export function plot_catalunya_map_coverage(width, comarques_boundaries,
 }
 export function plot_catalunya_map_coverage_municipal(width, single_comarque_boundaries,
   ratio_attention_latest_year, municipal_latest_population, catalunya_indicator_type,
-  color_catalunya_map, plot_title) {
+  color_catalunya_map, plot_title,
+  municipal_name_label) {
 
   return Plot.plot({
     title: plot_title,
@@ -69,7 +83,12 @@ export function plot_catalunya_map_coverage_municipal(width, single_comarque_bou
     marks: [
       Plot.geo(single_comarque_boundaries, {
         fill: (d) => catalunya_indicator_type == "POPULATION_INDICATOR" ? municipal_latest_population[d.properties.municipal_id] : ratio_attention_latest_year[d.properties.municipal_id],
-        title: d => d.properties.municipal_id,
+        title: d => `${municipal_name_label[d.properties.municipal_id]}
+Population: ${1}
+Population 65+: ${2}
+Indicator elderly population: ${municipal_latest_population[d.properties.municipal_id]}
+Places residential: ${4}
+Coverage residential service: ${ratio_attention_latest_year[d.properties.municipal_id]}`,
         strokeOpacity: 1.0,
         strokeWidth: 1,
         stroke: "black",
