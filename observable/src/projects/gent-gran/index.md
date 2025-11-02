@@ -40,7 +40,6 @@ import {
   plot_legend_trend_population,
   plot_legend_trend_services,
   plot_legend_trend_iniciative,
-  service_tag_to_complete,
   map_inciative_color
 } from "./components/comarca-charts.js";
 ```
@@ -149,9 +148,6 @@ const serveis_residence_ratio = Generators.input(serveis_residence_ratio_input)
 ```js
 const social_services_comarca = social_services_empty_last_year.params({comarca_id: nom_comarca.codi_comarca}).filter((row, $) => (row.comarca_id === $.comarca_id));
 const all_available_services = social_services_comarca.filter(row =>  row.total_capacit > 0).select('service_type_id').dedupe('service_type_id').array('service_type_id');
-```
-```js
-const all_services = Array.from(service_tag_to_complete.entries()).map(k => k[1]);
 ```
 ```js
 const serveis_input = Inputs.select(new Map(all_available_services.map(s => [service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(s)], s])), {
@@ -265,7 +261,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
           <span class="big">${Number(catalunya_ratio_cobertura).toLocaleString('ca-ES')}%</span>
       </div>
       <div class="card">
-          <h4>${deficit_camas_residencia > 0? t(locale_value, "SURPLUS_PLACES") : t(locale_value, "DEFICIT_PLACES")}</h4>
+          <h4>${deficit_camas_residencia < 0? t(locale_value, "SURPLUS_PLACES") : t(locale_value, "DEFICIT_PLACES")}</h4>
           <span class="big">${Number(deficit_camas_residencia).toLocaleString('ca-ES')}</span>
       </div>
     </div>
@@ -292,29 +288,29 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
       <div class="grid-colspan-1">
           <h4>${t(locale_value, "EVOLUTION_POPULATION_65_PLUS")}</h4>
           ${single_comarca_population_input}
-          ${resize((width) => plot_legend_trend_population(width, single_comarca_population))}
+          ${resize((width) => plot_legend_trend_population(width, locale_value, single_comarca_population))}
       </div>
       <div class="grid-colspan-1">
           <h4>${t(locale_value, "ASSISTANCE_SERVICES")}</h4>
           ${serveis_residence_ratio_input}
-          ${resize((width) => plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, service_type))}
+          ${resize((width) => plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type))}
       </div>
       <div class="grid-colspan-1">
           <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
           ${serveis_input}
-          ${resize((width) => plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color, service_qualification))} 
+          ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, service_qualification))} 
       </div>
   </div>
 
   <div class="grid grid-cols-3">
       <div class="card grid-colspan-1">
-          <figure>${resize((width) => plot_trend_population_groups_by_comarca(width, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population))}</figure>
+          <figure>${resize((width) => plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population))}</figure>
       </div>
       <div class="card grid-colspan-1">
-          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis))}</figure>
+          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, locale_value, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis))}</figure>
       </div>
       <div class="card grid-colspan-1">
-          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis, all_available_services))}</figure>
+          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis, all_available_services))}</figure>
       </div>
   </div>
 

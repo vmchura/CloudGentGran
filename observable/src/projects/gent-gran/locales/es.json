@@ -45,5 +45,6 @@
   "PLACES_DEFICIT_SURPLUS": "{deficitSurplus} de plazas (cobertura 4,11%)",
   "LANGUAGE_LABEL": "Idioma",
   "CATALONIA": "Cataluña",
-  "POPULATION": "Población"
+  "POPULATION": "Población",
+  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Plazas disponibles acumuladas"
 }

@@ -1,14 +1,7 @@
 import * as aq from "npm:arquero";
 import * as Plot from "@observablehq/plot";
 import * as d3 from "d3";
-
-export const service_tag_to_complete = new Map([
-  ["Servei de residència assistida", "Servei de residència assistida per a gent gran de caràcter temporal o permanent"],
-  ["Servei de centre de dia", "Servei de centre de dia per a gent gran de caràcter temporal o permanent"],
-  ["Servei de llar residència", "Servei de llar residència per a gent gran de caràcter temporal o permanent"],
-  ["Servei de tutela", "Servei de tutela per a gent gran"],
-  ["Servei d' habitatge tutelat", "Servei d' habitatge tutelat per a gent gran de caràcter temporal o permanent"]
-]);
+import {t} from "./i18n.js";
 
 export const colour_by_service = new Map([
   ["DAY-001", "#a160af"],
@@ -24,13 +17,13 @@ export const map_inciative_color = new Map([
   ["PUB-001", "#3b5fc0"]
 ]);
 
-export function plot_trend_population_groups_by_comarca(width, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population) {
+export function plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
     y: {
       grid: true,
-      label: single_comarca_population ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més",
+      label: single_comarca_population ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"),
     },
     color: {
       domain: single_comarca_population ? ["population_ge65"] : ["elderly_indicator"],
@@ -39,7 +32,7 @@ export function plot_trend_population_groups_by_comarca(width, comarca_populatio
       columns: 1,
       rows: 2,
       label: null,
-      tickFormat: d => d === "population_ge65" ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més"
+      tickFormat: d => d === "population_ge65" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
     },
     x: {
       grid: true,
@@ -62,14 +55,14 @@ export function plot_trend_population_groups_by_comarca(width, comarca_populatio
   });
 }
 
-export function plot_comarca_by_serveis(width, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_services) {
+export function plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_services) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
     y: {
       type: "linear",
       grid: true,
-      label: "Places acumulativa del servei",
+      label: t(locale_value, "TOTAL_OFFERED_PLACES_ACCUMULATED"),
     },
     color: {
       domain: all_services,
@@ -99,14 +92,14 @@ export function plot_comarca_by_serveis(width, social_services_empty_last_year, 
   });
 }
 
-export function plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis) {
+export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
     y: {
       type: "linear",
       grid: true,
-      label: "Taxa de cobertura (%)",
+      label: t(locale_value, "COVERAGE_RATE"),
     },
     color: {
       legend: false,
@@ -128,14 +121,14 @@ export function plot_comarca_by_cobertura(width, comarca_coverage, nom_comarca, 
   });
 }
 
-export function plot_services_comarca_by_iniciatives(width, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis) {
+export function plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
     y: {
       type: "linear",
       grid: true,
-      label: "Places acumulativa del servei",
+      label: t(locale_value, "TOTAL_OFFERED_PLACES_ACCUMULATED"),
     },
     color: {
       domain: [
@@ -176,7 +169,7 @@ export function plot_services_comarca_by_iniciatives(width, social_services_empt
   });
 }
 
-export function plot_legend_trend_population(width, single_comarca_population) {
+export function plot_legend_trend_population(width, locale_value, single_comarca_population) {
   return Plot.legend({
     width: width,
     color: {
@@ -186,12 +179,12 @@ export function plot_legend_trend_population(width, single_comarca_population) {
       columns: 1,
       rows: 2,
       label: null,
-      tickFormat: d => d === "population_over_65" ? "Població de 65 anys i més" : "Percentatge de la població de 65 anys i més"
+      tickFormat: d => d === "population_over_65" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
     }
   });
 }
 
-export function plot_legend_trend_services(width, serveis_residence_ratio, all_available_services, service_type) {
+export function plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type) {
   return serveis_residence_ratio ? Plot.legend({
     width: width,
     color: {
@@ -204,7 +197,7 @@ export function plot_legend_trend_services(width, serveis_residence_ratio, all_a
   }) : Plot.legend({
     width: width,
     color: {
-      domain: ["Taxa de cobertura de residència per a gent gran (%)"],
+      domain: [t(locale_value, "COVERAGE_RATE")],
       range: ["#ff9c38"],
       legend: false,
       columns: 1,
@@ -213,7 +206,7 @@ export function plot_legend_trend_services(width, serveis_residence_ratio, all_a
   });
 }
 
-export function plot_legend_trend_iniciative(width, domain_iniciatives, map_inciative_color, service_qualification) {
+export function plot_legend_trend_iniciative(width, locale_value, domain_iniciatives, map_inciative_color, service_qualification) {
   return Plot.legend({
     width: width,
     color: {
