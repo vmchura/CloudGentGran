@@ -217,7 +217,7 @@ municipal_name_label);
 </div>
     </div>
     <div class="grid-colspan-1">
-        <h2>Catalunya ${census_latest_year}</h2>
+        <h2>${t(locale_value, "CATALONIA")} ${census_latest_year}</h2>
         <div class="grid-colspan-1">
             <div class="card">
                 <h4>${t(locale_value, "POPULATION_65_PLUS")}</h4>
@@ -255,7 +255,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
         </div>
     </div>
     <div class="grid-colspan-1">
-      <h2>Catalunya ${coverage_latest_year}</h2>
+      <h2>${t(locale_value, "CATALONIA")} ${coverage_latest_year}</h2>
       <div class="card">
           <h4>${t(locale_value, "RESIDENCE_PLACES_ELDERLY")}</h4>
           <span class="big">${Number(number_places_residence).toLocaleString('ca-ES')}</span>
