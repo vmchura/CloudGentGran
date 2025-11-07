@@ -1,8 +1,15 @@
 {
-  "name": "node-build-deploy-lambda",
+  "name": "build-deploy-lambda",
   "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
   "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
-    "aws-sdk": "^2.1600.0"
+    "aws-sdk": "^2.1692.0"
   }
 }
