@@ -19,6 +19,7 @@ export interface LambdaConstructProps {
     transformerExecutionRole: iam.Role;
     martExecutionRole: iam.Role;
     monitoringExecutionRole: iam.Role;
+    dataServiceRole: iam.Role;
 }
 
 interface LambdaFunctionProps {
@@ -139,7 +140,7 @@ export class LambdaConstruct extends Construct {
             lambdaPrefix,
             account,
             region,
-            executionRole: props.extractorExecutionRole
+            executionRole: props.dataServiceRole
         });
     }
 

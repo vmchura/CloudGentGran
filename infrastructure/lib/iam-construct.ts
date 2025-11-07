@@ -26,6 +26,7 @@ export class IamConstruct extends Construct {
   public readonly airflowCrossAccountRole: iam.Role;
   public readonly s3CopierTransformerRole: iam.Role;
   public readonly s3CopierMartRole: iam.Role;
+  public readonly dataServiceRole: iam.Role;
 
   // Orchestration roles
   public readonly airflowUser: iam.User;
@@ -42,6 +43,7 @@ export class IamConstruct extends Construct {
   public readonly airflowCrossAccountPolicy: iam.ManagedPolicy;
   public readonly s3CopierTransformerPolicy: iam.ManagedPolicy;
   public readonly s3CopierMartPolicy: iam.ManagedPolicy;
+  public readonly dataServicePolicy: iam.ManagedPolicy;
 
   constructor(scope: Construct, id: string, props: IamConstructProps) {
     super(scope, id);
@@ -631,6 +633,52 @@ export class IamConstruct extends Construct {
       ],
     });
 
+    this.dataServicePolicy = new iam.ManagedPolicy(this, 'DataServicePolicy', {
+      managedPolicyName: `CatalunyaDataServicePolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `Permissions to service data from data mart phase to public (${environmentName})`,
+      statements: [
+        // CloudWatch Logs
+        new iam.PolicyStatement({
+          sid: 'CloudWatchLogGroups',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'logs:CreateLogGroup',
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+            'logs:DescribeLogGroups',
+            'logs:DescribeLogStreams',
+          ],
+          resources: [
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*`,
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*:*`,
+          ],
+        }),
+        // S3 Data Bucket Read
+        new iam.PolicyStatement({
+          sid: 'S3DataBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+          ],
+          resources: [`arn:aws:s3:::${bucketName}`],
+        }),
+        // S3 Data Bucket Write (landing prefix)
+        new iam.PolicyStatement({
+          sid: 'S3DataBucketWrite',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:PutObject',
+            's3:PutObjectAcl',
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [`arn:aws:s3:::${bucketName}/dataservice/*`],
+        }),
+
+      ]
+    })
+
     // ========================================
     // Lambda Execution Roles
     // ========================================
@@ -776,6 +824,21 @@ export class IamConstruct extends Construct {
     cdk.Tags.of(this.s3CopierTransformerRole).add('ServiceType', 'S3Copier');
     cdk.Tags.of(this.s3CopierMartRole).add('ServiceType', 'S3Copier');
 
+    // Data Service Role
+    this.dataServiceRole = new iam.Role(this, 'DataServiceRole', {
+      roleName: `catalunya-data-service-role-${environmentName}`,
+      description: `Catalunya Data Pipeline - Data Service Role (${environmentName})`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [this.dataServicePolicy]
+    });
+    // Apply common tags
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.dataServiceRole).add(key, value);
+    });
+
+    cdk.Tags.of(this.dataServiceRole).add('ServiceType', 'DataService');
+    cdk.Tags.of(this.dataServiceRole).add('RoleType', 'Lambda');
+
     // ========================================
     // Human Data Engineer Role
     // ========================================
@@ -828,6 +891,7 @@ export class IamConstruct extends Construct {
     cdk.Tags.of(this.martExecutionRole).add('Service', 'DBT');
     cdk.Tags.of(this.monitoringExecutionRole).add('Service', 'Lambda');
     cdk.Tags.of(this.dataEngineerRole).add('RoleType', 'Human');
+    cdk.Tags.of(this.dataServiceRole).add('RoleType', 'Lambda');
   }
 
 }
