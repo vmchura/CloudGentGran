@@ -34,13 +34,33 @@ if (isLocal) {
     );
   `);
 } else {
-  console.error("Using AWS default credential chain");
-  conn.run(`
-    CREATE OR REPLACE SECRET aws_s3 (
-      TYPE S3,
-      PROVIDER credential_chain
-    );
-  `);
+  const useLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localstack') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+  if (useLocalStack) {
+    console.error("Using LocalStack credentials from environment");
+    await conn.run(`
+      CREATE OR REPLACE SECRET aws_s3 (
+        TYPE S3,
+        KEY_ID '${process.env.AWS_ACCESS_KEY_ID}',
+        SECRET '${process.env.AWS_SECRET_ACCESS_KEY}',
+        REGION 'eu-west-1',
+        ENDPOINT '${process.env.AWS_ENDPOINT_URL?.replace('http://', '')}',
+        URL_STYLE 'path',
+        USE_SSL false
+      );
+    `);
+  } else {
+    console.error("Using AWS credentials from environment");
+    await conn.run(`
+      CREATE OR REPLACE SECRET aws_s3 (
+        TYPE S3,
+        KEY_ID '${process.env.AWS_ACCESS_KEY_ID}',
+        SECRET '${process.env.AWS_SECRET_ACCESS_KEY}',
+        ${process.env.AWS_SESSION_TOKEN ? `SESSION_TOKEN '${process.env.AWS_SESSION_TOKEN}',` : ''}
+        REGION 'eu-west-1'
+      );
+    `);
+  }
 }
 
 // Load data
