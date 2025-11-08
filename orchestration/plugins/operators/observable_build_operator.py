@@ -139,7 +139,7 @@ class ObservableBuildDeployOperator(BaseOperator):
                 raise FileNotFoundError(f"Build output not found at {build_dir}")
 
             self.log.info(f"☁️  Uploading to S3: s3://{self.bucket_name}/{self.s3_prefix}")
-            uploaded_files = self._upload_directory_to_s3(build_dir)
+            uploaded_files = self._upload_directory_to_s3(build_dir, credentials)
 
             self.log.info(f"✅ Successfully uploaded {len(uploaded_files)} files")
 
@@ -164,9 +164,16 @@ class ObservableBuildDeployOperator(BaseOperator):
             self.log.info(f"🧹 Cleaning up temporary directory: {tmp_dir}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    def _upload_directory_to_s3(self, directory: str) -> list:
-        aws_hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='s3')
-        s3_client = aws_hook.get_conn()
+    def _upload_directory_to_s3(self, directory: str, credentials: dict) -> list:
+        import boto3
+        
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=credentials['AccessKeyId'],
+            aws_secret_access_key=credentials['SecretAccessKey'],
+            aws_session_token=credentials['SessionToken'],
+            region_name=self.region
+        )
 
         uploaded_files = []
         dir_path = Path(directory)
