@@ -9,6 +9,9 @@ export interface EnvironmentConfig {
   scheduleCron: string;
   catalogBucketName: string;
   requireMfaForHumanRoles?: boolean;
+  webDomain: string,
+  webSubdomain?: string,
+  serviceBucketName: string
 }
 
 export class ConfigHelper {
@@ -34,6 +37,9 @@ export class ConfigHelper {
       scheduleCron: config.scheduleCron || 'cron(0 23 ? * MON *)',
       catalogBucketName: config.catalogBucketName || `catalunya-catalog-${environmentName}`,
       requireMfaForHumanRoles: config.requireMfaForHumanRoles !== false,
+      webDomain: config.webDomain || 'www.example.com',
+      webSubdomain: config.webSubdomain,
+      serviceBucketName: config.serviceBucketName || `catalunya-service-${environmentName}`,
     };
   }
 
