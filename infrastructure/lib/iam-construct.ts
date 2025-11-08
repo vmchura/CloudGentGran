@@ -653,7 +653,6 @@ export class IamConstruct extends Construct {
             `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*:*`,
           ],
         }),
-        // S3 Data Bucket Read
         new iam.PolicyStatement({
           sid: 'S3DataBucketRead',
           effect: iam.Effect.ALLOW,
@@ -661,9 +660,18 @@ export class IamConstruct extends Construct {
             's3:GetBucketLocation',
             's3:ListBucket',
           ],
-          resources: [`arn:aws:s3:::${bucketName}`],
+          resources: [`arn:aws:s3:::${bucketName}`]
         }),
-        // S3 Data Bucket Write (landing prefix)
+        new iam.PolicyStatement({
+          sid: 'S3DataObjectRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [`arn:aws:s3:::${bucketName}/marts/*`],
+        }),
+        // S3 Data Bucket Write (dataservice prefix)
         new iam.PolicyStatement({
           sid: 'S3DataBucketWrite',
           effect: iam.Effect.ALLOW,
@@ -675,7 +683,6 @@ export class IamConstruct extends Construct {
           ],
           resources: [`arn:aws:s3:::${bucketName}/dataservice/*`],
         }),
-
       ]
     })
 
