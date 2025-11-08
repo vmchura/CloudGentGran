@@ -1,32 +1,30 @@
-const AWS = require('aws-sdk');
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { execSync } from "child_process";
+import fs from "fs";
+import path from "path";
 
-const isLocalStack = process.env.IS_LOCAL === 'true';
-
-const s3 = new AWS.S3({
-    endpoint: process.env.AWS_ENDPOINT_URL || undefined,
-    s3ForcePathStyle: true
+const s3 = new S3Client({
+  endpoint: process.env.AWS_ENDPOINT_URL || undefined,
+  forcePathStyle: true,
+  region: process.env.REGION || 'eu-west-1'
 });
 
-exports.handler = async (event) => {
+export async function handler(event) {
     const bucketName = process.env.BUCKET_NAME;
-    const repoUrl = event.repository_url;
-    const targetPath = event.target_path || 'dist';
-    const s3Prefix = event.s3_prefix || 'builds';
-    const localRepoPath = event.local_repo_path;
+    const repoUrl = process.env.REPOSITORY_URL;
+    const targetPath = 'dist';
+    const s3Prefix = 'dataservice/observable';
+    const branch = process.env.ENVIRONMENT == 'prod' ? 'main' : 'develop';
 
     const tmpDir = `/tmp/repo-${Date.now()}`;
 
     try {
-        if (isLocalStack) {
-            console.log(`LocalStack mode: using local repo at ${localRepoPath}`);
-            execSync(`cp -r ${localRepoPath} ${tmpDir}`, { stdio: 'inherit' });
-        } else {
-            console.log(`Cloning ${repoUrl}...`);
-            execSync(`git clone ${repoUrl} ${tmpDir}`, { stdio: 'inherit' });
-        }
+        
+        console.log(`Cloning ${repoUrl}...`);
+        
+        execSync(`curl -L ${repoUrl}/archive/refs/heads/${branch}.zip -o ${tmpDir}/repo.zip`);
+        execSync(`unzip ${tmpDir}/repo.zip "observable/*" -d ${tmpDir}`);
+        
 
         console.log('Running npm ci...');
         execSync('npm ci', { cwd: tmpDir, stdio: 'inherit' });
@@ -85,30 +83,19 @@ async function uploadDirectory(dirPath, bucket, prefix) {
         } else {
             const key = `${prefix}/${item.name}`;
             const fileContent = fs.readFileSync(fullPath);
-            await s3.putObject({
+            await s3.send(new PutObjectCommand({
                 Bucket: bucket,
                 Key: key,
                 Body: fileContent
-            }).promise();
+            }));
             files.push(key);
         }
     }
     return files;
 }
 
-if (require.main === module) {
-    const testEvent = {
-        local_repo_path: process.argv[2] || process.env.TEST_REPO_PATH,
-        target_path: process.argv[3] || 'dist',
-        s3_prefix: process.argv[4] || 'test-builds'
-    };
-
-    process.env.BUCKET_NAME = process.env.BUCKET_NAME || 'test-bucket';
-    process.env.IS_LOCAL = 'true';
-    process.env.AWS_ENDPOINT_URL = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
-
-    console.log('Testing with event:', testEvent);
-    exports.handler(testEvent).then(result => {
+if (import.meta.url === `file://${process.argv[1]}`) {
+    handler({}).then(result => {
         console.log('Result:', JSON.stringify(result, null, 2));
         process.exit(result.statusCode === 200 ? 0 : 1);
     }).catch(err => {

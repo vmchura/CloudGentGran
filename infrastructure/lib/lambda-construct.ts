@@ -574,8 +574,10 @@ export class LambdaConstruct extends Construct {
             role: lambdaRole,
             environment: {
                 BUCKET_NAME: bucketName,
+                REPOSITORY_URL: 'https://github.com/vmchura/CloudGentGran',
                 ENVIRONMENT: environmentName,
-                REGION: region
+                REGION: region,
+                IS_LOCAL: isLocalStack ? 'true' : 'false'
             },
             timeout: cdk.Duration.seconds(900),
             memorySize: 2048,
@@ -583,15 +585,8 @@ export class LambdaConstruct extends Construct {
                 minify: false,
                 sourceMap: false,
                 target: 'node20',
-                externalModules: ['aws-sdk']
+                externalModules: ['@aws-sdk/client-s3']
             },
-            layers: isLocalStack ? [] : [
-                lambda.LayerVersion.fromLayerVersionArn(
-                    this,
-                    'GitLayer',
-                    `arn:aws:lambda:${region}:553035198032:layer:git-lambda2:8`
-                )
-            ],
             description: `Node Build Deploy Lambda for ${environmentName} environment - Orchestrated by Airflow`,
         });
 
