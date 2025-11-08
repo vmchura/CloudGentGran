@@ -19,7 +19,6 @@ export interface LambdaConstructProps {
     transformerExecutionRole: iam.Role;
     martExecutionRole: iam.Role;
     monitoringExecutionRole: iam.Role;
-    dataServiceRole: iam.Role;
 }
 
 interface LambdaFunctionProps {
@@ -41,7 +40,6 @@ export class LambdaConstruct extends Construct {
     public readonly populationMunicipalGreater65Transformer: lambda.Function;
     public readonly populationMunicipalGreater65Mart: lambda.Function;
     public readonly comarquesBoundariesExtractor: lambda.Function;
-    public readonly observableDeployLambda: lambda.Function;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -129,18 +127,6 @@ export class LambdaConstruct extends Construct {
             account,
             region,
             executionRole: props.extractorExecutionRole
-        });
-
-        this.observableDeployLambda = this.createObservableDeployLambda({
-            environmentName,
-            projectName,
-            config,
-            bucketName,
-            catalogBucketName,
-            lambdaPrefix,
-            account,
-            region,
-            executionRole: props.dataServiceRole
         });
     }
 
@@ -550,65 +536,4 @@ export class LambdaConstruct extends Construct {
         return lambdaFunction;
     }
 
-    private createObservableDeployLambda(props: LambdaFunctionProps): lambda.Function {
-        const {
-            environmentName,
-            projectName,
-            config,
-            bucketName,
-            catalogBucketName,
-            lambdaPrefix,
-            account,
-            region
-        } = props;
-
-        const lambdaRole = props.executionRole;
-
-        const nodeBuildDeployLambda = new NodejsFunction(this, 'NodeBuildDeployLambda', {
-            functionName: `${lambdaPrefix}-node-build-deploy`,
-            entry: '../lambda/service/deploy_observable/index.js',
-            runtime: lambda.Runtime.NODEJS_20_X,
-            handler: 'handler',
-            role: lambdaRole,
-            environment: {
-                BUCKET_NAME: bucketName,
-                REPOSITORY_URL: 'https://github.com/vmchura/CloudGentGran',
-                ENVIRONMENT: environmentName,
-                REGION: region
-            },
-            timeout: cdk.Duration.seconds(900),
-            memorySize: 2048,
-            bundling: {
-                minify: false,
-                sourceMap: false,
-                target: 'node20',
-                externalModules: ['@aws-sdk/client-s3'],
-                nodeModules: ['adm-zip']
-            },
-            description: `Node Build Deploy Lambda for ${environmentName} environment - Orchestrated by Airflow`,
-        });
-
-        const commonTags = ConfigHelper.getCommonTags(environmentName);
-        Object.entries(commonTags).forEach(([key, value]) => {
-            cdk.Tags.of(nodeBuildDeployLambda).add(key, value);
-        });
-
-        cdk.Tags.of(nodeBuildDeployLambda).add('Purpose', 'BuildDeploy');
-        cdk.Tags.of(nodeBuildDeployLambda).add('Layer', 'Service');
-        cdk.Tags.of(nodeBuildDeployLambda).add('Runtime', 'NodeJS');
-
-        new cdk.CfnOutput(this, 'NodeBuildDeployLambdaArn', {
-            value: nodeBuildDeployLambda.functionArn,
-            description: 'ARN of the Node Build Deploy Lambda function',
-            exportName: `${projectName}-NodeBuildDeployLambdaArn`,
-        });
-
-        new cdk.CfnOutput(this, 'NodeBuildDeployLambdaName', {
-            value: nodeBuildDeployLambda.functionName,
-            description: 'Name of the Node Build Deploy Lambda function',
-            exportName: `${projectName}-NodeBuildDeployLambdaName`,
-        });
-
-        return nodeBuildDeployLambda;
-    }
 }

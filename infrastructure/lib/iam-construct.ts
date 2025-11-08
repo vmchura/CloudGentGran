@@ -704,7 +704,7 @@ export class IamConstruct extends Construct {
       roleName: `catalunya-mart-role-${environmentName}`,
       description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
       assumedBy: new iam.CompositePrincipal(
-        new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
+        new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
         new iam.ServicePrincipal('lambda.amazonaws.com')
       ),
       managedPolicies: [this.martExecutorPolicy],
@@ -828,7 +828,7 @@ export class IamConstruct extends Construct {
     this.dataServiceRole = new iam.Role(this, 'DataServiceRole', {
       roleName: `catalunya-data-service-role-${environmentName}`,
       description: `Catalunya Data Pipeline - Data Service Role (${environmentName})`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      assumedBy: new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
       managedPolicies: [this.dataServicePolicy]
     });
     // Apply common tags
