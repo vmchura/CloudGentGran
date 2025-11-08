@@ -86,20 +86,32 @@ class ObservableBuildDeployOperator(BaseOperator):
 
             self.log.info("🔨 Running npm run build...")
 
-            aws_hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='s3')
-            credentials = aws_hook.get_credentials()
+            hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='s3')
+            session = hook.get_session()
+            sts_client = session.client('sts')
+
+            account_id = sts_client.get_caller_identity()['Account']
+
+            ENVIRONMENT = os.getenv('AIRFLOW_VAR_ENVIRONMENT')
+            dataservice_role_arn = f"arn:aws:iam::{account_id}:role/catalunya-data-service-role-{ENVIRONMENT}"
+
+            self.log.info(f"Assuming dataservice role: {dataservice_role_arn}")
+            assumed_role = sts_client.assume_role(
+                RoleArn=dataservice_role_arn,
+                RoleSessionName='observable_build'
+            )
+            credentials = assumed_role['Credentials']
 
             env = os.environ.copy()
             node_bin_path = os.path.join(observable_dir, 'node_modules', '.bin')
             env['PATH'] = f"{node_bin_path}:{env.get('PATH', '')}"
-            env['S3_BUCKET_DATA'] = 'catalunya-data-dev'
-            env['S3_BUCKET_CATALOG'] = 'catalunya-catalog-dev'
+            env['S3_BUCKET_DATA'] = self.s3_bucket_data
+            env['S3_BUCKET_CATALOG'] = self.s3_bucket_catalog
 
             # Add AWS credentials instead of AWS_PROFILE
-            env['AWS_ACCESS_KEY_ID'] = credentials.access_key
-            env['AWS_SECRET_ACCESS_KEY'] = credentials.secret_key
-            if credentials.token:
-                env['AWS_SESSION_TOKEN'] = credentials.token
+            env['AWS_ACCESS_KEY_ID'] = credentials['AccessKeyId']
+            env['AWS_SECRET_ACCESS_KEY'] = credentials['SecretAccessKey']
+            env['AWS_SESSION_TOKEN'] = credentials['SessionToken']
             env['AWS_REGION'] = self.region
             env['AWS_DEFAULT_REGION'] = self.region
             env['AWS_ENDPOINT_URL'] = os.getenv('AWS_ENDPOINT_URL', '')
