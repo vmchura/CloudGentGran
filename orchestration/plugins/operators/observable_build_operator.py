@@ -31,7 +31,7 @@ class ObservableBuildDeployOperator(BaseOperator):
         self.repository_url = repository_url
         self.bucket_name = bucket_name
         self.environment = environment
-        self.branch = branch or ('main' if environment == 'prod' else 'observable')
+        self.branch = branch or ('main' if environment == 'prod' else 'develop')
         self.s3_prefix = s3_prefix
         self.aws_conn_id = aws_conn_id
         self.region = region
