@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { aws_s3 as s3, aws_cloudfront as cloudfront, aws_cloudfront_origins as origins, aws_route53 as route53, aws_route53_targets as targets } from 'aws-cdk-lib';
+import { EnvironmentConfig, ConfigHelper } from './config';
 
 export class StaticWebsiteStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props: {
@@ -44,6 +45,16 @@ export class StaticWebsiteStack extends cdk.Stack {
         },
       ],
     });
+
+    const commonTags = ConfigHelper.getCommonTags(environmentName);
+
+      Object.entries(commonTags).forEach(([key, value]) => {
+        cdk.Tags.of(this.websiteBucket).add(key, value);
+      });
+  // Additional S3 bucket tags
+      cdk.Tags.of(this.websiteBucket).add('Purpose', 'DataService');
+      cdk.Tags.of(this.websiteBucket).add('Layer', 'Service');
+      cdk.Tags.of(this.websiteBucket).add('DataClassification', 'Processed');
 
     // --- 2️⃣ CloudFront distribution ---
     const distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
