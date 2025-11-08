@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-import boto3
 from airflow.models import BaseOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 
@@ -99,6 +98,7 @@ class ObservableBuildDeployOperator(BaseOperator):
             env['AWS_SECRET_ACCESS_KEY'] = credentials.secret_key
             if credentials.token:
                 env['AWS_SESSION_TOKEN'] = credentials.token
+            env['AWS_REGION'] = self.region
             env['AWS_DEFAULT_REGION'] = self.region
             env['AWS_ENDPOINT_URL'] = os.getenv('AWS_ENDPOINT_URL', '')
 
