@@ -18,6 +18,7 @@ export interface WebConstructProps {
   subdomain?: string;
   accountId: string;
   certificateId: string;
+  bucketName: string
 }
 
 export class WebConstruct extends Construct {
