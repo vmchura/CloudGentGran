@@ -56,9 +56,7 @@ dag = DAG(
 build_and_deploy_observable = ObservableBuildDeployOperator(
     task_id='build_and_deploy_observable',
     repository_url='https://github.com/vmchura/CloudGentGran',
-    bucket_name=config['data_bucket'],
     environment=ENVIRONMENT,
-    s3_prefix='dataservice/observable',
     aws_conn_id=config['aws_conn_id'],
     dag=dag
 )

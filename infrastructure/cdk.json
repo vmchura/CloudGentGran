@@ -63,7 +63,10 @@
         "githubRepo": "vmchura/CloudGentGran",
         "requireMfaForHumanRoles": true,
         "allowedGitHubBranches": ["develop", "main", "feature/*"],
-        "catalogBucketName": "catalunya-catalog-dev"
+        "catalogBucketName": "catalunya-catalog-dev",
+        "webDomain": "analitica.academy",
+        "webSubdomain": "dev",
+        "serviceBucketName": "catalunya-service-dev"
       },
       "prod": {
         "region": "eu-west-1",
@@ -75,7 +78,9 @@
         "githubRepo": "vmchura/CloudGentGran",
         "requireMfaForHumanRoles": true,
         "allowedGitHubBranches": ["main"],
-        "catalogBucketName": "catalunya-catalog-prod"
+        "catalogBucketName": "catalunya-catalog-prod",
+        "webDomain": "analitica.academy",
+        "serviceBucketName": "catalunya-service-prod"
       }
     }
   }

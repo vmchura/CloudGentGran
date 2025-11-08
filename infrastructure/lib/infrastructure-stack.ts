@@ -7,6 +7,7 @@ import { LambdaConstruct } from './lambda-construct';
 import { AnalyticsConstruct } from './analytics-construct';
 import { CatalogConstruct } from './catalog-construct';
 import { GlueConstruct } from './glue-construct';
+import { WebConstruct } from './web-construct';
 
 export interface CatalunyaDataStackProps extends cdk.StackProps {
   environmentName: string;
@@ -32,6 +33,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly analyticsInfrastructure: AnalyticsConstruct;
   public readonly catalogInfrastructure: CatalogConstruct;
   public readonly glueInfrastructure: GlueConstruct;
+  public readonly webInfrastructure: WebConstruct;
 
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -168,6 +170,24 @@ export class CatalunyaDataStack extends cdk.Stack {
 
     // Glue depends on analytics (database must exist first)
     this.glueInfrastructure.node.addDependency(this.analyticsInfrastructure);
+
+    // ========================================
+    // Web Infrastructure (Optional - based on config)
+    // ========================================
+    const webConfig = this.config as any;
+    const certificateId = process.env.WEB_CERTIFICATE_ID;
+
+    if (webConfig.webDomain && certificateId) {
+      this.webInfrastructure = new WebConstruct(this, 'WebInfrastructure', {
+        environmentName: this.environmentName,
+        projectName: this.projectName,
+        domainName: webConfig.webDomain,
+        subdomain: webConfig.webSubdomain,
+        accountId: this.account,
+        certificateId: certificateId,
+        bucketName: webConfig.serviceBucketName
+      });
+    }
 
     // ========================================
     // CloudFormation Outputs

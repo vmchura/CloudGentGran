@@ -1,41 +1,49 @@
 import * as cdk from 'aws-cdk-lib';
-import { aws_s3 as s3, aws_cloudfront as cloudfront, aws_cloudfront_origins as origins, aws_route53 as route53, aws_route53_targets as targets } from 'aws-cdk-lib';
-import { EnvironmentConfig, ConfigHelper } from './config';
+import { Construct } from 'constructs';
+import {
+  aws_s3 as s3,
+  aws_cloudfront as cloudfront,
+  aws_cloudfront_origins as origins,
+  aws_route53 as route53,
+  aws_route53_targets as targets,
+  aws_certificatemanager as acm,
+  aws_iam as iam
+} from 'aws-cdk-lib';
+import { ConfigHelper } from './config';
 
-export class StaticWebsiteStack extends cdk.Stack {
-  constructor(scope: cdk.App, id: string, props: {
-    environmentName: string,
-    domainName: string,
-    subdomain: string,
-  }) {
-    super(scope, id, props);
+export interface WebConstructProps {
+  environmentName: string;
+  projectName: string;
+  domainName: string;
+  subdomain?: string;
+  accountId: string;
+  certificateId: string;
+}
 
-    const { environmentName, domainName, subdomain } = props;
+export class WebConstruct extends Construct {
+  public readonly websiteBucket: s3.Bucket;
+  public readonly distribution: cloudfront.Distribution;
+  public readonly siteDomain: string;
 
-    const siteDomain = `${subdomain}.${domainName}`;
-    const bucketName = `${siteDomain.replace(/\./g, '-')}-${environmentName}`;
+  constructor(scope: Construct, id: string, props: WebConstructProps) {
+    super(scope, id);
 
-    // --- 1️⃣ S3 Bucket ---
-    const websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
+    const { environmentName, projectName, domainName, subdomain, accountId, certificateId, bucketName } = props;
+
+    this.siteDomain = subdomain ? `${subdomain}.${domainName}` : domainName;
+    const certificateArn = `arn:aws:acm:us-east-1:${accountId}:certificate/${certificateId}`;
+
+    this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
       bucketName,
-      versioned: environmentName === 'prod',
+      versioned: false,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       publicReadAccess: false,
       removalPolicy: environmentName === 'prod'
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: environmentName !== 'prod',
-
-      // Optional: lifecycle for assets
-      lifecycleRules: [
-        {
-          id: 'ExpireOldAssets',
-          prefix: 'assets/',
-          enabled: true,
-          expiration: cdk.Duration.days(90),
-        },
-      ],
-
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
       cors: [
         {
           allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
@@ -46,50 +54,94 @@ export class StaticWebsiteStack extends cdk.Stack {
       ],
     });
 
-    const commonTags = ConfigHelper.getCommonTags(environmentName);
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OAI', {
+      comment: `OAI for ${this.siteDomain}`,
+    });
 
-      Object.entries(commonTags).forEach(([key, value]) => {
-        cdk.Tags.of(this.websiteBucket).add(key, value);
-      });
-  // Additional S3 bucket tags
-      cdk.Tags.of(this.websiteBucket).add('Purpose', 'DataService');
-      cdk.Tags.of(this.websiteBucket).add('Layer', 'Service');
-      cdk.Tags.of(this.websiteBucket).add('DataClassification', 'Processed');
+    this.websiteBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject'],
+        resources: [`${this.websiteBucket.bucketArn}/*`],
+        principals: [new iam.CanonicalUserPrincipal(originAccessIdentity.cloudFrontOriginAccessIdentityS3CanonicalUserId)],
+      })
+    );
 
-    // --- 2️⃣ CloudFront distribution ---
-    const distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
+    const certificate = acm.Certificate.fromCertificateArn(this, 'Certificate', certificateArn);
+
+    this.distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
       defaultBehavior: {
-        origin: new origins.S3Origin(websiteBucket),
+        origin: new origins.S3Origin(this.websiteBucket, {
+          originAccessIdentity,
+        }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+        compress: true,
       },
       defaultRootObject: 'index.html',
       errorResponses: [
         {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
+        },
+        {
           httpStatus: 404,
-          responseHttpStatus: 404,
-          responsePagePath: '/404.html',
-          ttl: cdk.Duration.minutes(30),
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
         },
       ],
-      domainNames: [siteDomain],
-      certificate: cloudfront.ViewerCertificate.fromAcmCertificate({
-        certificateArn: `arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID`, // <-- Replace with your cert
-        env: { region: 'us-east-1' }, // ACM cert for CloudFront must be in us-east-1
-      }),
+      domainNames: [this.siteDomain],
+      certificate,
+      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      enableLogging: false,
     });
 
-    // --- 3️⃣ Route 53 DNS record ---
     const zone = route53.HostedZone.fromLookup(this, 'Zone', { domainName });
+
     new route53.ARecord(this, 'AliasRecord', {
-      recordName: siteDomain,
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
+      recordName: this.siteDomain,
+      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(this.distribution)),
       zone,
     });
 
-    // --- 4️⃣ Output the URLs ---
-    new cdk.CfnOutput(this, 'BucketName', { value: websiteBucket.bucketName });
-    new cdk.CfnOutput(this, 'DistributionDomain', { value: distribution.domainName });
-    new cdk.CfnOutput(this, 'WebsiteURL', { value: `https://${siteDomain}` });
+    const commonTags = ConfigHelper.getCommonTags(environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.websiteBucket).add(key, value);
+      cdk.Tags.of(this.distribution).add(key, value);
+    });
+
+    cdk.Tags.of(this.websiteBucket).add('Purpose', 'StaticWebsite');
+    cdk.Tags.of(this.websiteBucket).add('Layer', 'Presentation');
+    cdk.Tags.of(this.websiteBucket).add('DataClassification', 'Public');
+
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: this.websiteBucket.bucketName,
+      description: 'Static website S3 bucket name',
+      exportName: `${projectName}-WebsiteBucket-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'DistributionId', {
+      value: this.distribution.distributionId,
+      description: 'CloudFront distribution ID',
+      exportName: `${projectName}-DistributionId-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'DistributionDomain', {
+      value: this.distribution.domainName,
+      description: 'CloudFront distribution domain',
+      exportName: `${projectName}-DistributionDomain-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebsiteURL', {
+      value: `https://${this.siteDomain}`,
+      description: 'Website URL',
+      exportName: `${projectName}-WebsiteURL-${environmentName}`,
+    });
   }
 }
