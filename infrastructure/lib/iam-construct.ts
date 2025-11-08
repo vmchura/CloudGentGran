@@ -671,6 +671,20 @@ export class IamConstruct extends Construct {
           ],
           resources: [`arn:aws:s3:::${bucketName}/marts/*`],
         }),
+        new iam.PolicyStatement({
+          sid: 'S3CatalogBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [
+            `arn:aws:s3:::${catalogBucketName}`,
+            `arn:aws:s3:::${catalogBucketName}/*`,
+          ],
+        }),
         // S3 Data Bucket Write (dataservice prefix)
         new iam.PolicyStatement({
           sid: 'S3DataBucketWrite',
