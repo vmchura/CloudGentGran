@@ -19,30 +19,27 @@ class ObservableBuildDeployOperator(BaseOperator):
             self,
             *,
             repository_url: str,
-            bucket_name: str,
             environment: str = 'dev',
             branch: Optional[str] = None,
-            s3_prefix: str = 'dataservice/observable',
             aws_conn_id: str = 'aws_default',
             region: str = 'eu-west-1',
             **kwargs
     ):
         super().__init__(**kwargs)
         self.repository_url = repository_url
-        self.bucket_name = bucket_name
         self.environment = environment
         self.branch = branch or ('main' if environment == 'prod' else 'develop')
-        self.s3_prefix = s3_prefix
         self.aws_conn_id = aws_conn_id
         self.region = region
         self.s3_bucket_data = f'catalunya-data-{environment}'
         self.s3_bucket_catalog = f'catalunya-catalog-{environment}'
+        self.s3_bucket_service = f'catalunya-service-{environment}'
 
     def execute(self, context):
         self.log.info(f"🚀 Starting Observable build and deploy for {self.environment}")
         self.log.info(f"   Repository: {self.repository_url}")
         self.log.info(f"   Branch: {self.branch}")
-        self.log.info(f"   Target: s3://{self.bucket_name}/{self.s3_prefix}")
+        self.log.info(f"   Target: s3://{self.s3_bucket_service}")
 
         tmp_dir = tempfile.mkdtemp(prefix='observable-build-')
 
@@ -138,15 +135,13 @@ class ObservableBuildDeployOperator(BaseOperator):
             if not os.path.exists(build_dir):
                 raise FileNotFoundError(f"Build output not found at {build_dir}")
 
-            self.log.info(f"☁️  Uploading to S3: s3://{self.bucket_name}/{self.s3_prefix}")
-            uploaded_files = self._upload_directory_to_s3(build_dir)
+            self.log.info(f"☁️  Uploading to S3: s3://{self.s3_bucket_service}")
+            uploaded_files = self._upload_directory_to_s3(build_dir, credentials)
 
             self.log.info(f"✅ Successfully uploaded {len(uploaded_files)} files")
 
             return {
                 'status': 'success',
-                'bucket': self.bucket_name,
-                'prefix': self.s3_prefix,
                 'files_uploaded': len(uploaded_files),
                 'branch': self.branch,
                 'environment': self.environment
@@ -164,9 +159,16 @@ class ObservableBuildDeployOperator(BaseOperator):
             self.log.info(f"🧹 Cleaning up temporary directory: {tmp_dir}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    def _upload_directory_to_s3(self, directory: str) -> list:
-        aws_hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='s3')
-        s3_client = aws_hook.get_conn()
+    def _upload_directory_to_s3(self, directory: str, credentials: dict) -> list:
+        import boto3
+        
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=credentials['AccessKeyId'],
+            aws_secret_access_key=credentials['SecretAccessKey'],
+            aws_session_token=credentials['SessionToken'],
+            region_name=self.region
+        )
 
         uploaded_files = []
         dir_path = Path(directory)
@@ -174,13 +176,13 @@ class ObservableBuildDeployOperator(BaseOperator):
         for file_path in dir_path.rglob('*'):
             if file_path.is_file():
                 relative_path = file_path.relative_to(dir_path)
-                s3_key = f"{self.s3_prefix}/{relative_path.as_posix()}"
+                s3_key = relative_path.as_posix()
 
                 self.log.info(f"   Uploading {relative_path} → {s3_key}")
 
                 s3_client.upload_file(
                     str(file_path),
-                    self.bucket_name,
+                    self.s3_bucket_service,
                     s3_key
                 )
                 uploaded_files.append(s3_key)
