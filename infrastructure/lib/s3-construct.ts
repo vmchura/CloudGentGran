@@ -55,6 +55,12 @@ export class S3Construct extends Construct {
         enabled: true,
         expiration: cdk.Duration.days(config.retentionPeriod),
       },
+      {
+        id: 'DataServiceLayer',
+        prefix: 'dataservice/',
+        enabled: true,
+        expiration: cdk.Duration.days(60),
+      },
     ];
 
     // Create the main data bucket

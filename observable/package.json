@@ -1,0 +1,28 @@
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "clean": "rimraf src/.observablehq/cache",
+    "build": "observable build",
+    "dev": "observable preview",
+    "deploy": "observable deploy",
+    "observable": "observable"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.651.1",
+    "@duckdb/node-api": "^1.4.1-r.4",
+    "@observablehq/framework": "^1.13.3",
+    "@observablehq/plot": "^0.6.17",
+    "apache-arrow": "^21.1.0",
+    "arquero": "^8.0.3",
+    "d3-dsv": "^3.0.1",
+    "d3-time-format": "^4.1.0",
+    "parquet-wasm": "^0.6.1"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -102,6 +102,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       transformerExecutionRole: this.iamInfrastructure.transformerExecutionRole,
       martExecutionRole: this.iamInfrastructure.martExecutionRole,
       monitoringExecutionRole: this.iamInfrastructure.monitoringExecutionRole,
+      dataServiceRole: this.iamInfrastructure.dataServiceRole
     });
 
     // ========================================
