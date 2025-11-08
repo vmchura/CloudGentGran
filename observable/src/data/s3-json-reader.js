@@ -1,6 +1,7 @@
 import {S3Client, GetObjectCommand, ListObjectsV2Command} from "@aws-sdk/client-s3";
 
 const isLocal = process.env.AWS_PROFILE === "localstack";
+const useLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localstack') || process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 const s3Client = new S3Client(
   isLocal
@@ -13,7 +14,19 @@ const s3Client = new S3Client(
           secretAccessKey: "test"
         }
       }
-    : {}
+    : useLocalStack
+    ? {
+        endpoint: process.env.AWS_ENDPOINT_URL,
+        region: process.env.AWS_REGION || "eu-west-1",
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        }
+      }
+    : {
+        region: process.env.AWS_REGION || "eu-west-1"
+      }
 );
 
 async function streamToBuffer(stream) {
