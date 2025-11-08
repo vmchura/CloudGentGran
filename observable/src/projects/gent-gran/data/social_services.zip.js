@@ -34,11 +34,14 @@ if (isLocal) {
     );
   `);
 } else {
-  console.error("Using AWS default credential chain");
-  conn.run(`
+  console.error("Using AWS credentials from environment");
+  await conn.run(`
     CREATE OR REPLACE SECRET aws_s3 (
       TYPE S3,
-      PROVIDER credential_chain
+      KEY_ID '${process.env.AWS_ACCESS_KEY_ID}',
+      SECRET '${process.env.AWS_SECRET_ACCESS_KEY}',
+      ${process.env.AWS_SESSION_TOKEN ? `SESSION_TOKEN '${process.env.AWS_SESSION_TOKEN}',` : ''}
+      REGION 'eu-west-1'
     );
   `);
 }
