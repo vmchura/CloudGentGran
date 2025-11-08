@@ -564,8 +564,6 @@ export class LambdaConstruct extends Construct {
 
         const lambdaRole = props.executionRole;
 
-        const isLocalStack = (process.env.CDK_LOCALSTACK ?? 'false') === 'true';
-
         const nodeBuildDeployLambda = new NodejsFunction(this, 'NodeBuildDeployLambda', {
             functionName: `${lambdaPrefix}-node-build-deploy`,
             entry: '../lambda/service/deploy_observable/index.js',
@@ -576,8 +574,7 @@ export class LambdaConstruct extends Construct {
                 BUCKET_NAME: bucketName,
                 REPOSITORY_URL: 'https://github.com/vmchura/CloudGentGran',
                 ENVIRONMENT: environmentName,
-                REGION: region,
-                IS_LOCAL: isLocalStack ? 'true' : 'false'
+                REGION: region
             },
             timeout: cdk.Duration.seconds(900),
             memorySize: 2048,
@@ -585,7 +582,8 @@ export class LambdaConstruct extends Construct {
                 minify: false,
                 sourceMap: false,
                 target: 'node20',
-                externalModules: ['@aws-sdk/client-s3']
+                externalModules: ['@aws-sdk/client-s3'],
+                nodeModules: ['adm-zip']
             },
             description: `Node Build Deploy Lambda for ${environmentName} environment - Orchestrated by Airflow`,
         });

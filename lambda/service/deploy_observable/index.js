@@ -1,7 +1,12 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import https from "https";
+import { pipeline } from "stream/promises";
+import { createWriteStream } from "fs";
+import AdmZip from "adm-zip";
+import { execSync } from "child_process";
+
 
 const s3 = new S3Client({
   endpoint: process.env.AWS_ENDPOINT_URL || undefined,
@@ -9,37 +14,75 @@ const s3 = new S3Client({
   region: process.env.REGION || 'eu-west-1'
 });
 
+async function downloadFile(url, destPath) {
+  const file = createWriteStream(destPath);
+  return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        // Follow redirect
+        return downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
+      }
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve();
+      });
+    }).on('error', (err) => {
+      fs.unlink(destPath, () => reject(err));
+    });
+  });
+}
+
+
 export async function handler(event) {
     const bucketName = process.env.BUCKET_NAME;
     const repoUrl = process.env.REPOSITORY_URL;
-    const targetPath = 'dist';
     const s3Prefix = 'dataservice/observable';
     const branch = process.env.ENVIRONMENT == 'prod' ? 'main' : 'develop';
 
     const tmpDir = `/tmp/repo-${Date.now()}`;
+    const zipPath = path.join(tmpDir, 'repo.zip');
+    const observableDirectory = path.join(tmpDir, `CloudGentGran-${branch}`, 'observable');
 
     try {
         
-        console.log(`Cloning ${repoUrl}...`);
+        console.log(`Get ${repoUrl}/${branch}... into ${observableDirectory}`);
         
-        execSync(`curl -L ${repoUrl}/archive/refs/heads/${branch}.zip -o ${tmpDir}/repo.zip`);
-        execSync(`unzip ${tmpDir}/repo.zip "observable/*" -d ${tmpDir}`);
+        // Create temp directory
+        fs.mkdirSync(tmpDir, { recursive: true });
+        
+        // Download zip file
+        const downloadUrl = `${repoUrl}/archive/refs/heads/${branch}.zip`;
+        console.log(`Downloading from ${downloadUrl}`);
+        await downloadFile(downloadUrl, zipPath);
+        
+        // Extract zip file
+        console.log('Extracting zip file...');
+        const zip = new AdmZip(zipPath);
+        
+        // Extract only files that match the pattern
+        zip.extractEntryTo(
+            `CloudGentGran-${branch}/observable/`,
+            tmpDir,
+            true,  // maintainEntryPath
+            true   // overwrite
+        );
+        
+        console.log(`Extracted to ${observableDirectory}`);
+        execSync(`chmod -R 755 ${tmpDir}`);
+
         
 
         console.log('Running npm ci...');
-        execSync('npm ci', { cwd: tmpDir, stdio: 'inherit' });
+        execSync('npm ci', { cwd: observableDirectory, stdio: 'inherit' });
 
         console.log('Running npm run build...');
-        execSync('npm run build', { cwd: tmpDir, stdio: 'inherit' });
+        execSync('npm run build', { cwd: observableDirectory, stdio: 'inherit' });
 
-        let buildDir = path.join(tmpDir, targetPath);
+        let buildDir = path.join(observableDirectory, 'dist');
         if (!fs.existsSync(buildDir)) {
-            const distDir = path.join(tmpDir, 'dist');
-            if (fs.existsSync(distDir)) {
-                buildDir = distDir;
-            } else {
-                throw new Error(`Build output not found at ${targetPath} or dist`);
-            }
+           
+            throw new Error(`Build output not found at ${buildDir}`);
         }
 
         console.log(`Uploading from ${buildDir} to s3://${bucketName}/${s3Prefix}...`);
