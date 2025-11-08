@@ -100,6 +100,7 @@ class ObservableBuildDeployOperator(BaseOperator):
             if credentials.token:
                 env['AWS_SESSION_TOKEN'] = credentials.token
             env['AWS_DEFAULT_REGION'] = self.region
+            env['AWS_ENDPOINT_URL'] = os.getenv('AWS_ENDPOINT_URL', '')
 
 
             result = subprocess.run(
