@@ -711,7 +711,7 @@ export class IamConstruct extends Construct {
       roleName: `catalunya-mart-role-${environmentName}`,
       description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
       assumedBy: new iam.CompositePrincipal(
-        new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+        new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
         new iam.ServicePrincipal('lambda.amazonaws.com')
       ),
       managedPolicies: [this.martExecutorPolicy],
