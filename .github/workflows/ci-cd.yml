@@ -157,6 +157,7 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
   # ==========================================
   # DEPLOY TO DEVELOPMENT
@@ -247,6 +248,7 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
       # Conditional CDK Deploy
       - name: CDK Deploy Development (LocalStack)
@@ -274,6 +276,7 @@ jobs:
           CDK_DEFAULT_REGION: eu-west-1
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEPLOY_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
       - name: Upload deployment outputs
         uses: actions/upload-artifact@v4
@@ -357,6 +360,7 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
       - name: CDK Deploy Production
         working-directory: ./infrastructure
@@ -373,6 +377,7 @@ jobs:
           # Add deployment metadata
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEPLOY_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
       - name: Upload deployment outputs
         uses: actions/upload-artifact@v4
@@ -427,6 +432,7 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
       - name: Check for sensitive data in code
         run: |
