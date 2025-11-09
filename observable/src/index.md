@@ -195,7 +195,7 @@ municipal_name_label);
   </p>
 </div>
 
-<hr/>
+---
 
 <div class="story-section">
     <h2>${t(locale_value, "WHERE_ELDERLY_LIVE")}</h2>
@@ -236,6 +236,8 @@ municipal_name_label);
 </div>
 </div>
 
+---
+
 <div class="story-section">
   <h2>${t(locale_value, "RESIDENTIAL_PLACES_SUFFICIENCY")}</h2>
   <p>
@@ -272,7 +274,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
   </div>
 </div>
 
-<hr/>
+---
 
 <div class="story-section">
   <h2>${t(locale_value, "EVOLUTION_POPULATION_SERVICES")}</h2>
@@ -282,45 +284,36 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
   </p>
 
   <div class="grid grid-cols-3">
-      <h3 class="grid-colspan-2">${t(locale_value, "TREND_POPULATION_SERVICES_COMARCA")}</h3>
+      <h3 class="grid-colspan-1">${t(locale_value, "TREND_POPULATION_SERVICES_COMARCA")}</h3>
       <div class="grid-colspan-1" style="align-self: center;">
           ${nom_comarca_input}
       </div>
   </div>
 
   <div class="grid grid-cols-3">
-      <div class="grid-colspan-1">
+      <div class="card grid-colspan-1">
           <h4>${t(locale_value, "EVOLUTION_POPULATION_65_PLUS")}</h4>
           ${single_comarca_population_input}
           ${resize((width) => plot_legend_trend_population(width, locale_value, single_comarca_population))}
-      </div>
-      <div class="grid-colspan-1">
-          <h4>${t(locale_value, "ASSISTANCE_SERVICES")}</h4>
-          ${serveis_residence_ratio_input}
-          ${resize((width) => plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type))}
-      </div>
-      <div class="grid-colspan-1">
-          <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
-          ${serveis_input}
-          ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, service_qualification))} 
-      </div>
-  </div>
-
-  <div class="grid grid-cols-3">
-      <div class="card grid-colspan-1">
           <figure>${resize((width) => plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population))}</figure>
       </div>
       <div class="card grid-colspan-1">
+          <h4>${t(locale_value, "ASSISTANCE_SERVICES")}</h4>
+          ${serveis_residence_ratio_input}
+          ${resize((width) => plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type))}
           <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, locale_value, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis))}</figure>
       </div>
       <div class="card grid-colspan-1">
+          <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
+          ${serveis_input}
+          ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, service_qualification))} 
           <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis, all_available_services))}</figure>
       </div>
   </div>
 
 </div>
 
-<hr/>
+---
 
 <div class="story-section">
   <h2>Detall territorial per comarca</h2>
@@ -366,6 +359,8 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
     </div>
   </div>
 </div>
+
+---
 
 ```js
 const content = {
