@@ -730,17 +730,6 @@ export class IamConstruct extends Construct {
       managedPolicies: [this.transformerPolicy],
     });
 
-    // Lambda Mart Execution Role
-    this.martExecutionRole = new iam.Role(this, 'MartExecutionRole', {
-      roleName: `catalunya-mart-role-${environmentName}`,
-      description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
-      assumedBy: new iam.CompositePrincipal(
-        new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
-        new iam.ServicePrincipal('lambda.amazonaws.com')
-      ),
-      managedPolicies: [this.martExecutorPolicy],
-    });
-
     // Lambda Monitoring Execution Role
     this.monitoringExecutionRole = new iam.Role(this, 'MonitoringExecutionRole', {
       roleName: `catalunya-monitoring-role-${environmentName}`,
@@ -828,6 +817,17 @@ export class IamConstruct extends Construct {
 
     cdk.Tags.of(this.airflowCrossAccountRole).add('ServiceType', 'Orchestration');
     cdk.Tags.of(this.airflowCrossAccountRole).add('RoleType', 'CrossAccount');
+
+    // Lambda Mart Execution Role
+    this.martExecutionRole = new iam.Role(this, 'MartExecutionRole', {
+      roleName: `catalunya-mart-role-${environmentName}`,
+      description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+        new iam.ServicePrincipal('lambda.amazonaws.com')
+      ),
+      managedPolicies: [this.martExecutorPolicy],
+    });
 
     // ========================================
     // S3 Copier Roles
