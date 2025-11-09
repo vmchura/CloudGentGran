@@ -1,4 +1,5 @@
 {
+  "BASE": "en",
   "TITLE": "Aging and Elderly Care in Catalonia",
   "INDICATOR_VARIATION": "Percentage variation between years {referenceYear} and {latestYear}",
   "INTRO_TEXT": "The perception that there are many elderly people in Catalonia sparked my curiosity to verify it with data. I wanted to know if this impression was a coincidence or a demographic reality. Moreover, when talking to nursing home professionals, they often mention waiting lists for admission. These observations motivated the analysis to better understand the distribution of the elderly population and the availability of residential places in the territory.",

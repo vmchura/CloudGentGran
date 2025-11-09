@@ -1,4 +1,5 @@
 {
+  "BASE": "es",
   "TITLE": "Envejecimiento y Atención a las Personas Mayores en Cataluña",
   "INDICATOR_VARIATION": "Variación porcentual entre los años {referenceYear} y {latestYear}",
   "INTRO_TEXT": "La percepción de que en Cataluña hay muchas personas mayores despertó mi curiosidad por comprobarlo con datos. Quería saber si esta impresión respondía a una coincidencia o a una realidad demográfica. Además, al hablar con profesionales de residencias, a menudo comentan que hay lista de espera para acceder a ellas. Estas observaciones motivaron el análisis para entender mejor la distribución de la población mayor y la disponibilidad de plazas residenciales en el territorio.",
