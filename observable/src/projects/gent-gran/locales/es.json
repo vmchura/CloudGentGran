@@ -1,4 +1,5 @@
 {
+  "BASE": "es",
   "TITLE": "Envejecimiento y Atención a las Personas Mayores en Cataluña",
   "INDICATOR_VARIATION": "Variación porcentual entre los años {referenceYear} y {latestYear}",
   "INTRO_TEXT": "La percepción de que en Cataluña hay muchas personas mayores despertó mi curiosidad por comprobarlo con datos. Quería saber si esta impresión respondía a una coincidencia o a una realidad demográfica. Además, al hablar con profesionales de residencias, a menudo comentan que hay lista de espera para acceder a ellas. Estas observaciones motivaron el análisis para entender mejor la distribución de la población mayor y la disponibilidad de plazas residenciales en el territorio.",
@@ -46,5 +47,12 @@
   "LANGUAGE_LABEL": "Idioma",
   "CATALONIA": "Cataluña",
   "POPULATION": "Población",
-  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Plazas disponibles acumuladas"
+  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Plazas disponibles acumuladas",
+  "SOURCES": "Fuentes",
+  "SOURCE_ENTITIES_TITLE": "Registro de entidades, servicios y establecimientos sociales (servicios sociales básicos y especializados)",
+  "SOURCE_ENTITIES_DESCRIPTION": "Registro en el que se inscriben y califican todos los servicios sociales, tanto los básicos como los especializados, ya sean de titularidad pública o privada, así como las entidades que son sus titulares.",
+  "SOURCE_POPULATION_TITLE": "Censo de población y viviendas",
+  "SOURCE_POPULATION_DESCRIPTION": "El Censo de población y viviendas es la operación estadística que, con periodicidad anual, proporciona el recuento de la población residente en el territorio y su distribución geográfica. También proporciona información sobre las principales características demográficas y sociales de la población, hogares y familias, y viviendas.",
+  "SOURCE_BOUNDARIES_TITLE": "Divisiones administrativas",
+  "SOURCE_BOUNDARIES_DESCRIPTION": "Base geográfica que contiene los límites vigentes de las diferentes divisiones administrativas que conforman la organización territorial de Cataluña"
 }

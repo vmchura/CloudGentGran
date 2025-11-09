@@ -1,4 +1,5 @@
 {
+  "BASE": "ca",
   "TITLE": "Envelliment i Atenció a la Gent Gran a Catalunya",
   "INDICATOR_VARIATION": "Variació percentual entre els anys {referenceYear} i {latestYear}",
   "INTRO_TEXT": "La percepció que a Catalunya hi ha moltes persones grans em va despertar la curiositat de comprovar-ho amb dades. Volia saber si aquesta impressió responia a una coincidència o a una realitat demogràfica. A més, en parlar amb professionals de residències, sovint comenten que hi ha llista d'espera per accedir-hi. Aquestes observacions van motivar l'anàlisi per entendre millor la distribució de la població gran i la disponibilitat de places residencials al territori.",
@@ -46,5 +47,12 @@
   "LANGUAGE_LABEL": "Idioma",
   "CATALONIA": "Catalunya",
   "POPULATION": "Població",
-  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Places disponibles acumulades"
+  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Places disponibles acumulades",
+  "SOURCES": "Fonts",
+  "SOURCE_ENTITIES_TITLE": "Registre d'entitats, serveis i establiments socials (serveis socials bàsics i especialitzats)",
+  "SOURCE_ENTITIES_DESCRIPTION": "Registre en què s'inscriuen i qualifiquen tots els serveis socials, tant els bàsics com els especialitzats, siguin de titularitat pública o privada, així com les entitats que en són titulars.",
+  "SOURCE_POPULATION_TITLE": "Cens de població i habitatges",
+  "SOURCE_POPULATION_DESCRIPTION": "El Cens de població i habitatges és l'operació estadística que, amb periodicitat anual, proporciona el recompte de la població resident al territori i la seva distribució geogràfica. També proporciona informació sobre les principals característiques demogràfiques i socials de la població, les llars i famílies, i els habitatges.",
+  "SOURCE_BOUNDARIES_TITLE": "Divisions administratives",
+  "SOURCE_BOUNDARIES_DESCRIPTION": "Base geogràfica que conté els límits vigents de les diferents divisions administratives que conformen l'organització territorial de Catalunya"
 }

@@ -1,4 +1,5 @@
 {
+  "BASE": "en",
   "TITLE": "Aging and Elderly Care in Catalonia",
   "INDICATOR_VARIATION": "Percentage variation between years {referenceYear} and {latestYear}",
   "INTRO_TEXT": "The perception that there are many elderly people in Catalonia sparked my curiosity to verify it with data. I wanted to know if this impression was a coincidence or a demographic reality. Moreover, when talking to nursing home professionals, they often mention waiting lists for admission. These observations motivated the analysis to better understand the distribution of the elderly population and the availability of residential places in the territory.",
@@ -46,5 +47,12 @@
   "LANGUAGE_LABEL": "Language",
   "CATALONIA": "Catalonia",
   "POPULATION": "Population",
-  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Cumulative available places"
+  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Cumulative available places",
+  "SOURCES": "Sources",
+  "SOURCE_ENTITIES_TITLE": "Register of social entities, services, and establishments (basic and specialized social services)",
+  "SOURCE_ENTITIES_DESCRIPTION": "Register in which all social services are recorded and classified, both basic and specialized, whether publicly or privately owned, as well as the entities that hold them.",
+  "SOURCE_POPULATION_TITLE": "Population and Housing Census",
+  "SOURCE_POPULATION_DESCRIPTION": "The Population and Housing Census is the statistical operation that, on an annual basis, provides a count of the resident population in the territory and its geographical distribution. It also provides information on the main demographic and social characteristics of the population, households and families, and dwellings.",
+  "SOURCE_BOUNDARIES_TITLE": "Administrative boundaries",
+  "SOURCE_BOUNDARIES_DESCRIPTION": "Geographic base that contains the current limits of the different administrative divisions that make up the territorial organization of Catalonia"
 }
