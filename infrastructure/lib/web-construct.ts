@@ -18,7 +18,7 @@ export interface WebConstructProps {
   subdomain?: string;
   accountId: string;
   certificateId: string;
-  bucketName: string
+  bucketName: string;
 }
 
 export class WebConstruct extends Construct {
@@ -71,9 +71,7 @@ export class WebConstruct extends Construct {
 
     this.distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
       defaultBehavior: {
-        origin: new origins.S3Origin(this.websiteBucket, {
-          originAccessIdentity,
-        }),
+        origin: origins.S3BucketOrigin.withOriginAccessControl(this.websiteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,

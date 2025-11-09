@@ -174,17 +174,25 @@ export class CatalunyaDataStack extends cdk.Stack {
     // ========================================
     // Web Infrastructure (Optional - based on config)
     // ========================================
-    const certificateId = process.env.WEB_CERTIFICATE_ID || 'undefined';
+    const certificateId = process.env.WEB_CERTIFICATE_ID;
 
-    this.webInfrastructure = new WebConstruct(this, 'WebInfrastructure', {
-      environmentName: this.environmentName,
-      projectName: this.projectName,
-      domainName: this.config.webDomain,
-      subdomain: this.config.webSubdomain,
-      accountId: this.account,
-      certificateId: certificateId,
-      bucketName: this.config.serviceBucketName
-    });
+    if (certificateId && certificateId !== 'undefined') {
+      console.log('Building: constructing WebInfrastructure...');
+
+      this.webInfrastructure = new WebConstruct(this, 'WebInfrastructure', {
+        environmentName: this.environmentName,
+        projectName: this.projectName,
+        domainName: this.config.webDomain,
+        subdomain: this.config.webSubdomain,
+        accountId: this.account,
+        certificateId: certificateId,
+        bucketName: this.config.serviceBucketName,
+      });
+
+    } else {
+      console.log('Skipping: NOT constructing WebInfrastructure (missing certificateId)');
+    }
+
 
     // ========================================
     // CloudFormation Outputs
