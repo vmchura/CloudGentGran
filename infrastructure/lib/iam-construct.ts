@@ -875,8 +875,8 @@ export class IamConstruct extends Construct {
     // ========================================
 
     this.dataEngineerRole = new iam.Role(this, 'DataEngineerRole', {
-      roleName: 'catalunya-data-engineer-role',
-      description: 'Catalunya Data Pipeline - Human Data Engineer Role',
+      roleName: `catalunya-data-engineer-role-${environmentName}`,
+      description: `Catalunya Data Pipeline - Human Data Engineer Role for environment -${environmentName}`,
       assumedBy: new iam.AccountRootPrincipal().withConditions({
         Bool: {
           'aws:MultiFactorAuthPresent': 'true',
