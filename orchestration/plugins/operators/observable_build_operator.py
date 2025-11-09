@@ -160,7 +160,8 @@ class ObservableBuildDeployOperator(BaseOperator):
 
     def _upload_directory_to_s3(self, directory: str, credentials: dict) -> list:
         import boto3
-        
+        import mimetypes
+
         s3_client = boto3.client(
             's3',
             aws_access_key_id=credentials['AccessKeyId'],
@@ -177,12 +178,17 @@ class ObservableBuildDeployOperator(BaseOperator):
                 relative_path = file_path.relative_to(dir_path)
                 s3_key = relative_path.as_posix()
 
-                self.log.info(f"   Uploading {relative_path} → {s3_key}")
+                content_type, _ = mimetypes.guess_type(str(file_path))
+                if content_type is None:
+                    content_type = 'application/octet-stream'
+
+                self.log.info(f"   Uploading {relative_path} → {s3_key} ({content_type})")
 
                 s3_client.upload_file(
                     str(file_path),
                     self.s3_bucket_service,
-                    s3_key
+                    s3_key,
+                    ExtraArgs={'ContentType': content_type}
                 )
                 uploaded_files.append(s3_key)
 
