@@ -8,7 +8,7 @@ export default {
   // lets you organize them into sections and have unlisted pages.
   pages: [
     {
-      name: "Gent-Gran", path: "/projects/gent-gran/",
+      name: "Gent-Gran", path: "/projects/gent-gran/index.html",
     }
   ],
 
@@ -29,6 +29,6 @@ export default {
   // search: true, // activate search
   // linkify: true, // convert URLs in Markdown to links
   // typographer: false, // smart quotes and other typographic improvements
-  // preserveExtension: false, // drop .html from URLs
-  // preserveIndex: false, // drop /index from URLs
+  preserveExtension: true, // drop .html from URLs
+  preserveIndex: true, // drop /index from URLs
 };
