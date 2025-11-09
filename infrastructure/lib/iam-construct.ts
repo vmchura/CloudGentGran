@@ -14,6 +14,7 @@ export interface IamConstructProps {
   athenaDatabaseName: string;
   athenaWorkgroupName: string;
   catalogBucketName: string;
+  serviceBucketName: string;
 }
 
 export class IamConstruct extends Construct {
@@ -50,7 +51,7 @@ export class IamConstruct extends Construct {
 
     const { environmentName, projectName, config, account, region, bucketName,
       athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName,
-      catalogBucketName } = props;
+      catalogBucketName, serviceBucketName } = props;
 
     // Common tags for all IAM resources
     const commonTags = ConfigHelper.getCommonTags(environmentName);
@@ -687,7 +688,16 @@ export class IamConstruct extends Construct {
         }),
         // S3 Data Bucket Write (dataservice prefix)
         new iam.PolicyStatement({
-          sid: 'S3DataBucketWrite',
+          sid: 'S3ServiceBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+          ],
+          resources: [`arn:aws:s3:::${serviceBucketName}`]
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3ServiceBucketWrite',
           effect: iam.Effect.ALLOW,
           actions: [
             's3:PutObject',
@@ -695,7 +705,7 @@ export class IamConstruct extends Construct {
             's3:GetObject',
             's3:GetObjectVersion',
           ],
-          resources: [`arn:aws:s3:::${bucketName}/dataservice/*`],
+          resources: [`arn:aws:s3:::${serviceBucketName}/*`],
         }),
       ]
     })
