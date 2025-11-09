@@ -4,6 +4,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { EnvironmentConfig, ConfigHelper } from './config';
+import { execSync } from 'child_process';
 
 export interface CatalogConstructProps {
   environmentName: string;
@@ -33,6 +34,7 @@ export class CatalogConstruct extends Construct {
   public readonly catalogBucket: s3.Bucket;
   public readonly catalogBucketName: string;
   public readonly serviceTypeCatalogLambda: lambda.Function;
+  public readonly serviceQualificationCatalogLambda: lambda.Function;
   public readonly municipalsCatalogLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: CatalogConstructProps) {
@@ -53,17 +55,28 @@ export class CatalogConstruct extends Construct {
     // Create simplified catalog infrastructure
     this.catalogBucket = this.createCatalogBucket(environmentName, projectName);
     this.serviceTypeCatalogLambda = this.createServiceTypeCatalogLambda({
-          environmentName,
-          projectName,
-          config,
-          dataBucketName: props.dataBucketName,
-          athenaDatabaseName: props.athenaDatabaseName,
-          lambdaPrefix,
-          account,
-          region,
-          catalogExecutorRole: props.catalogExecutorRole
-        });
+      environmentName,
+      projectName,
+      config,
+      dataBucketName: props.dataBucketName,
+      athenaDatabaseName: props.athenaDatabaseName,
+      lambdaPrefix,
+      account,
+      region,
+      catalogExecutorRole: props.catalogExecutorRole
+    });
     this.municipalsCatalogLambda = this.createMunicipalsCatalogLambda({
+      environmentName,
+      projectName,
+      config,
+      dataBucketName: props.dataBucketName,
+      athenaDatabaseName: props.athenaDatabaseName,
+      lambdaPrefix,
+      account,
+      region,
+      catalogExecutorRole: props.catalogExecutorRole
+    });
+    this.serviceQualificationCatalogLambda = this.createServiceQualificationCatalogLambda({
       environmentName,
       projectName,
       config,
@@ -142,7 +155,42 @@ export class CatalogConstruct extends Construct {
 
     return catalogBucket;
   }
+  /**
+   * Gets the appropriate Python Lambda code, skipping bundling for tests
+   */
+  private getPythonLambdaCode(extractor_directory: string): lambda.Code {
+    const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
+    // Use bundling for real deployments
+    console.log('📦 Using Python bundling for deployment');
+    return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`, {
+      bundling: {
+        local: {
 
+          tryBundle(outputDir: string) {
+            if (isAct) {
+              try {
+                execSync(`pip install pandas fastparquet -t ${outputDir}`);
+                execSync(`cp -au . ${outputDir}`);
+                return true;
+              } catch {
+                return false;
+              }
+            } else {
+              return false;
+            }
+          }
+
+        },
+        image: lambda.Runtime.PYTHON_3_13.bundlingImage,
+        command: [
+          'bash', '-c', [
+            'pip install pandas fastparquet -t /asset-output',
+            'cp -au . /asset-output'
+          ].join(' && ')
+        ],
+      },
+    });
+  }
   /**
    * Creates a simplified Lambda function for creating raw parquet files
    */
@@ -165,22 +213,14 @@ export class CatalogConstruct extends Construct {
     // ========================================
     // Simple Catalog Lambda
     // ========================================
+
+
+
     const serviceTypeCatalogLambda = new lambda.Function(this, 'ServiceTypeCatalogLambda', {
       functionName: `${lambdaPrefix}-service-type-catalog`,
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_13,
       handler: 'service_type_initializer.lambda_handler',
-      code: lambda.Code.fromAsset('../lambda/catalog/service_type', {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c', [
-              // Install minimal dependencies for parquet creation
-              'pip install pandas fastparquet -t /asset-output',
-              'cp -au . /asset-output'
-            ].join(' && ')
-          ],
-        },
-      }),
+      code: this.getPythonLambdaCode('service_type'),
       timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
@@ -220,7 +260,72 @@ export class CatalogConstruct extends Construct {
 
     return serviceTypeCatalogLambda;
   }
-private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
+
+  private createServiceQualificationCatalogLambda(props: CatalogLambdaProps): lambda.Function {
+    const {
+      environmentName,
+      projectName,
+      config,
+      lambdaPrefix,
+      account,
+      region
+    } = props;
+
+    // ========================================
+    // IAM Role for Simple Catalog Lambda
+    // ========================================
+    // Use the execution role from props
+    const catalogRole = props.catalogExecutorRole;
+
+    // ========================================
+    // Simple Catalog Lambda
+    // ========================================
+    const serviceTypeCatalogLambda = new lambda.Function(this, 'ServiceQualificationCatalogLambda', {
+      functionName: `${lambdaPrefix}-service-qualification-catalog`,
+      runtime: lambda.Runtime.PYTHON_3_13,
+      handler: 'service_qualification_initializer.lambda_handler',
+      code: this.getPythonLambdaCode('service_qualification'),
+      timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
+      memorySize: 256, // Reduced memory for simple parquet creation
+      role: catalogRole,
+      environment: {
+        CATALOG_BUCKET_NAME: this.catalogBucketName,
+        ENVIRONMENT: environmentName,
+        REGION: region
+      },
+      description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
+    });
+
+    // ========================================
+    // Tags and Outputs
+    // ========================================
+    const commonTags = ConfigHelper.getCommonTags(environmentName);
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(serviceTypeCatalogLambda).add(key, value);
+    });
+
+    // Simplified tags
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Purpose', 'ParquetGeneration');
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Layer', 'DataProcessing');
+    cdk.Tags.of(serviceTypeCatalogLambda).add('Complexity', 'Simple');
+
+    // Lambda outputs
+    new cdk.CfnOutput(this, 'ServiceQualificationCatalogLambdaArn', {
+      value: serviceTypeCatalogLambda.functionArn,
+      description: 'ARN of the ServiceQualification Catalog Lambda function',
+      exportName: `${projectName}-ServiceQualificationCatalogLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'ServiceQualificationCatalogLambdaName', {
+      value: serviceTypeCatalogLambda.functionName,
+      description: 'Name of the ServiceQualification Catalog Lambda function',
+      exportName: `${projectName}-ServiceQualificationCatalogLambdaName`,
+    });
+
+    return serviceTypeCatalogLambda;
+  }
+
+  private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config'> & { config: EnvironmentConfig }): lambda.Function {
     const {
       environmentName,
       projectName,
@@ -242,33 +347,22 @@ private createMunicipalsCatalogLambda(props: Omit<CatalogConstructProps, 'config
 
 
     const municipalsCatalogLambda = new lambda.Function(this, 'MunicipalsCatalogLambda', {
-          functionName: `${lambdaPrefix}-municipals-catalog`,
-          runtime: lambda.Runtime.PYTHON_3_9,
-          handler: 'municipals_initializer.lambda_handler',
-          code: lambda.Code.fromAsset('../lambda/catalog/municipals', {
-            bundling: {
-              image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-              command: [
-                'bash', '-c', [
-                  // Install minimal dependencies for parquet creation
-                  'pip install pandas fastparquet -t /asset-output',
-                  'cp -au . /asset-output'
-                ].join(' && ')
-              ],
-            },
-          }),
-          timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
-          memorySize: 512, // Reduced memory for simple parquet creation
-          role: catalogRole,
-          environment: {
-            CATALOG_BUCKET_NAME: this.catalogBucketName,
-            SEMANTIC_IDENTIFIER: 'municipals',
-            DATASET_IDENTIFIER: '9aju-tpwc',
-            ENVIRONMENT: environmentName,
-            REGION: region
-          },
-          description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
-        });
+      functionName: `${lambdaPrefix}-municipals-catalog`,
+      runtime: lambda.Runtime.PYTHON_3_13,
+      handler: 'municipals_initializer.lambda_handler',
+      code: this.getPythonLambdaCode('municipals'),
+      timeout: cdk.Duration.seconds(60), // Reduced timeout for simple operations
+      memorySize: 512, // Reduced memory for simple parquet creation
+      role: catalogRole,
+      environment: {
+        CATALOG_BUCKET_NAME: this.catalogBucketName,
+        SEMANTIC_IDENTIFIER: 'municipals',
+        DATASET_IDENTIFIER: '9aju-tpwc',
+        ENVIRONMENT: environmentName,
+        REGION: region
+      },
+      description: `Simple Catalog Lambda for ${environmentName} environment - Creates raw parquet files`,
+    });
 
     // ========================================
     // Tags and Outputs

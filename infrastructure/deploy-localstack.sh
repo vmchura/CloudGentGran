@@ -19,6 +19,8 @@ export AWS_REGION=eu-west-1
 export AWS_DEFAULT_REGION=eu-west-1
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
+export CDK_LOCALSTACK=true
+export WEB_CERTIFICATE_ID='undefined'
 
 # For CDK >= 2.177.0, we need to explicitly allow region environment variables
 export AWS_ENVAR_ALLOWLIST=AWS_REGION,AWS_DEFAULT_REGION,CDK_DEFAULT_REGION

@@ -126,12 +126,11 @@ export class AnalyticsConstruct extends Construct {
 
     const workgroupConfiguration: athena.CfnWorkGroup.WorkGroupConfigurationProperty = {
       resultConfiguration: {
-        outputLocation: `s3://${athenaResultsBucketName}/query-results/`,
         encryptionConfiguration: {
           encryptionOption: 'SSE_S3',
         },
       },
-      enforceWorkGroupConfiguration: true,
+      enforceWorkGroupConfiguration: false,
       publishCloudWatchMetricsEnabled: true,
       bytesScannedCutoffPerQuery: environmentName === 'prod'
         ? 10 * 1024 * 1024 * 1024 // 10GB limit for prod

@@ -6,12 +6,12 @@ version: '1.0.0'
 profile: 'catalunya_data'
 
 # These configurations specify where dbt should look for different types of files.
-model-paths: ["models"]
-analysis-paths: ["analyses"]
-test-paths: ["tests"]
-seed-paths: ["seeds"]
-macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
+model-paths: [ "models" ]
+analysis-paths: [ "analyses" ]
+test-paths: [ "tests" ]
+seed-paths: [ "seeds" ]
+macro-paths: [ "macros" ]
+snapshot-paths: [ "snapshots" ]
 
 clean-targets:
   - "target"
@@ -19,17 +19,13 @@ clean-targets:
 
 # Variables for different environments
 vars:
-  # Local development paths
-  staging_path: "./local_data/staging"
-  marts_path: "./local_data/marts"
+  # Environment-specific S3 buckets
+  data_bucket: "{{ env_var('DATA_BUCKET') }}"
+  catalog_bucket: "{{ env_var('CATALOG_BUCKET') }}"
 
 # Configuring models
 models:
   catalunya_marts:
-    # Staging models - temporary views for data transformation
-    staging:
-      +materialized: view
-      
     # Marts models - final tables for analytics
     marts:
       +materialized: table

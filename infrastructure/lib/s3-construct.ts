@@ -20,7 +20,6 @@ export class S3Construct extends Construct {
 
     const { environmentName, projectName, config, bucketName, athenaResultsBucketName } = props;
 
-    // Define lifecycle rules for cost optimization
     const lifecycleRules: s3.LifecycleRule[] = [
       {
           id: 'LandingLayerExpiration',
@@ -55,6 +54,12 @@ export class S3Construct extends Construct {
         prefix: 'athena-results/',
         enabled: true,
         expiration: cdk.Duration.days(config.retentionPeriod),
+      },
+      {
+        id: 'DataServiceLayer',
+        prefix: 'dataservice/',
+        enabled: true,
+        expiration: cdk.Duration.days(60),
       },
     ];
 

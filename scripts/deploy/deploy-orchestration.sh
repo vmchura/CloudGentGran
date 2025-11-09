@@ -31,10 +31,12 @@ if [ "$ENVIRONMENT" = "production" ]; then
     APP_NAME="cloudgentgran-orchestration-prod"
     DB_NAME="cloudgentgran-airflow-db-prod"
     SUBDOMAIN="airflow-prod"
+    AIRFLOW_ENV="prod"
 elif [ "$ENVIRONMENT" = "development" ]; then
     APP_NAME="cloudgentgran-orchestration-dev"
     DB_NAME="cloudgentgran-airflow-db-dev"
     SUBDOMAIN="airflow-dev"
+    AIRFLOW_ENV="dev"
 else
     echo -e "${RED}❌ Invalid environment. Use 'development' or 'production'${NC}"
     exit 1
@@ -194,7 +196,7 @@ echo -e "${GREEN}✅ dbt integration completed ($(du -sh orchestration/dbt | cut
 echo -e "${YELLOW}💾 Committing deployment artifacts...${NC}"
 DEPLOYMENT_TAG="deployment-$(date +%Y%m%d-%H%M%S)-$ENVIRONMENT"
 
-git add orchestration/dbt/
+git add -f orchestration/dbt/
 
 if git commit -m "🚀 Deployment artifacts for $ENVIRONMENT
 
@@ -269,21 +271,14 @@ fi
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_EMAIL=admin@example.com"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__BASE_URL=http://$SUBDOMAIN.$DOKKU_DOMAIN:8080"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__API__PORT=8080"
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__HOSTNAME_CALLABLE=airflow.utils.net.get_host_ip_address"
 
-# Environment-specific configurations
-if [ "$ENVIRONMENT" = "production" ]; then
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=production"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_CONN_AWS_LAMBDA_ROLE_CONN='aws://?region_name=eu-west-1&role_arn=arn:aws:iam::${AWS_ACCOUNT_ID:?Set AWS_ACCOUNT_ID}:role/catalunya-airflow-cross-account-role-prod&external_id=catalunya-prod-airflow'"
-else
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=development"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_CONN_AWS_LAMBDA_ROLE_CONN='aws://?region_name=eu-west-1&role_arn=arn:aws:iam::${AWS_ACCOUNT_ID:?Set AWS_ACCOUNT_ID}:role/catalunya-airflow-cross-account-role-dev&external_id=catalunya-dev-airflow'"
-fi
+run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$AIRFLOW_ENV"
 
 echo -e "${GREEN}✅ Environment settings configured${NC}"
 
@@ -357,3 +352,7 @@ echo -e "🌍 Your Airflow is available at: ${YELLOW}http://$SUBDOMAIN.$DOKKU_DO
 echo ""
 echo -e "🔄 To redeploy, run from project root:"
 echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT${NC}"
+
+# After the first deployment is very important to add the fernet key:
+# dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY=fernet_key_value
+# as well the output of the script in roles-deployment.sh, which are aws credentials

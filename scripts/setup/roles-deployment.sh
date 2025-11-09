@@ -8,12 +8,64 @@ set -euo pipefail
 echo "🔐 Attaching minimal IAM permissions for infrastructure testing..."
 
 # --- Configuration ---
+ENVIRONMENT=${1:-dev}
+if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
+    echo "❌ Invalid environment. Usage: $0 [dev|prod]"
+    exit 1
+fi
 POLICY_NAME="CatalunyaDeploymentPolicy"
 TMP_POLICY_FILE="/tmp/minimal-catalunyadeployment-policy.json"
+GITHUB_REPO="vmchura/CloudGentGran"
 
 # Get account ID for resource ARNs
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="eu-west-1"
+
+# --- Function to create or update a GitHub OIDC role ---
+create_github_role() {
+    local role_name=$1
+
+    echo "⏳ Handling GitHub OIDC role: $role_name"
+
+    cat > /tmp/trust-policy-${role_name}.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringLike": {
+            "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO}:*"
+          },
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
+EOF
+
+    if aws iam get-role --role-name "$role_name" --no-cli-pager > /dev/null 2>&1; then
+        echo "🔁 Role $role_name already exists. Updating trust policy..."
+        aws iam update-assume-role-policy \
+            --role-name "$role_name" \
+            --policy-document file:///tmp/trust-policy-${role_name}.json \
+            --no-cli-pager
+    else
+        echo "🆕 Creating role: $role_name"
+        aws iam create-role \
+            --role-name "$role_name" \
+            --assume-role-policy-document file:///tmp/trust-policy-${role_name}.json \
+            --description "Catalunya Data Pipeline - GitHub Actions $role_name" \
+            --tags Key=Project,Value=CatalunyaDataPipeline Key=Environment,Value=${role_name##*-} Key=Service,Value=GitHubActions \
+            --no-cli-pager
+    fi
+}
 
 # --- Cleanup on exit ---
 trap "rm -f $TMP_POLICY_FILE" EXIT
@@ -40,8 +92,7 @@ cat > "$TMP_POLICY_FILE" << EOF
         "cloudformation:DescribeStackResources"
       ],
       "Resource": [
-        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-dev/*",
-        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-prod/*",
+        "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CatalunyaDataStack-${ENVIRONMENT}/*",
         "arn:aws:cloudformation:${REGION}:${ACCOUNT_ID}:stack/CDKToolkit/*"
       ]
     },
@@ -78,7 +129,10 @@ cat > "$TMP_POLICY_FILE" << EOF
         "s3:ListBucket"
       ],
       "Resource": [
-        "arn:aws:s3:::catalunya-data-*",
+        "arn:aws:s3:::catalunya-data-${ENVIRONMENT}",
+        "arn:aws:s3:::catalunya-athena-results-${ENVIRONMENT}",
+        "arn:aws:s3:::catalunya-catalog-${ENVIRONMENT}",
+        "arn:aws:s3:::catalunya-service-${ENVIRONMENT}",
         "arn:aws:s3:::cdk-hnb659fds-*"
       ]
     },
@@ -93,7 +147,10 @@ cat > "$TMP_POLICY_FILE" << EOF
         "s3:DeleteObjectVersion"
       ],
       "Resource": [
-        "arn:aws:s3:::catalunya-data-*/*",
+        "arn:aws:s3:::catalunya-data-${ENVIRONMENT}/*",
+        "arn:aws:s3:::catalunya-athena-results-${ENVIRONMENT}/*",
+        "arn:aws:s3:::catalunya-catalog-${ENVIRONMENT}/*",
+        "arn:aws:s3:::catalunya-service-${ENVIRONMENT}/*",
         "arn:aws:s3:::cdk-hnb659fds-*/*"
       ]
     },
@@ -129,8 +186,8 @@ cat > "$TMP_POLICY_FILE" << EOF
       ],
       "Resource": [
         "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:*S3AutoDeleteObjectsCustomResourceProvider*",
-        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-*",
-        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:catalunya-*"
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:CatalunyaDataStack-${ENVIRONMENT}-*",
+        "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:catalunya-${ENVIRONMENT}-*"
       ]
     },
     {
@@ -162,6 +219,58 @@ cat > "$TMP_POLICY_FILE" << EOF
       ],
       "Resource": [
         "arn:aws:athena:${REGION}:${ACCOUNT_ID}:workgroup/catalunya-workgroup-*"
+      ]
+    },
+    {
+      "Sid": "Route53HostedZone",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ListHostedZones",
+        "route53:GetHostedZone",
+        "route53:ListHostedZonesByName"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Route53RecordSets",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:GetChange",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": [
+        "arn:aws:route53:::hostedzone/*",
+        "arn:aws:route53:::change/*"
+      ]
+    },
+    {
+      "Sid": "CloudFrontDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3BucketPolicyManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": [
+        "arn:aws:s3:::catalunya-service-${ENVIRONMENT}"
       ]
     },
     {
@@ -303,7 +412,10 @@ attach_policy_to_role() {
 }
 
 # --- Main execution ---
+create_github_role "catalunya-deployment-role-${ENVIRONMENT}"
+
 echo "🚀 Starting minimal permissions setup..."
+
 
 # Step 1: Create or update the policy
 create_or_update_policy
@@ -311,12 +423,10 @@ create_or_update_policy
 # Step 2: Attach to roles
 echo ""
 echo "🔗 Attaching policy to GitHub deployment roles..."
-attach_policy_to_role "catalunya-deployment-role-dev"
-attach_policy_to_role "catalunya-deployment-role-prod"
+attach_policy_to_role "catalunya-deployment-role-${ENVIRONMENT}"
 
 echo ""
 echo "✅ Minimal permissions setup complete!"
 echo ""
 echo "📋 Roles with attached policy:"
-echo "  - catalunya-deployment-role-dev (for develop branch deployments)"
-echo "  - catalunya-deployment-role-prod (for production deployments)"
+echo "  - catalunya-deployment-role-${ENVIRONMENT}"

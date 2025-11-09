@@ -14,7 +14,7 @@ export interface IamConstructProps {
   athenaDatabaseName: string;
   athenaWorkgroupName: string;
   catalogBucketName: string;
-  githubRepo?: string;
+  serviceBucketName: string;
 }
 
 export class IamConstruct extends Construct {
@@ -25,10 +25,13 @@ export class IamConstruct extends Construct {
   public readonly monitoringExecutionRole: iam.Role;
   public readonly catalogExecutorRole: iam.Role;
   public readonly airflowCrossAccountRole: iam.Role;
+  public readonly s3CopierTransformerRole: iam.Role;
+  public readonly s3CopierMartRole: iam.Role;
+  public readonly dataServiceRole: iam.Role;
 
-  // GitHub OIDC roles
-  public readonly githubDeploymentRole: iam.Role;
-  public readonly githubOidcProvider: iam.OpenIdConnectProvider;
+  // Orchestration roles
+  public readonly airflowUser: iam.User;
+  public readonly airflowAccessKey: iam.AccessKey;
 
   // Human roles
   public readonly dataEngineerRole: iam.Role;
@@ -37,32 +40,21 @@ export class IamConstruct extends Construct {
   public readonly extractorPolicy: iam.ManagedPolicy;
   public readonly transformerPolicy: iam.ManagedPolicy;
   public readonly martExecutorPolicy: iam.ManagedPolicy;
-  public readonly deploymentPolicy: iam.ManagedPolicy;
   public readonly catalogExecutorPolicy: iam.ManagedPolicy;
   public readonly airflowCrossAccountPolicy: iam.ManagedPolicy;
+  public readonly s3CopierTransformerPolicy: iam.ManagedPolicy;
+  public readonly s3CopierMartPolicy: iam.ManagedPolicy;
+  public readonly dataServicePolicy: iam.ManagedPolicy;
 
   constructor(scope: Construct, id: string, props: IamConstructProps) {
     super(scope, id);
 
     const { environmentName, projectName, config, account, region, bucketName,
-            athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName,
-            catalogBucketName } = props;
-
-    const githubRepo = props.githubRepo || 'vmchura/CloudGentGran';
+      athenaResultsBucketName, athenaDatabaseName, athenaWorkgroupName,
+      catalogBucketName, serviceBucketName } = props;
 
     // Common tags for all IAM resources
     const commonTags = ConfigHelper.getCommonTags(environmentName);
-
-    // ========================================
-    // GitHub OIDC Provider (if not exists)
-    // ========================================
-    this.githubOidcProvider = new iam.OpenIdConnectProvider(this, 'GitHubOIDCProvider', {
-      url: 'https://token.actions.githubusercontent.com',
-      clientIds: ['sts.amazonaws.com'],
-      thumbprints: ['6938fd4d98bab03faadb97b34396831e3780aea1'], // GitHub's thumbprint
-    });
-
-    cdk.Tags.of(this.githubOidcProvider).add('Project', commonTags.Project);
 
     // ========================================
     // IAM Policies
@@ -165,6 +157,20 @@ export class IamConstruct extends Construct {
             `arn:aws:s3:::${bucketName}/landing/*`,
           ],
         }),
+        new iam.PolicyStatement({
+          sid: 'S3CatalogBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [
+            `arn:aws:s3:::${catalogBucketName}`,
+            `arn:aws:s3:::${catalogBucketName}/*`,
+          ],
+        }),
         // S3 Data Bucket Write (staging prefix)
         new iam.PolicyStatement({
           sid: 'S3DataBucketWrite',
@@ -190,6 +196,20 @@ export class IamConstruct extends Construct {
             },
           },
         }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'glue:CreatePartition',
+            'glue:GetTable',
+            'glue:GetDatabase',
+            'glue:CreatePartition'
+          ],
+          resources: [
+            `arn:aws:glue:${region}:${account}:catalog`,
+            `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
+            `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`
+          ]
+        })
       ],
     });
 
@@ -239,8 +259,13 @@ export class IamConstruct extends Construct {
             's3:DeleteObject',
             's3:GetObject',
             's3:GetObjectVersion',
+            's3:ListBucket',
+            's3:GetBucketLocation',
           ],
-          resources: [`arn:aws:s3:::${bucketName}/marts/*`],
+          resources: [
+            `arn:aws:s3:::${bucketName}/marts`,
+            `arn:aws:s3:::${bucketName}/marts/*`,
+          ],
         }),
         // S3 Athena Results Access
         new iam.PolicyStatement({
@@ -252,6 +277,10 @@ export class IamConstruct extends Construct {
             's3:PutObject',
             's3:GetObject',
             's3:DeleteObject',
+            's3:GetObjectVersion',
+            's3:ListBucketVersions',
+            's3:AbortMultipartUpload',
+            's3:ListMultipartUploadParts',
           ],
           resources: [
             `arn:aws:s3:::${athenaResultsBucketName}`,
@@ -264,16 +293,23 @@ export class IamConstruct extends Construct {
           effect: iam.Effect.ALLOW,
           actions: [
             'glue:GetDatabase',
+            'glue:GetDatabases',
             'glue:GetTable',
             'glue:GetTables',
             'glue:GetPartition',
             'glue:GetPartitions',
             'glue:BatchGetPartition',
+            'glue:GetDataCatalogEncryptionSettings',
+            'glue:GetUserDefinedFunction',
+            'glue:GetUserDefinedFunctions',
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
             `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
             `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`,
+            `arn:aws:glue:${region}:${account}:userDefinedFunction/${athenaDatabaseName}/*`,
+            `arn:aws:glue:${region}:${account}:database/marts`,
+            `arn:aws:glue:${region}:${account}:table/marts/*`
           ],
         }),
         // Glue Data Catalog Write
@@ -290,11 +326,14 @@ export class IamConstruct extends Construct {
             'glue:BatchCreatePartition',
             'glue:BatchUpdatePartition',
             'glue:BatchDeletePartition',
+            'glue:DeletePartition'
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
             `arn:aws:glue:${region}:${account}:database/${athenaDatabaseName}`,
             `arn:aws:glue:${region}:${account}:table/${athenaDatabaseName}/*`,
+            `arn:aws:glue:${region}:${account}:database/marts`,
+            `arn:aws:glue:${region}:${account}:table/marts/*`
           ],
         }),
         // Athena Query Execution
@@ -309,8 +348,15 @@ export class IamConstruct extends Construct {
             'athena:GetQueryResultsStream',
             'athena:ListQueryExecutions',
             'athena:BatchGetQueryExecution',
+            'athena:CancelQueryExecution',
+            'athena:GetResultConfiguration',
+            'athena:GetDataCatalog',
+            'athena:ListDataCatalogs',
           ],
-          resources: [`arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`],
+          resources: [
+            `arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`,
+            `arn:aws:athena:${region}:${account}:datacatalog/*`,
+          ],
         }),
         // Athena Workgroup Access
         new iam.PolicyStatement({
@@ -319,8 +365,17 @@ export class IamConstruct extends Construct {
           actions: [
             'athena:GetWorkGroup',
             'athena:ListWorkGroups',
+            'athena:UpdateWorkGroup',
+            'athena:GetResultConfiguration',
+            'athena:ListNamedQueries',
+            'athena:GetNamedQuery',
+            'athena:CreateNamedQuery',
+            'athena:DeleteNamedQuery',
           ],
-          resources: [`arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`],
+          resources: [
+            `arn:aws:athena:${region}:${account}:workgroup/${athenaWorkgroupName}`,
+            `arn:aws:athena:${region}:${account}:workgroup/primary`,
+          ],
         }),
         // X-Ray Permissions
         new iam.PolicyStatement({
@@ -336,6 +391,37 @@ export class IamConstruct extends Construct {
               'aws:RequestedRegion': region,
             },
           },
+        }),
+        // Additional Athena permissions for DBT operations
+        new iam.PolicyStatement({
+          sid: 'AthenaAdditionalPermissions',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'athena:ListDatabases',
+            'athena:ListTableMetadata',
+            'athena:GetTableMetadata',
+            'athena:ListTagsForResource',
+          ],
+          resources: ['*'],
+          conditions: {
+            StringEquals: {
+              'aws:RequestedRegion': region,
+            },
+          },
+        }),
+        // Additional S3 permissions for data access patterns used by DBT
+        new iam.PolicyStatement({
+          sid: 'S3AdditionalDataAccess',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketVersioning',
+            's3:ListBucketMultipartUploads',
+            's3:GetBucketNotification',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${athenaResultsBucketName}`,
+          ],
         }),
       ],
     });
@@ -390,7 +476,9 @@ export class IamConstruct extends Construct {
             'glue:DeleteTable',
             'glue:GetDatabase',
             'glue:CreateDatabase',
+            'glue:CreateDatabases',
             'glue:UpdateDatabase',
+            'glue:GetTableVersions',
           ],
           resources: [
             `arn:aws:glue:${region}:${account}:catalog`,
@@ -415,12 +503,12 @@ export class IamConstruct extends Construct {
         }),
       ],
     });
+
     // Airflow Cross-Account Policy
     this.airflowCrossAccountPolicy = new iam.ManagedPolicy(this, 'AirflowCrossAccountPolicy', {
       managedPolicyName: `CatalunyaAirflowCrossAccountPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
       description: `Airflow cross-account permissions for Catalunya Data Pipeline (${environmentName})`,
       statements: [
-        // Assume catalog executor roles
         new iam.PolicyStatement({
           sid: 'AssumeRolePermissions',
           effect: iam.Effect.ALLOW,
@@ -429,8 +517,11 @@ export class IamConstruct extends Construct {
           ],
           resources: [
             `arn:aws:iam::${account}:role/catalunya-catalog-executor-role-${environmentName}`,
-            `arn:aws:iam::${account}:role/catalunya-${environmentName}-*-extractor`,
-            `arn:aws:iam::${account}:role/catalunya-${environmentName}-*-transformer`,
+            `arn:aws:iam::${account}:role/catalunya-lambda-extractor-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-lambda-transformer-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-mart-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-s3-copier-transformer-role-${environmentName}`,
+            `arn:aws:iam::${account}:role/catalunya-s3-copier-mart-role-${environmentName}`,
           ],
         }),
         // Invoke Lambda functions
@@ -478,245 +569,146 @@ export class IamConstruct extends Construct {
         }),
       ],
     });
-    // Deployment Policy for GitHub Actions
-    this.deploymentPolicy = new iam.ManagedPolicy(this, 'DeploymentPolicy', {
-      managedPolicyName: 'CatalunyaDeploymentPolicy',
-      description: 'Deployment permissions for Catalunya Data Pipeline CDK stacks',
+
+    // S3 Copier Transformer Policy
+    this.s3CopierTransformerPolicy = new iam.ManagedPolicy(this, 'S3CopierTransformerPolicy', {
+      managedPolicyName: `CatalunyaS3CopierTransformerPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `S3 copy permissions for transformer layer (${environmentName})`,
       statements: [
-        // CloudFormation Stack Operations
         new iam.PolicyStatement({
-          sid: 'CloudFormationStackOps',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'cloudformation:CreateStack',
-            'cloudformation:UpdateStack',
-            'cloudformation:DeleteStack',
-            'cloudformation:DescribeStacks',
-            'cloudformation:GetTemplate',
-            'cloudformation:CreateChangeSet',
-            'cloudformation:ExecuteChangeSet',
-            'cloudformation:DescribeChangeSet',
-            'cloudformation:DescribeStackEvents',
-            'cloudformation:GetTemplateSummary',
-            'cloudformation:DescribeStackResources',
-          ],
-          resources: [
-            `arn:aws:cloudformation:${region}:${account}:stack/CatalunyaDataStack-dev/*`,
-            `arn:aws:cloudformation:${region}:${account}:stack/CatalunyaDataStack-prod/*`,
-            `arn:aws:cloudformation:${region}:${account}:stack/CDKToolkit/*`,
-          ],
-        }),
-        // CloudFormation List Operations
-        new iam.PolicyStatement({
-          sid: 'CloudFormationList',
-          effect: iam.Effect.ALLOW,
-          actions: ['cloudformation:ListStacks'],
-          resources: ['*'],
-          conditions: {
-            StringEquals: {
-              'aws:RequestedRegion': region,
-            },
-          },
-        }),
-        // S3 Project Buckets Management
-        new iam.PolicyStatement({
-          sid: 'S3ProjectBuckets',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:CreateBucket',
-            's3:DeleteBucket',
-            's3:GetBucketLocation',
-            's3:GetBucketVersioning',
-            's3:GetBucketEncryption',
-            's3:GetBucketPublicAccessBlock',
-            's3:GetBucketNotification',
-            's3:GetBucketTagging',
-            's3:PutBucketVersioning',
-            's3:PutBucketEncryption',
-            's3:PutBucketPublicAccessBlock',
-            's3:PutBucketNotification',
-            's3:PutBucketTagging',
-            's3:ListBucket',
-          ],
-          resources: [
-            'arn:aws:s3:::catalunya-data-*',
-            'arn:aws:s3:::cdk-hnb659fds-*',
-          ],
-        }),
-        // S3 Project Objects Management
-        new iam.PolicyStatement({
-          sid: 'S3ProjectObjects',
+          sid: 'S3ReadLandingLayer',
           effect: iam.Effect.ALLOW,
           actions: [
             's3:GetObject',
-            's3:PutObject',
-            's3:DeleteObject',
             's3:GetObjectVersion',
-            's3:DeleteObjectVersion',
+            's3:ListBucket',
           ],
           resources: [
-            'arn:aws:s3:::catalunya-data-*/*',
-            'arn:aws:s3:::cdk-hnb659fds-*/*',
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${bucketName}/landing/*`,
           ],
         }),
-        // IAM Pass Roles
         new iam.PolicyStatement({
-          sid: 'IAMPassRoles',
-          effect: iam.Effect.ALLOW,
-          actions: ['iam:GetRole', 'iam:PassRole'],
-          resources: [
-            `arn:aws:iam::${account}:role/cdk-*`,
-            `arn:aws:iam::${account}:role/*S3AutoDeleteObjectsCustomResourceProviderRole*`,
-            `arn:aws:iam::${account}:role/catalunya-*`,
-          ],
-        }),
-        // Lambda Project Functions Management
-        new iam.PolicyStatement({
-          sid: 'LambdaProjectFunctions',
+          sid: 'S3WriteStagingLayer',
           effect: iam.Effect.ALLOW,
           actions: [
-            'lambda:CreateFunction',
-            'lambda:DeleteFunction',
-            'lambda:GetFunction',
-            'lambda:UpdateFunctionCode',
-            'lambda:UpdateFunctionConfiguration',
-            'lambda:InvokeFunction',
-            'lambda:TagResource',
-            'lambda:UntagResource',
-            'lambda:ListTags',
-            'lambda:AddPermission',
-            'lambda:RemovePermission',
-            'lambda:GetPolicy',
+            's3:PutObject',
+            's3:PutObjectAcl',
           ],
           resources: [
-            `arn:aws:lambda:${region}:${account}:function:*S3AutoDeleteObjectsCustomResourceProvider*`,
-            `arn:aws:lambda:${region}:${account}:function:CatalunyaDataStack-*`,
-            `arn:aws:lambda:${region}:${account}:function:catalunya-*`,
+            `arn:aws:s3:::${bucketName}/staging/*`,
           ],
-        }),
-        // Glue Data Catalog Minimal Management
-        new iam.PolicyStatement({
-          sid: 'GlueDataCatalogMinimal',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'glue:CreateDatabase',
-            'glue:DeleteDatabase',
-            'glue:GetDatabase',
-            'glue:UpdateDatabase',
-            'glue:TagResource',
-            'glue:UntagResource',
-          ],
-          resources: [
-            `arn:aws:glue:${region}:${account}:catalog`,
-            `arn:aws:glue:${region}:${account}:database/catalunya_data_*`,
-          ],
-        }),
-        // Athena Workgroup Minimal Management
-        new iam.PolicyStatement({
-          sid: 'AthenaWorkgroupMinimal',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'athena:CreateWorkGroup',
-            'athena:DeleteWorkGroup',
-            'athena:GetWorkGroup',
-            'athena:UpdateWorkGroup',
-            'athena:TagResource',
-            'athena:UntagResource',
-          ],
-          resources: [`arn:aws:athena:${region}:${account}:workgroup/catalunya-workgroup-*`],
-        }),
-        // CDK Bootstrap SSM Parameters
-        new iam.PolicyStatement({
-          sid: 'CDKBootstrapSSM',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'ssm:GetParameter',
-            'ssm:GetParameters',
-            'ssm:PutParameter',
-            'ssm:DeleteParameter',
-          ],
-          resources: [`arn:aws:ssm:${region}:${account}:parameter/cdk-bootstrap*`],
-        }),
-        // IAM CDK Role Management
-        new iam.PolicyStatement({
-          sid: 'IAMCDKRoleManagement',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'iam:CreateRole',
-            'iam:DeleteRole',
-            'iam:PutRolePolicy',
-            'iam:DeleteRolePolicy',
-            'iam:GetRole',
-            'iam:GetRolePolicy',
-            'iam:AttachRolePolicy',
-            'iam:DetachRolePolicy',
-            'iam:TagRole',
-            'iam:UntagRole',
-          ],
-          resources: [`arn:aws:iam::${account}:role/cdk-*`],
-        }),
-        // STS Assume Role for CDK
-        new iam.PolicyStatement({
-          sid: 'STSAssumeRole',
-          effect: iam.Effect.ALLOW,
-          actions: ['sts:AssumeRole'],
-          resources: [`arn:aws:iam::${account}:role/cdk-*`],
-        }),
-        // ECR Repository Management
-        new iam.PolicyStatement({
-          sid: 'ECRRepositoryManagement',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'ecr:DeleteRepository',
-            'ecr:CreateRepository',
-            'ecr:DescribeRepositories',
-            'ecr:PutLifecyclePolicy',
-            'ecr:SetRepositoryPolicy',
-            'ecr:TagResource',
-          ],
-          resources: [`arn:aws:ecr:${region}:${account}:repository/cdk*`],
-          conditions: {
-            StringEquals: {
-              'aws:RequestedRegion': region,
-            },
-          },
-        }),
-        // CDK Bootstrap Bucket Operations
-        new iam.PolicyStatement({
-          sid: 'AllowCDKBootstrapBucket',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:GetBucketLocation',
-            's3:GetBucketVersioning',
-            's3:PutBucketVersioning',
-            's3:GetBucketEncryption',
-            's3:PutBucketEncryption',
-            's3:GetBucketPublicAccessBlock',
-            's3:PutBucketPublicAccessBlock',
-          ],
-          resources: ['arn:aws:s3:::cdk-hnb659fds-*'],
-        }),
-        // Resource Tagging
-        new iam.PolicyStatement({
-          sid: 'AllowProjectTagging',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'tag:GetResources',
-            'tag:TagResources',
-            'tag:UntagResources',
-          ],
-          resources: ['*'],
-          conditions: {
-            StringEquals: {
-              'aws:RequestedRegion': region,
-            },
-            StringLike: {
-              'aws:ResourceTag:Project': 'CatalunyaDataPipeline',
-            },
-          },
         }),
       ],
     });
+
+    // S3 Copier Mart Policy
+    this.s3CopierMartPolicy = new iam.ManagedPolicy(this, 'S3CopierMartPolicy', {
+      managedPolicyName: `CatalunyaS3CopierMartPolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `S3 copy permissions for mart layer (${environmentName})`,
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'S3ReadStagingLayer',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:GetObjectVersion',
+            's3:ListBucket',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${bucketName}/staging/*`,
+          ],
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3WriteMartsLayer',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:PutObject',
+            's3:PutObjectAcl',
+          ],
+          resources: [
+            `arn:aws:s3:::${bucketName}/marts/*`,
+          ],
+        }),
+      ],
+    });
+
+    this.dataServicePolicy = new iam.ManagedPolicy(this, 'DataServicePolicy', {
+      managedPolicyName: `CatalunyaDataServicePolicy${environmentName.charAt(0).toUpperCase() + environmentName.slice(1)}`,
+      description: `Permissions to service data from data mart phase to public (${environmentName})`,
+      statements: [
+        // CloudWatch Logs
+        new iam.PolicyStatement({
+          sid: 'CloudWatchLogGroups',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'logs:CreateLogGroup',
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+            'logs:DescribeLogGroups',
+            'logs:DescribeLogStreams',
+          ],
+          resources: [
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*`,
+            `arn:aws:logs:${region}:${account}:log-group:/aws/lambda/catalunya-${environmentName}-*:*`,
+          ],
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3DataBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+          ],
+          resources: [`arn:aws:s3:::${bucketName}`]
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3DataObjectRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [`arn:aws:s3:::${bucketName}/marts/*`],
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3CatalogBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [
+            `arn:aws:s3:::${catalogBucketName}`,
+            `arn:aws:s3:::${catalogBucketName}/*`,
+          ],
+        }),
+        // S3 Data Bucket Write (dataservice prefix)
+        new iam.PolicyStatement({
+          sid: 'S3ServiceBucketRead',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetBucketLocation',
+            's3:ListBucket',
+          ],
+          resources: [`arn:aws:s3:::${serviceBucketName}`]
+        }),
+        new iam.PolicyStatement({
+          sid: 'S3ServiceBucketWrite',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:PutObject',
+            's3:PutObjectAcl',
+            's3:GetObject',
+            's3:GetObjectVersion',
+          ],
+          resources: [`arn:aws:s3:::${serviceBucketName}/*`],
+        }),
+      ]
+    })
 
     // ========================================
     // Lambda Execution Roles
@@ -742,7 +734,10 @@ export class IamConstruct extends Construct {
     this.martExecutionRole = new iam.Role(this, 'MartExecutionRole', {
       roleName: `catalunya-mart-role-${environmentName}`,
       description: `Catalunya Data Pipeline - Mart/DBT Execution Role (${environmentName})`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ArnPrincipal(`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`),
+        new iam.ServicePrincipal('lambda.amazonaws.com')
+      ),
       managedPolicies: [this.martExecutorPolicy],
     });
 
@@ -756,26 +751,6 @@ export class IamConstruct extends Construct {
       ],
     });
 
-    // ========================================
-    // GitHub OIDC Deployment Role
-    // ========================================
-
-    this.githubDeploymentRole = new iam.Role(this, 'GitHubDeploymentRole', {
-      roleName: `catalunya-deployment-role-${environmentName}`,
-      description: `Catalunya Data Pipeline - GitHub Actions Role (${environmentName})`,
-      assumedBy: new iam.WebIdentityPrincipal(
-        this.githubOidcProvider.openIdConnectProviderArn,
-        {
-          StringLike: {
-            'token.actions.githubusercontent.com:sub': `repo:${githubRepo}:*`,
-          },
-          StringEquals: {
-            'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-          },
-        }
-      ),
-      managedPolicies: [this.deploymentPolicy],
-    });
     // ========================================
     // Catalog Executor Role
     // ========================================
@@ -797,27 +772,103 @@ export class IamConstruct extends Construct {
     cdk.Tags.of(this.catalogExecutorRole).add('RoleType', 'Lambda');
 
     // ========================================
+    // Airflow IAM User (Minimal Assumer User)
+    // ========================================
+
+    this.airflowUser = new iam.User(this, 'AirflowUser', {
+      userName: `dokku-airflow-assumer-${environmentName}`,
+      path: '/service-accounts/',
+    });
+
+    // Create access key for the user
+    this.airflowAccessKey = new iam.AccessKey(this, 'AirflowAccessKey', {
+      user: this.airflowUser,
+    });
+
+    // Add ONLY AssumeRole permission (minimal permissions principle)
+    this.airflowUser.addToPolicy(new iam.PolicyStatement({
+      sid: 'AssumeCrossAccountRole',
+      effect: iam.Effect.ALLOW,
+      actions: ['sts:AssumeRole'],
+      resources: [`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`],
+      conditions: {
+        StringEquals: {
+          'sts:ExternalId': `catalunya-${environmentName}-airflow-exec`,
+        },
+      },
+    }));
+
+    // Apply common tags to user
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.airflowUser).add(key, value);
+    });
+
+    cdk.Tags.of(this.airflowUser).add('ServiceType', 'Orchestration');
+    cdk.Tags.of(this.airflowUser).add('RoleType', 'Assumer');
+
+    // ========================================
     // Airflow Cross-Account Role
     // ========================================
-    const airflowServerPrincipal = `arn:aws:iam::${account}:role/dokku-airflow-${environmentName}`;
 
     this.airflowCrossAccountRole = new iam.Role(this, 'AirflowCrossAccountRole', {
       roleName: `catalunya-airflow-cross-account-role-${environmentName}`,
       description: `Airflow cross-account role for Catalunya Data Pipeline (${environmentName})`,
-      assumedBy: new iam.ArnPrincipal(airflowServerPrincipal),
+      assumedBy: new iam.ArnPrincipal(this.airflowUser.userArn),
+      externalIds: [`catalunya-${environmentName}-airflow-exec`],
+      maxSessionDuration: cdk.Duration.minutes(61),
       managedPolicies: [
         this.airflowCrossAccountPolicy,
       ],
-      externalIds: [`catalunya-${environmentName}-airflow`], // For additional security
     });
 
-    // Apply common tags
+    // Apply common tags to cross-account role
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(this.airflowCrossAccountRole).add(key, value);
     });
 
     cdk.Tags.of(this.airflowCrossAccountRole).add('ServiceType', 'Orchestration');
     cdk.Tags.of(this.airflowCrossAccountRole).add('RoleType', 'CrossAccount');
+
+    // ========================================
+    // S3 Copier Roles
+    // ========================================
+
+    this.s3CopierTransformerRole = new iam.Role(this, 'S3CopierTransformerRole', {
+      roleName: `catalunya-s3-copier-transformer-role-${environmentName}`,
+      description: `S3 copier role for transformer layer (${environmentName})`,
+      assumedBy: new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+      managedPolicies: [this.s3CopierTransformerPolicy],
+    });
+
+    this.s3CopierMartRole = new iam.Role(this, 'S3CopierMartRole', {
+      roleName: `catalunya-s3-copier-mart-role-${environmentName}`,
+      description: `S3 copier role for mart layer (${environmentName})`,
+      assumedBy: new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+      managedPolicies: [this.s3CopierMartPolicy],
+    });
+
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.s3CopierTransformerRole).add(key, value);
+      cdk.Tags.of(this.s3CopierMartRole).add(key, value);
+    });
+
+    cdk.Tags.of(this.s3CopierTransformerRole).add('ServiceType', 'S3Copier');
+    cdk.Tags.of(this.s3CopierMartRole).add('ServiceType', 'S3Copier');
+
+    // Data Service Role
+    this.dataServiceRole = new iam.Role(this, 'DataServiceRole', {
+      roleName: `catalunya-data-service-role-${environmentName}`,
+      description: `Catalunya Data Pipeline - Data Service Role (${environmentName})`,
+      assumedBy: new iam.ArnPrincipal(this.airflowCrossAccountRole.roleArn),
+      managedPolicies: [this.dataServicePolicy]
+    });
+    // Apply common tags
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this.dataServiceRole).add(key, value);
+    });
+
+    cdk.Tags.of(this.dataServiceRole).add('ServiceType', 'DataService');
+    cdk.Tags.of(this.dataServiceRole).add('RoleType', 'Lambda');
 
     // ========================================
     // Human Data Engineer Role
@@ -853,7 +904,6 @@ export class IamConstruct extends Construct {
       cdk.Tags.of(this.transformerExecutionRole).add(key, value);
       cdk.Tags.of(this.martExecutionRole).add(key, value);
       cdk.Tags.of(this.monitoringExecutionRole).add(key, value);
-      cdk.Tags.of(this.githubDeploymentRole).add(key, value);
       cdk.Tags.of(this.dataEngineerRole).add(key, value);
     });
 
@@ -862,7 +912,8 @@ export class IamConstruct extends Construct {
       cdk.Tags.of(this.extractorPolicy).add(key, value);
       cdk.Tags.of(this.transformerPolicy).add(key, value);
       cdk.Tags.of(this.martExecutorPolicy).add(key, value);
-      cdk.Tags.of(this.deploymentPolicy).add(key, value);
+      cdk.Tags.of(this.catalogExecutorPolicy).add(key, value);
+      cdk.Tags.of(this.airflowCrossAccountPolicy).add(key, value);
     });
 
     // Add environment-specific tags
@@ -870,54 +921,8 @@ export class IamConstruct extends Construct {
     cdk.Tags.of(this.transformerExecutionRole).add('Service', 'Lambda');
     cdk.Tags.of(this.martExecutionRole).add('Service', 'DBT');
     cdk.Tags.of(this.monitoringExecutionRole).add('Service', 'Lambda');
-    cdk.Tags.of(this.githubDeploymentRole).add('Service', 'GitHubActions');
     cdk.Tags.of(this.dataEngineerRole).add('RoleType', 'Human');
+    cdk.Tags.of(this.dataServiceRole).add('RoleType', 'Lambda');
   }
 
-  /**
-   * Get the Lambda execution role for a specific service type
-   */
-  public getLambdaExecutionRole(serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring'): iam.Role {
-    switch (serviceType) {
-      case 'extractor':
-        return this.extractorExecutionRole;
-      case 'transformer':
-        return this.transformerExecutionRole;
-      case 'mart':
-        return this.martExecutionRole;
-      case 'monitoring':
-        return this.monitoringExecutionRole;
-      default:
-        throw new Error(`Unknown service type: ${serviceType}`);
-    }
-  }
-
-  /**
-   * Grant additional permissions to a Lambda execution role
-   */
-  public grantAdditionalPermissions(
-    serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring',
-    ...permissions: iam.PolicyStatement[]
-  ): void {
-    const role = this.getLambdaExecutionRole(serviceType);
-
-    permissions.forEach((permission, index) => {
-      role.addToPolicy(permission);
-    });
-  }
-
-  /**
-   * Create a custom managed policy for specific use cases
-   */
-  public createCustomPolicy(
-    policyName: string,
-    description: string,
-    statements: iam.PolicyStatement[]
-  ): iam.ManagedPolicy {
-    return new iam.ManagedPolicy(this, policyName, {
-      managedPolicyName: policyName,
-      description,
-      statements,
-    });
-  }
 }

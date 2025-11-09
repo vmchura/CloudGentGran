@@ -6,6 +6,8 @@ import { S3Construct } from './s3-construct';
 import { LambdaConstruct } from './lambda-construct';
 import { AnalyticsConstruct } from './analytics-construct';
 import { CatalogConstruct } from './catalog-construct';
+import { GlueConstruct } from './glue-construct';
+import { WebConstruct } from './web-construct';
 
 export interface CatalunyaDataStackProps extends cdk.StackProps {
   environmentName: string;
@@ -23,6 +25,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly athenaWorkgroupName: string;
   public readonly athenaDatabaseName: string;
   public readonly athenaResultsBucketName: string;
+  public readonly serviceBucketName: string;
 
   // Construct references
   public readonly iamInfrastructure: IamConstruct;
@@ -30,6 +33,8 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly lambdaInfrastructure: LambdaConstruct;
   public readonly analyticsInfrastructure: AnalyticsConstruct;
   public readonly catalogInfrastructure: CatalogConstruct;
+  public readonly glueInfrastructure: GlueConstruct;
+  public readonly webInfrastructure: WebConstruct;
 
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -49,7 +54,8 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.athenaWorkgroupName = ConfigHelper.getResourceName('catalunya-workgroup', this.environmentName);
     this.athenaDatabaseName = `catalunya_data_${this.environmentName}`;
     this.athenaResultsBucketName = ConfigHelper.getResourceName('catalunya-athena-results', this.environmentName);
-    this.catalogBucketName = this.config.catalogBucketName
+    this.catalogBucketName = this.config.catalogBucketName;
+    this.serviceBucketName = this.config.serviceBucketName;
 
     // Apply common tags to the entire stack
     const commonTags = ConfigHelper.getCommonTags(this.environmentName);
@@ -71,7 +77,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       athenaDatabaseName: this.athenaDatabaseName,
       athenaWorkgroupName: this.athenaWorkgroupName,
       catalogBucketName: this.catalogBucketName,
-      githubRepo: this.config.githubRepo,
+      serviceBucketName: this.serviceBucketName
     });
 
     // ========================================
@@ -93,13 +99,14 @@ export class CatalunyaDataStack extends cdk.Stack {
       projectName: this.projectName,
       config: this.config,
       bucketName: this.bucketName,
+      catalogBucketName: this.catalogBucketName,
       lambdaPrefix: this.lambdaPrefix,
       account: this.account,
       region: this.region,
       extractorExecutionRole: this.iamInfrastructure.extractorExecutionRole,
       transformerExecutionRole: this.iamInfrastructure.transformerExecutionRole,
       martExecutionRole: this.iamInfrastructure.martExecutionRole,
-      monitoringExecutionRole: this.iamInfrastructure.monitoringExecutionRole,
+      monitoringExecutionRole: this.iamInfrastructure.monitoringExecutionRole
     });
 
     // ========================================
@@ -133,6 +140,18 @@ export class CatalunyaDataStack extends cdk.Stack {
     });
 
     // ========================================
+    // Glue Infrastructure (Table Schema Layer)
+    // ========================================
+    this.glueInfrastructure = new GlueConstruct(this, 'GlueInfrastructure', {
+      environmentName: this.environmentName,
+      projectName: this.projectName,
+      config: this.config,
+      dataBucketName: this.bucketName,
+      athenaDatabaseName: this.athenaDatabaseName,
+      glueExecutorRole: this.iamInfrastructure.catalogExecutorRole,
+    });
+
+    // ========================================
     // Cross-Construct Dependencies
     // ========================================
 
@@ -151,6 +170,32 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.catalogInfrastructure.node.addDependency(this.iamInfrastructure);
     this.catalogInfrastructure.node.addDependency(this.s3Infrastructure);
     this.catalogInfrastructure.node.addDependency(this.analyticsInfrastructure);
+
+    // Glue depends on analytics (database must exist first)
+    this.glueInfrastructure.node.addDependency(this.analyticsInfrastructure);
+
+    // ========================================
+    // Web Infrastructure (Optional - based on config)
+    // ========================================
+    const certificateId = process.env.WEB_CERTIFICATE_ID;
+
+    if (certificateId && certificateId !== 'undefined') {
+      console.log('Building: constructing WebInfrastructure...');
+
+      this.webInfrastructure = new WebConstruct(this, 'WebInfrastructure', {
+        environmentName: this.environmentName,
+        projectName: this.projectName,
+        domainName: this.config.webDomain,
+        subdomain: this.config.webSubdomain,
+        accountId: this.account,
+        certificateId: certificateId,
+        bucketName: this.config.serviceBucketName,
+      });
+
+    } else {
+      console.log('Skipping: NOT constructing WebInfrastructure (missing certificateId)');
+    }
+
 
     // ========================================
     // CloudFormation Outputs
@@ -227,81 +272,58 @@ export class CatalunyaDataStack extends cdk.Stack {
       exportName: `${this.projectName}-MartRoleArn`,
     });
 
-    new cdk.CfnOutput(this, 'GitHubDeploymentRoleArn', {
-      value: this.iamInfrastructure.githubDeploymentRole.roleArn,
-      description: 'GitHub Actions deployment role ARN',
-      exportName: `${this.projectName}-GitHubDeploymentRoleArn`,
-    });
-
     new cdk.CfnOutput(this, 'DataEngineerRoleArn', {
       value: this.iamInfrastructure.dataEngineerRole.roleArn,
       description: 'Data engineer human role ARN',
       exportName: `${this.projectName}-DataEngineerRoleArn`,
     });
-  }
 
-  // ========================================
-  // Public Accessors for Backward Compatibility
-  // ========================================
+    new cdk.CfnOutput(this, 'CatalogExecutorRoleArn', {
+      value: this.iamInfrastructure.catalogExecutorRole.roleArn,
+      description: 'Catalog executor role ARN',
+      exportName: `${this.projectName}-CatalogExecutorRoleArn`,
+    });
 
-  /**
-   * Access to the main data bucket
-   */
-  public get dataBucket() {
-    return this.s3Infrastructure.dataBucket;
-  }
+    new cdk.CfnOutput(this, 'AirflowCrossAccountRoleArn', {
+      value: this.iamInfrastructure.airflowCrossAccountRole.roleArn,
+      description: 'Airflow cross-account role ARN',
+      exportName: `${this.projectName}-AirflowCrossAccountRoleArn`,
+    });
 
-  /**
-   * Access to the Athena results bucket
-   */
-  public get athenaResultsBucket() {
-    return this.s3Infrastructure.athenaResultsBucket;
-  }
+    // Airflow Authentication Outputs (Minimal Assumer User)
+    new cdk.CfnOutput(this, 'AirflowAssumerUserName', {
+      value: this.iamInfrastructure.airflowUser.userName,
+      description: 'Airflow assumer IAM user name (minimal permissions - only AssumeRole)',
+      exportName: `${this.projectName}-AirflowAssumerUserName`,
+    });
 
-  /**
-   * Access to the Glue database
-   */
-  public get glueDatabase() {
-    return this.analyticsInfrastructure.glueDatabase;
-  }
+    new cdk.CfnOutput(this, 'AirflowAssumerAccessKeyId', {
+      value: this.iamInfrastructure.airflowAccessKey.accessKeyId,
+      description: 'Airflow assumer access key ID (SENSITIVE - only for AssumeRole)',
+      exportName: `${this.projectName}-AirflowAssumerAccessKeyId`,
+    });
 
-  /**
-   * Access to the Athena workgroup
-   */
-  public get athenaWorkgroup() {
-    return this.analyticsInfrastructure.athenaWorkgroup;
-  }
+    new cdk.CfnOutput(this, 'AirflowAssumerSecretAccessKey', {
+      value: this.iamInfrastructure.airflowAccessKey.secretAccessKey.unsafeUnwrap(),
+      description: 'Airflow assumer secret access key (VERY SENSITIVE - only for AssumeRole)',
+      exportName: `${this.projectName}-AirflowAssumerSecretAccessKey`,
+    });
 
-  /**
-   * Access to the API extractor Lambda function
-   */
-  public get apiExtractorLambda() {
-    return this.lambdaInfrastructure.apiExtractorLambda;
-  }
+    new cdk.CfnOutput(this, 'AirflowTargetRoleArn', {
+      value: this.iamInfrastructure.airflowCrossAccountRole.roleArn,
+      description: 'Airflow target role ARN (role to assume for Lambda permissions)',
+      exportName: `${this.projectName}-AirflowTargetRoleArn`,
+    });
 
-  /**
-   * Access to the social services transformer Lambda function
-   */
-  public get socialServicesTransformerLambda() {
-    return this.lambdaInfrastructure.socialServicesTransformerLambda;
-  }
+    new cdk.CfnOutput(this, 'AirflowExternalId', {
+      value: `catalunya-${this.environmentName}-airflow-exec`,
+      description: 'External ID required for AssumeRole (additional security)',
+      exportName: `${this.projectName}-AirflowExternalId`,
+    });
 
-  /**
-   * Access to the catalog bucket
-   */
-  public get catalogBucket() {
-    return this.catalogInfrastructure.catalogBucket;
-  }
-
-  /**
-   * Access to the catalog initializer Lambda function
-   */
-  public get serviceTypeCatalogLambda() {
-    return this.catalogInfrastructure.serviceTypeCatalogLambda;
-  }
-
-  public get municipalsCatalogLambda() {
-    return this.catalogInfrastructure.municipalsCatalogLambda;
+    // Note: GitHub deployment role ARN output removed as it's now managed by setup scripts
+    // The role ARN can be retrieved via AWS CLI if needed:
+    // aws iam get-role --role-name catalunya-deployment-role-${environmentName} --query 'Role.Arn'
   }
 
   // ========================================
@@ -327,18 +349,24 @@ export class CatalunyaDataStack extends cdk.Stack {
     return this.iamInfrastructure.monitoringExecutionRole;
   }
 
-  public get githubDeploymentRole() {
-    return this.iamInfrastructure.githubDeploymentRole;
-  }
-
   public get dataEngineerRole() {
     return this.iamInfrastructure.dataEngineerRole;
   }
 
-  /**
-   * Get a Lambda execution role by service type
-   */
-  public getLambdaExecutionRole(serviceType: 'extractor' | 'transformer' | 'mart' | 'monitoring') {
-    return this.iamInfrastructure.getLambdaExecutionRole(serviceType);
+  public get catalogExecutorRole() {
+    return this.iamInfrastructure.catalogExecutorRole;
   }
+
+  public get airflowCrossAccountRole() {
+    return this.iamInfrastructure.airflowCrossAccountRole;
+  }
+
+  public get airflowUser() {
+    return this.iamInfrastructure.airflowUser;
+  }
+
+  public get airflowAccessKey() {
+    return this.iamInfrastructure.airflowAccessKey;
+  }
+
 }
