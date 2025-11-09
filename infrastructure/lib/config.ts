@@ -72,7 +72,7 @@ export class ConfigHelper {
       transformer: `catalunya-lambda-transformer-role-${environmentName}`,
       mart: `catalunya-mart-role-${environmentName}`,
       monitoring: `catalunya-monitoring-role-${environmentName}`,
-      dataEngineer: 'catalunya-data-engineer-role',
+      dataEngineer: `catalunya-data-engineer-role-${environmentName}`,
       catalogExecutor: `catalunya-catalog-executor-role-${environmentName}`,
       airflowCrossAccount: `catalunya-airflow-cross-account-role-${environmentName}`,
       airflowAssumer: `dokku-airflow-assumer-${environmentName}`,
