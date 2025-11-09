@@ -25,6 +25,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly athenaWorkgroupName: string;
   public readonly athenaDatabaseName: string;
   public readonly athenaResultsBucketName: string;
+  public readonly serviceBucketName: string;
 
   // Construct references
   public readonly iamInfrastructure: IamConstruct;
@@ -53,7 +54,8 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.athenaWorkgroupName = ConfigHelper.getResourceName('catalunya-workgroup', this.environmentName);
     this.athenaDatabaseName = `catalunya_data_${this.environmentName}`;
     this.athenaResultsBucketName = ConfigHelper.getResourceName('catalunya-athena-results', this.environmentName);
-    this.catalogBucketName = this.config.catalogBucketName
+    this.catalogBucketName = this.config.catalogBucketName;
+    this.serviceBucketName = this.config.serviceBucketName;
 
     // Apply common tags to the entire stack
     const commonTags = ConfigHelper.getCommonTags(this.environmentName);
@@ -75,6 +77,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       athenaDatabaseName: this.athenaDatabaseName,
       athenaWorkgroupName: this.athenaWorkgroupName,
       catalogBucketName: this.catalogBucketName,
+      serviceBucketName: this.serviceBucketName
     });
 
     // ========================================
