@@ -47,5 +47,12 @@
   "LANGUAGE_LABEL": "Idioma",
   "CATALONIA": "Cataluña",
   "POPULATION": "Población",
-  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Plazas disponibles acumuladas"
+  "TOTAL_OFFERED_PLACES_ACCUMULATED": "Plazas disponibles acumuladas",
+  "SOURCES": "Fuentes",
+  "SOURCE_ENTITIES_TITLE": "Registro de entidades, servicios y establecimientos sociales (servicios sociales básicos y especializados)",
+  "SOURCE_ENTITIES_DESCRIPTION": "Registro en el que se inscriben y califican todos los servicios sociales, tanto los básicos como los especializados, ya sean de titularidad pública o privada, así como las entidades que son sus titulares.",
+  "SOURCE_POPULATION_TITLE": "Censo de población y viviendas",
+  "SOURCE_POPULATION_DESCRIPTION": "El Censo de población y viviendas es la operación estadística que, con periodicidad anual, proporciona el recuento de la población residente en el territorio y su distribución geográfica. También proporciona información sobre las principales características demográficas y sociales de la población, hogares y familias, y viviendas.",
+  "SOURCE_BOUNDARIES_TITLE": "Divisiones administrativas",
+  "SOURCE_BOUNDARIES_DESCRIPTION": "Base geográfica que contiene los límites vigentes de las diferentes divisiones administrativas que conforman la organización territorial de Cataluña"
 }

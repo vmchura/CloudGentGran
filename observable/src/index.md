@@ -362,6 +362,17 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
 
 ---
 
+## ${t(locale_value, "SOURCES")}
+
+* [${t(locale_value, "SOURCE_ENTITIES_TITLE")}](https://analisi.transparenciacatalunya.cat/ca/Societat-benestar/Registre-d-entitats-serveis-i-establiments-socials/ivft-vegh/about_data): 
+${t(locale_value, "SOURCE_ENTITIES_DESCRIPTION")}
+
+* [${t(locale_value, "SOURCE_POPULATION_TITLE")}](https://www.idescat.cat/pub/?id=censph): ${t(locale_value, "SOURCE_POPULATION_DESCRIPTION")}
+
+* [${t(locale_value, "SOURCE_BOUNDARIES_TITLE")}](https://www.icgc.cat/en/Geoinformation-and-Maps/Data-and-products/Cartographic-geoinformation/Administrative-boundaries): ${t(locale_value, "SOURCE_BOUNDARIES_DESCRIPTION")}
+
+---
+
 ```js
 const content = {
   "ca": [`Els comentaris, recomanacions i retroalimentació constructiva són benvinguts. Podeu contactar-me directament a través de LinkedIn per compartir les vostres perspectives o suggeriments per a futurs estudis.
