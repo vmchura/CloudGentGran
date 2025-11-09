@@ -141,6 +141,16 @@ jobs:
           echo "☁️ Installing aws-cdk for AWS deployment..."
           npm install -g aws-cdk
 
+      - name: Configure AWS credentials for synth
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-dev
+          role-session-name: GitHubActions-Synth-${{ github.run_id }}
+          aws-region: eu-west-1
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
       - name: CDK Diff (Syntax Check) - LocalStack
         if: ${{ env.ACT }}
         working-directory: ./infrastructure
@@ -417,6 +427,15 @@ jobs:
         working-directory: ./infrastructure
         run: npm ci
 
+      - name: Configure AWS credentials for security scan
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-dev
+          role-session-name: GitHubActions-SecurityScan-${{ github.run_id }}
+          aws-region: eu-west-1
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
       - name: Run npm audit
         working-directory: ./infrastructure
         run: npm audit --audit-level moderate
@@ -425,9 +444,18 @@ jobs:
         working-directory: ./infrastructure
         run: |
           npm install -g aws-cdk
-          # Generate CloudFormation templates
           npx cdk synth --all --require-approval never
-          # Check for security best practices in generated templates
+          echo "CloudFormation templates generated successfully - manual security review recommended"
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: eu-west-1
+          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
+
+      - name: CDK Security Check
+        working-directory: ./infrastructure
+        run: |
+          npm install -g aws-cdk
+          npx cdk synth --all --require-approval never
           echo "CloudFormation templates generated successfully - manual security review recommended"
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
