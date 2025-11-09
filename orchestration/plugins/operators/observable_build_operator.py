@@ -10,7 +10,7 @@ from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 
 
 class ObservableBuildDeployOperator(BaseOperator):
-    template_fields = ('environment', 'bucket_name', 'repository_url', 'branch')
+    template_fields = ('repository_url', 'environment', 'aws_conn_id')
 
     ui_color = '#ff9900'
     ui_fgcolor = '#ffffff'
@@ -19,16 +19,15 @@ class ObservableBuildDeployOperator(BaseOperator):
             self,
             *,
             repository_url: str,
-            environment: str = 'dev',
-            branch: Optional[str] = None,
-            aws_conn_id: str = 'aws_default',
+            environment: str,
+            aws_conn_id: str,
             region: str = 'eu-west-1',
             **kwargs
     ):
         super().__init__(**kwargs)
         self.repository_url = repository_url
         self.environment = environment
-        self.branch = branch or ('main' if environment == 'prod' else 'develop')
+        self.branch = 'main' if environment == 'prod' else 'develop'
         self.aws_conn_id = aws_conn_id
         self.region = region
         self.s3_bucket_data = f'catalunya-data-{environment}'
