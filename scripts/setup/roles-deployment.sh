@@ -132,6 +132,7 @@ cat > "$TMP_POLICY_FILE" << EOF
         "arn:aws:s3:::catalunya-data-${ENVIRONMENT}",
         "arn:aws:s3:::catalunya-athena-results-${ENVIRONMENT}",
         "arn:aws:s3:::catalunya-catalog-${ENVIRONMENT}",
+        "arn:aws:s3:::catalunya-service-${ENVIRONMENT}",
         "arn:aws:s3:::cdk-hnb659fds-*"
       ]
     },
@@ -149,6 +150,7 @@ cat > "$TMP_POLICY_FILE" << EOF
         "arn:aws:s3:::catalunya-data-${ENVIRONMENT}/*",
         "arn:aws:s3:::catalunya-athena-results-${ENVIRONMENT}/*",
         "arn:aws:s3:::catalunya-catalog-${ENVIRONMENT}/*",
+        "arn:aws:s3:::catalunya-service-${ENVIRONMENT}/*",
         "arn:aws:s3:::cdk-hnb659fds-*/*"
       ]
     },
@@ -217,6 +219,58 @@ cat > "$TMP_POLICY_FILE" << EOF
       ],
       "Resource": [
         "arn:aws:athena:${REGION}:${ACCOUNT_ID}:workgroup/catalunya-workgroup-*"
+      ]
+    },
+    {
+      "Sid": "Route53HostedZone",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ListHostedZones",
+        "route53:GetHostedZone",
+        "route53:ListHostedZonesByName"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Route53RecordSets",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:GetChange",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": [
+        "arn:aws:route53:::hostedzone/*",
+        "arn:aws:route53:::change/*"
+      ]
+    },
+    {
+      "Sid": "CloudFrontDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3BucketPolicyManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": [
+        "arn:aws:s3:::catalunya-service-${ENVIRONMENT}"
       ]
     },
     {
