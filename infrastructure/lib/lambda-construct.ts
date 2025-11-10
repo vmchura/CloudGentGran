@@ -503,7 +503,7 @@ export class LambdaConstruct extends Construct {
             runtime: lambda.Runtime.PYTHON_3_13,
             handler: 'api_extractor.lambda_handler',
             code: this.getPythonLambdaCode('comarques_boundaries'),
-            timeout: cdk.Duration.seconds(config.lambdaTimeout),
+            timeout: cdk.Duration.seconds(900),
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
