@@ -85,6 +85,7 @@ invoke_extractor = LambdaInvokeFunctionOperator(
     function_name=config['extractor_function'],
     aws_conn_id=config['aws_conn_id'],
     invocation_type='RequestResponse',
+    config_overrides={'read_timeout': 900},
     dag=dag
 )
 
