@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Catalunya Open Data Pipeline is designed as a multi-environment data platform that extracts, transforms, and loads (ETL) open data from Catalunya government sources using Apache Airflow orchestration across three distinct environments.
+The Catalunya Open Data Pipeline is designed as a multi-environment data platform that extracts, transforms, and loads (ETL) open data from Catalunya government sources using Apache Airflow orchestration across three distinct environments. The pipeline processes data through multiple layers, culminating in a public-facing data service powered by Observable Framework.
 
 ## Environment Architecture
 
@@ -27,9 +27,7 @@ The Catalunya Open Data Pipeline is designed as a multi-environment data platfor
 - **Processing**: Full AWS Lambda integration  
 - **Data Sources**: Real Catalunya APIs with production configurations
 
-## Data Flow Layers
-
-### 1. Landing Layer (`s3://bucket/landing/`)
+### 1. Landing Layer (`s3://data-bucket/landing/`)
 
 **Purpose**: Store raw, unprocessed data exactly as received from source APIs.
 
@@ -48,7 +46,7 @@ s3://catalunya-data-dev/landing/
 └── social_services/downloaded_date=20250915/files.json
 ```
 
-### 2. Staging Layer (`s3://bucket/staging/`)
+### 2. Staging Layer (`s3://data-bucket/staging/`)
 
 **Purpose**: Store cleaned, validated, and standardized data ready for analytics.
 
@@ -75,7 +73,7 @@ s3://catalunya-data-dev/staging/
 └── social_services/district_id=02/file.parquet
 ```
 
-### 3. Marts Layer (`s3://bucket/marts/`)
+### 3. Marts Layer (`s3://data-bucket/marts/`)
 
 **Purpose**: Business-ready dimensional models optimized for analytics and reporting.
 
@@ -98,6 +96,33 @@ s3://catalunya-data-dev/marts/
 └── social_services_by_service_municipal/
     └── file.parquet
 ```
+
+### 4. Service Layer (`s3://data-bucket/dataservice/`)
+
+**Purpose**: Public-ready datasets optimized for external consumption via Observable Framework.
+
+**Characteristics**:
+
+- **Format**: Observable target build directory
+- **Retention**: 60 days
+- **Processing**: Final formatting for visualization and API consumption
+
+### 5. Catalog Layer (`s3://catalog-bucket/`)
+
+**Purpose**: Metadata, schemas, and data dictionary for pipeline operations.
+
+**Characteristics**:
+
+- **Format**: JSON schemas, Avro schemas, documentation
+- **Access**: Read-only for transformation processes
+- **Retention**: Permanent with versioning
+- **Content**: Schema definitions, field mappings, business rules
+
+**Catalog Types**:
+
+- **Schema Registry**: Versioned data schemas
+- **Transformation Rules**: Business logic definitions
+- **Data Dictionary**: Field descriptions and metadata
 
 ## Technology Stack Details
 
@@ -122,8 +147,9 @@ s3://catalunya-data-dev/marts/
 
 **Development/Production Environments**:
 - **AWS Lambda**: Python 3.12 runtime for data extraction/transformation
-- **Amazon S3**: Multi-tier storage (Landing, Staging, Marts)
+- **Amazon S3**: Multi-tier storage (Landing, Staging, Marts, Service, Catalog)
 - **Amazon Athena**: SQL query engine with Glue Data Catalog
+- **S3 Copiers**: Direct layer-to-layer data transfer roles
 
 ### DBT Core
 
@@ -138,6 +164,22 @@ s3://catalunya-data-dev/marts/
 **Adapters**:
 - **Local**: DuckDB adapter
 - **Development/Production**: Athena adapter
+
+### Observable Framework
+
+**Purpose**: Public data visualization and dashboard platform
+
+**Features**:
+- **Interactive Dashboards**: Real-time data visualization
+- **Public Access**: No authentication required
+- **Data Loaders**: Direct S3 integration via CloudFront
+- **Responsive Design**: Mobile and desktop optimized
+
+**Architecture**:
+- **Static Site Generation**: Build-time data processing
+- **CDN Distribution**: CloudFront for global performance
+- **Data Source**: Service layer S3 bucket
+- **Update Frequency**: Daily refreshes via CI/CD
 
 ### Infrastructure
 
@@ -202,8 +244,42 @@ s3://catalunya-data-dev/marts/
 **Data Flow Position**: S3 Landing Layer → Lambda Transformer → S3 Staging Layer
 
 **Security Boundaries**:
-- Read access to S3 landing layer only
+- Read access to S3 landing layer and catalog bucket
 - Write access to S3 staging layer only
+
+**S3 Copier Roles**
+- `catalunya-s3-copier-transformer-role-dev`
+- `catalunya-s3-copier-transformer-role-prod`
+- `catalunya-s3-copier-mart-role-dev`
+- `catalunya-s3-copier-mart-role-prod`
+
+**Purpose**: Direct transfer of data between S3 layers without processing.
+
+**Runtime Context**: AWS Lambda functions for efficient bulk transfers.
+
+**Data Flow Position**: 
+- Transformer: Landing → Staging or Staging → Marts
+- Mart: Marts → Service
+
+**Security Boundaries**:
+- Source layer read-only access
+- Target layer write-only access
+- No data transformation capabilities
+
+**Data Service Role**
+- `catalunya-data-service-role-dev`
+- `catalunya-data-service-role-prod`
+
+**Purpose**: Prepare and publish data for public consumption via Observable.
+
+**Runtime Context**: Lambda functions managing public data exposure.
+
+**Data Flow Position**: S3 Marts → S3 Service Layer
+
+**Security Boundaries**:
+- Read access to marts layer
+- Write access to service bucket only
+- CloudFront distribution management
 
 **GitHub Actions Deployment Roles**
 - `catalunya-deployment-role-dev` (OIDC: develop branch)
@@ -361,7 +437,3 @@ s3://catalunya-data-dev/marts/
 | Dokku Server    | On-premise hosting     | Variable               |
 | **Total**       |                        | **< ~$3.25 + hosting** |
 
-
-## Disaster Recovery
-
-### Development/Production Environments [TODO]
