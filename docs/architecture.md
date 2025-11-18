@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Catalunya Open Data Pipeline is designed as a multi-environment data platform that extracts, transforms, and loads (ETL) open data from Catalunya government sources using Apache Airflow orchestration across three distinct environments.
+The Catalunya Open Data Pipeline is designed as a multi-environment data platform that extracts, transforms, and loads (ETL) open data from Catalunya government sources using Apache Airflow orchestration across three distinct environments. The pipeline processes data through multiple layers, culminating in a public-facing data service powered by Observable Framework.
 
 ## Environment Architecture
 
@@ -27,74 +27,7 @@ The Catalunya Open Data Pipeline is designed as a multi-environment data platfor
 - **Processing**: Full AWS Lambda integration  
 - **Data Sources**: Real Catalunya APIs with production configurations
 
-## Architecture Diagram
-
-```mermaid
-graph TB
-    %% Top Row - Sources and Orchestration
-    subgraph "Data Sources & Orchestration"
-        API[Catalunya APIs<br/>• Social Services<br/>• ...]
-        AF[Apache Airflow<br/>Orchestration]
-        GHA[GitHub Actions<br/>CI/CD]
-    end
-    
-    %% Middle Row - Processing
-    subgraph "Data Processing"
-        subgraph "Local"
-            LM[Mock Services<br/>• Mock APIs<br/>• Sample Data]
-        end
-        subgraph "Dev/Prod"
-            LE[Lambda Extract<br/>• API Client<br/>• Rate Limit<br/>• Error Handle]
-            LT[Lambda Transform<br/>• Validation<br/>• Clean]
-        end
-        DBT[DBT Core<br/>• SQL Models<br/>• Tests<br/>• Docs]
-    end
-    
-    %% Bottom Row - Storage
-    subgraph "Data Storage"
-        subgraph "Local Storage"
-            LS[Local Folders<br/>DuckDB]
-        end
-        subgraph "AWS Storage"
-            S3L[S3 Landing<br/>Raw JSON files]
-            S3S[S3 Staging<br/>Parquet files]
-            S3M[S3 Marts<br/>Analytics ready]
-        end
-    end
-    
-    %% Connections
-    API -->|HTTP API<br/>Requests|LE
-    AF -->|Triggers|LT
-    AF -->|Triggers|DBT
-    GHA -->|Triggers|DBT
-    
-    %% Local flow
-    LM -->|Mock Data|LS
-    
-    %% AWS flow
-    LE -->|Raw JSON|S3L
-    LT -->|Clean Data|S3S
-    DBT -->|Analytics SQL|S3M
-    DBT -->|Analytics SQL|LS
-    
-    S3L -->|S3 Event|LT
-    S3S -->|Data|DBT
-    
-    %% Styling
-    classDef apiClass fill: #e1f5fe, stroke: #01579b, stroke-width: 2px
-    classDef processClass fill: #fff3e0, stroke: #e65100, stroke-width: 2px
-    classDef storageClass fill: #e8f5e8, stroke: #2e7d32, stroke-width: 2px
-    classDef orchestrationClass fill: #f3e5f5, stroke: #4a148c, stroke-width: 2px
-    
-    class API apiClass
-    class LE,LT,DBT,LM processClass
-    class S3L,S3S,S3M,LS storageClass
-    class AF,GHA orchestrationClass
-```
-
-## Data Flow Layers
-
-### 1. Landing Layer (`s3://bucket/landing/`)
+### 1. Landing Layer (`s3://data-bucket/landing/`)
 
 **Purpose**: Store raw, unprocessed data exactly as received from source APIs.
 
@@ -109,11 +42,11 @@ graph TB
 
 ```
 s3://catalunya-data-dev/landing/
-├── social_services/ingested_process_at=20250803T140512/files.json
-└── social_services/ingested_process_at=20250803T150134/files.json
+├── social_services/downloaded_date=20250914/files.json
+└── social_services/downloaded_date=20250915/files.json
 ```
 
-### 2. Staging Layer (`s3://bucket/staging/`)
+### 2. Staging Layer (`s3://data-bucket/staging/`)
 
 **Purpose**: Store cleaned, validated, and standardized data ready for analytics.
 
@@ -140,7 +73,7 @@ s3://catalunya-data-dev/staging/
 └── social_services/district_id=02/file.parquet
 ```
 
-### 3. Marts Layer (`s3://bucket/marts/`)
+### 3. Marts Layer (`s3://data-bucket/marts/`)
 
 **Purpose**: Business-ready dimensional models optimized for analytics and reporting.
 
@@ -153,7 +86,6 @@ s3://catalunya-data-dev/staging/
 
 **Model Types**:
 
-- **Dimension Tables**: Reference data (municipalities, sectors, etc.)
 - **Fact Tables**: Metrics and measurements over time
 - **Aggregate Tables**: Pre-computed summaries for performance
 
@@ -161,18 +93,36 @@ s3://catalunya-data-dev/staging/
 
 ```
 s3://catalunya-data-dev/marts/
-├── dimensions/
-│   ├── dim_municipalities.parquet
-│   ├── dim_economic_sectors.parquet
-│   └── dim_time.parquet
-├── facts/
-│   ├── fact_population_monthly.parquet
-│   ├── fact_gdp_quarterly.parquet
-│   └── fact_service_usage_daily.parquet
-└── aggregates/
-    ├── agg_population_trends_yearly.parquet
-    └── agg_economic_indicators_quarterly.parquet
+└── social_services_by_service_municipal/
+    └── file.parquet
 ```
+
+### 4. Service Layer (`s3://data-bucket/dataservice/`)
+
+**Purpose**: Public-ready datasets optimized for external consumption via Observable Framework.
+
+**Characteristics**:
+
+- **Format**: Observable target build directory
+- **Retention**: 60 days
+- **Processing**: Final formatting for visualization and API consumption
+
+### 5. Catalog Layer (`s3://catalog-bucket/`)
+
+**Purpose**: Metadata, schemas, and data dictionary for pipeline operations.
+
+**Characteristics**:
+
+- **Format**: JSON schemas, Avro schemas, documentation
+- **Access**: Read-only for transformation processes
+- **Retention**: Permanent with versioning
+- **Content**: Schema definitions, field mappings, business rules
+
+**Catalog Types**:
+
+- **Schema Registry**: Versioned data schemas
+- **Transformation Rules**: Business logic definitions
+- **Data Dictionary**: Field descriptions and metadata
 
 ## Technology Stack Details
 
@@ -196,9 +146,10 @@ s3://catalunya-data-dev/marts/
 - **Processing**: Python scripts with mocked external services
 
 **Development/Production Environments**:
-- **AWS Lambda**: Python 3.9 runtime for data extraction/transformation
-- **Amazon S3**: Multi-tier storage (Landing, Staging, Marts)
+- **AWS Lambda**: Python 3.12 runtime for data extraction/transformation
+- **Amazon S3**: Multi-tier storage (Landing, Staging, Marts, Service, Catalog)
 - **Amazon Athena**: SQL query engine with Glue Data Catalog
+- **S3 Copiers**: Direct layer-to-layer data transfer roles
 
 ### DBT Core
 
@@ -213,6 +164,22 @@ s3://catalunya-data-dev/marts/
 **Adapters**:
 - **Local**: DuckDB adapter
 - **Development/Production**: Athena adapter
+
+### Observable Framework
+
+**Purpose**: Public data visualization and dashboard platform
+
+**Features**:
+- **Interactive Dashboards**: Real-time data visualization
+- **Public Access**: No authentication required
+- **Data Loaders**: Direct S3 integration via CloudFront
+- **Responsive Design**: Mobile and desktop optimized
+
+**Architecture**:
+- **Static Site Generation**: Build-time data processing
+- **CDN Distribution**: CloudFront for global performance
+- **Data Source**: Service layer S3 bucket
+- **Update Frequency**: Daily refreshes via CI/CD
 
 ### Infrastructure
 
@@ -277,8 +244,42 @@ s3://catalunya-data-dev/marts/
 **Data Flow Position**: S3 Landing Layer → Lambda Transformer → S3 Staging Layer
 
 **Security Boundaries**:
-- Read access to S3 landing layer only
+- Read access to S3 landing layer and catalog bucket
 - Write access to S3 staging layer only
+
+**S3 Copier Roles**
+- `catalunya-s3-copier-transformer-role-dev`
+- `catalunya-s3-copier-transformer-role-prod`
+- `catalunya-s3-copier-mart-role-dev`
+- `catalunya-s3-copier-mart-role-prod`
+
+**Purpose**: Direct transfer of data between S3 layers without processing.
+
+**Runtime Context**: AWS Lambda functions for efficient bulk transfers.
+
+**Data Flow Position**: 
+- Transformer: Landing → Staging or Staging → Marts
+- Mart: Marts → Service
+
+**Security Boundaries**:
+- Source layer read-only access
+- Target layer write-only access
+- No data transformation capabilities
+
+**Data Service Role**
+- `catalunya-data-service-role-dev`
+- `catalunya-data-service-role-prod`
+
+**Purpose**: Prepare and publish data for public consumption via Observable.
+
+**Runtime Context**: Lambda functions managing public data exposure.
+
+**Data Flow Position**: S3 Marts → S3 Service Layer
+
+**Security Boundaries**:
+- Read access to marts layer
+- Write access to service bucket only
+- CloudFront distribution management
 
 **GitHub Actions Deployment Roles**
 - `catalunya-deployment-role-dev` (OIDC: develop branch)
@@ -331,7 +332,6 @@ s3://catalunya-data-dev/marts/
 **Development/Production Environments**:
 - Lambda functions with internet access for API calls
 - Dokku server network configuration for Airflow
-- VPC configuration as needed for security isolation
 
 ## Monitoring & Observability
 
@@ -364,9 +364,6 @@ s3://catalunya-data-dev/marts/
 
 **Data Quality Monitoring**:
 - DBT test results and data lineage
-- Data freshness indicators
-- Schema drift detection
-- Row count and quality metrics
 
 ### Logging Strategy
 
@@ -389,7 +386,6 @@ s3://catalunya-data-dev/marts/
 
 **Development/Production Environments**:
 - Operational Dashboard: Pipeline health, processing times, error rates
-- Business Dashboard: Data freshness, dataset availability, query performance
 - Cost Dashboard: Resource usage and cost tracking
 
 ## Scalability Considerations
@@ -431,73 +427,13 @@ s3://catalunya-data-dev/marts/
 - **Resource Usage**: Minimal Docker container overhead
 - **Development Speed**: Fast iteration without cloud costs
 
-### Development Environment
-| Service         | Usage                  | Estimated Cost |
-|-----------------|------------------------|----------------|
-| S3 Storage      | 10GB across all layers | $0.25/month    |
-| Lambda Requests | 5K invocations/month   | $1.00/month    |
-| Athena Queries  | 50GB scanned/month     | $2.50/month    |
-| CloudWatch      | Logs + Metrics         | $2.00/month    |
-| Dokku Server    | On-premise hosting     | Variable       |
-| **Total**       |                        | **~$5.75 + hosting** |
+### Production/Development Environment
+| Service         | Usage                  | Estimated Cost         |
+|-----------------|------------------------|------------------------|
+| S3 Storage      | 10GB across all layers | < $0.25/month          |
+| Lambda Requests | 5K invocations/month   | < $1.00/month          |
+| Athena Queries  | 50GB scanned/month     | < $1.00/month          |
+| CloudWatch      | Logs + Metrics         | < $1.00/month          |
+| Dokku Server    | On-premise hosting     | Variable               |
+| **Total**       |                        | **< ~$3.25 + hosting** |
 
-### Production Environment
-| Service         | Usage                   | Estimated Cost |
-|-----------------|-------------------------|----------------|
-| S3 Storage      | 50GB across all layers  | $1.25/month    |
-| Lambda Requests | 20K invocations/month   | $4.00/month    |
-| Athena Queries  | 200GB scanned/month     | $10.00/month   |
-| CloudWatch      | Enhanced monitoring     | $5.00/month    |
-| Dokku Server    | Production hosting      | Variable       |
-| **Total**       |                         | **~$20.25 + hosting** |
-
-### Cost Controls
-
-**Automated Controls**:
-- Billing alerts for AWS services
-- S3 lifecycle policies for data archival
-- Lambda timeout limits to prevent runaway costs
-- Resource tagging for cost allocation
-
-**Manual Reviews**:
-- Monthly cost analysis by environment
-- Query optimization reviews for Athena usage
-- Storage utilization assessment and cleanup
-
-## Disaster Recovery
-
-### Local Environment
-- **Data Backup**: Git version control for code, local data is ephemeral
-- **Recovery**: Simple `git clone` and `docker-compose up`
-- **Development Impact**: Minimal, isolated environment
-
-### Development/Production Environments
-
-**Backup Strategy**:
-- S3 Cross-Region Replication for critical data
-- Git version control for all code and infrastructure
-- Database exports of Airflow metadata and configurations
-- Dokku server backup procedures
-
-**Recovery Procedures**:
-- Infrastructure recreation via AWS CDK
-- Airflow deployment restoration via Dokku
-- Data restore from backup S3 buckets
-- Pipeline restart and validation procedures
-
-**Business Continuity**:
-- Catalunya API availability monitoring
-- AWS service health monitoring
-- Dokku server health and failover planning
-- Alternative data source identification
-- Stakeholder communication plans
-
-**Recovery Time Objectives (RTO)**:
-- Local: < 30 minutes
-- Development: < 2 hours  
-- Production: < 4 hours
-
-**Recovery Point Objectives (RPO)**:
-- Local: N/A (ephemeral data)
-- Development: < 24 hours
-- Production: < 4 hours
