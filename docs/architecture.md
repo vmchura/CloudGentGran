@@ -27,71 +27,6 @@ The Catalunya Open Data Pipeline is designed as a multi-environment data platfor
 - **Processing**: Full AWS Lambda integration  
 - **Data Sources**: Real Catalunya APIs with production configurations
 
-## Architecture Diagram
-
-```mermaid
-graph TB
-    %% Top Row - Sources and Orchestration
-    subgraph "Data Sources & Orchestration"
-        API[Catalunya APIs<br/>• Social Services<br/>• ...]
-        AF[Apache Airflow<br/>Orchestration]
-        GHA[GitHub Actions<br/>CI/CD]
-    end
-    
-    %% Middle Row - Processing
-    subgraph "Data Processing"
-        subgraph "Local"
-            LM[Mock Services<br/>• Mock APIs<br/>• Sample Data]
-        end
-        subgraph "Dev/Prod"
-            LE[Lambda Extract<br/>• API Client<br/>• Rate Limit<br/>• Error Handle]
-            LT[Lambda Transform<br/>• Validation<br/>• Clean]
-        end
-        DBT[DBT Core<br/>• SQL Models<br/>• Tests<br/>• Docs]
-    end
-    
-    %% Bottom Row - Storage
-    subgraph "Data Storage"
-        subgraph "Local Storage"
-            LS[Local Folders<br/>DuckDB]
-        end
-        subgraph "AWS Storage"
-            S3L[S3 Landing<br/>Raw JSON files]
-            S3S[S3 Staging<br/>Parquet files]
-            S3M[S3 Marts<br/>Analytics ready]
-        end
-    end
-    
-    %% Connections
-    API -->|HTTP API<br/>Requests|LE
-    AF -->|Triggers|LT
-    AF -->|Triggers|DBT
-    GHA -->|Triggers|DBT
-    
-    %% Local flow
-    LM -->|Mock Data|LS
-    
-    %% AWS flow
-    LE -->|Raw JSON|S3L
-    LT -->|Clean Data|S3S
-    DBT -->|Analytics SQL|S3M
-    DBT -->|Analytics SQL|LS
-    
-    S3L -->|S3 Event|LT
-    S3S -->|Data|DBT
-    
-    %% Styling
-    classDef apiClass fill: #e1f5fe, stroke: #01579b, stroke-width: 2px
-    classDef processClass fill: #fff3e0, stroke: #e65100, stroke-width: 2px
-    classDef storageClass fill: #e8f5e8, stroke: #2e7d32, stroke-width: 2px
-    classDef orchestrationClass fill: #f3e5f5, stroke: #4a148c, stroke-width: 2px
-    
-    class API apiClass
-    class LE,LT,DBT,LM processClass
-    class S3L,S3S,S3M,LS storageClass
-    class AF,GHA orchestrationClass
-```
-
 ## Data Flow Layers
 
 ### 1. Landing Layer (`s3://bucket/landing/`)
@@ -109,8 +44,8 @@ graph TB
 
 ```
 s3://catalunya-data-dev/landing/
-├── social_services/ingested_process_at=20250803T140512/files.json
-└── social_services/ingested_process_at=20250803T150134/files.json
+├── social_services/downloaded_date=20250914/files.json
+└── social_services/downloaded_date=20250915/files.json
 ```
 
 ### 2. Staging Layer (`s3://bucket/staging/`)
@@ -153,7 +88,6 @@ s3://catalunya-data-dev/staging/
 
 **Model Types**:
 
-- **Dimension Tables**: Reference data (municipalities, sectors, etc.)
 - **Fact Tables**: Metrics and measurements over time
 - **Aggregate Tables**: Pre-computed summaries for performance
 
@@ -161,17 +95,8 @@ s3://catalunya-data-dev/staging/
 
 ```
 s3://catalunya-data-dev/marts/
-├── dimensions/
-│   ├── dim_municipalities.parquet
-│   ├── dim_economic_sectors.parquet
-│   └── dim_time.parquet
-├── facts/
-│   ├── fact_population_monthly.parquet
-│   ├── fact_gdp_quarterly.parquet
-│   └── fact_service_usage_daily.parquet
-└── aggregates/
-    ├── agg_population_trends_yearly.parquet
-    └── agg_economic_indicators_quarterly.parquet
+└── social_services_by_service_municipal/
+    └── file.parquet
 ```
 
 ## Technology Stack Details
@@ -196,7 +121,7 @@ s3://catalunya-data-dev/marts/
 - **Processing**: Python scripts with mocked external services
 
 **Development/Production Environments**:
-- **AWS Lambda**: Python 3.9 runtime for data extraction/transformation
+- **AWS Lambda**: Python 3.12 runtime for data extraction/transformation
 - **Amazon S3**: Multi-tier storage (Landing, Staging, Marts)
 - **Amazon Athena**: SQL query engine with Glue Data Catalog
 
@@ -331,7 +256,6 @@ s3://catalunya-data-dev/marts/
 **Development/Production Environments**:
 - Lambda functions with internet access for API calls
 - Dokku server network configuration for Airflow
-- VPC configuration as needed for security isolation
 
 ## Monitoring & Observability
 
@@ -364,9 +288,6 @@ s3://catalunya-data-dev/marts/
 
 **Data Quality Monitoring**:
 - DBT test results and data lineage
-- Data freshness indicators
-- Schema drift detection
-- Row count and quality metrics
 
 ### Logging Strategy
 
@@ -389,7 +310,6 @@ s3://catalunya-data-dev/marts/
 
 **Development/Production Environments**:
 - Operational Dashboard: Pipeline health, processing times, error rates
-- Business Dashboard: Data freshness, dataset availability, query performance
 - Cost Dashboard: Resource usage and cost tracking
 
 ## Scalability Considerations
@@ -431,73 +351,17 @@ s3://catalunya-data-dev/marts/
 - **Resource Usage**: Minimal Docker container overhead
 - **Development Speed**: Fast iteration without cloud costs
 
-### Development Environment
-| Service         | Usage                  | Estimated Cost |
-|-----------------|------------------------|----------------|
-| S3 Storage      | 10GB across all layers | $0.25/month    |
-| Lambda Requests | 5K invocations/month   | $1.00/month    |
-| Athena Queries  | 50GB scanned/month     | $2.50/month    |
-| CloudWatch      | Logs + Metrics         | $2.00/month    |
-| Dokku Server    | On-premise hosting     | Variable       |
-| **Total**       |                        | **~$5.75 + hosting** |
+### Production/Development Environment
+| Service         | Usage                  | Estimated Cost         |
+|-----------------|------------------------|------------------------|
+| S3 Storage      | 10GB across all layers | < $0.25/month          |
+| Lambda Requests | 5K invocations/month   | < $1.00/month          |
+| Athena Queries  | 50GB scanned/month     | < $1.00/month          |
+| CloudWatch      | Logs + Metrics         | < $1.00/month          |
+| Dokku Server    | On-premise hosting     | Variable               |
+| **Total**       |                        | **< ~$3.25 + hosting** |
 
-### Production Environment
-| Service         | Usage                   | Estimated Cost |
-|-----------------|-------------------------|----------------|
-| S3 Storage      | 50GB across all layers  | $1.25/month    |
-| Lambda Requests | 20K invocations/month   | $4.00/month    |
-| Athena Queries  | 200GB scanned/month     | $10.00/month   |
-| CloudWatch      | Enhanced monitoring     | $5.00/month    |
-| Dokku Server    | Production hosting      | Variable       |
-| **Total**       |                         | **~$20.25 + hosting** |
-
-### Cost Controls
-
-**Automated Controls**:
-- Billing alerts for AWS services
-- S3 lifecycle policies for data archival
-- Lambda timeout limits to prevent runaway costs
-- Resource tagging for cost allocation
-
-**Manual Reviews**:
-- Monthly cost analysis by environment
-- Query optimization reviews for Athena usage
-- Storage utilization assessment and cleanup
 
 ## Disaster Recovery
 
-### Local Environment
-- **Data Backup**: Git version control for code, local data is ephemeral
-- **Recovery**: Simple `git clone` and `docker-compose up`
-- **Development Impact**: Minimal, isolated environment
-
-### Development/Production Environments
-
-**Backup Strategy**:
-- S3 Cross-Region Replication for critical data
-- Git version control for all code and infrastructure
-- Database exports of Airflow metadata and configurations
-- Dokku server backup procedures
-
-**Recovery Procedures**:
-- Infrastructure recreation via AWS CDK
-- Airflow deployment restoration via Dokku
-- Data restore from backup S3 buckets
-- Pipeline restart and validation procedures
-
-**Business Continuity**:
-- Catalunya API availability monitoring
-- AWS service health monitoring
-- Dokku server health and failover planning
-- Alternative data source identification
-- Stakeholder communication plans
-
-**Recovery Time Objectives (RTO)**:
-- Local: < 30 minutes
-- Development: < 2 hours  
-- Production: < 4 hours
-
-**Recovery Point Objectives (RPO)**:
-- Local: N/A (ephemeral data)
-- Development: < 24 hours
-- Production: < 4 hours
+### Development/Production Environments [TODO]
