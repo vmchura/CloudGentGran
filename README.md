@@ -48,9 +48,10 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 
 ## 📊 Current Datasets
 
-| Dataset                                                                                                | Source | Update Frequency | Status |
-|--------------------------------------------------------------------------------------------------------|--------|------------------|--------|
-| [Register of entities, services, and social establishments (basic and specialized social services))](https://analisi.transparenciacatalunya.cat/en/Societat-benestar/Registre-d-entitats-serveis-i-establiments-socials/ivft-vegh/about_data) | Catalunya Open Data | Weekly           | 🔄 Planned |
+| Dataset                                                                                                | Source | Update Frequency | Status             |
+|--------------------------------------------------------------------------------------------------------|--------|------------------|--------------------|
+| [Register of entities, services, and social establishments (basic and specialized social services))](https://analisi.transparenciacatalunya.cat/en/Societat-benestar/Registre-d-entitats-serveis-i-establiments-socials/ivft-vegh/about_data) | Catalunya Open Data | Weekly           | Ingested           |
+| [Population and Housing Census](https://www.idescat.cat/pub/?id=censph)|Statistical Institute of Catalonia| Yearly           | Ingested partially |
 
 ## 🚀 Quick Start
 
@@ -253,19 +254,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: Create a GitHub issue
 - **Discussions**: Use GitHub Discussions for questions
 
-## 🗺️ Roadmap
-
-- [ ] **Phase 1**: Foundation Setup
-- [ ] **Phase 2**: Infrastructure as Code (AWS CDK)
-- [ ] **Phase 3**: Data Extraction Layer (Lambda)
-- [ ] **Phase 4**: DBT Project Setup
-- [ ] **Phase 5**: Data Transformation Models
-- [ ] **Phase 6**: GitHub Actions Workflow
-- [ ] **Phase 7**: Integration and Testing
-- [ ] **Phase 8**: Production Deployment
-- [ ] **Phase 9**: Monitoring and Maintenance
-
 ---
 
-**Last Updated**: August 2025  
+**Last Updated**: November 2025  
 **Maintainer**: vmchura
