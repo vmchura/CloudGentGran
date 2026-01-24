@@ -16,10 +16,6 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
 
-    # DBT Configuration
-    DBT_PROJECT_DIR: /opt/airflow/dbt/mart
-    DBT_PROFILES_DIR: /home/airflow/.dbt
-
     # LocalStack Integration
     AWS_ENDPOINT_URL: http://localstack:4566
     AWS_ACCESS_KEY_ID: test
@@ -40,7 +36,6 @@ x-airflow-common:
     - ./orchestration/config:/opt/airflow/config
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./dbt:/opt/airflow/dbt
-    - airflow-dbt-profiles:/home/airflow/.dbt
     - /var/run/docker.sock:/var/run/docker.sock  # For LocalStack container communication
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
@@ -247,31 +242,23 @@ services:
         
         echo "🔧 Creating missing directories..."
         mkdir -p /opt/airflow/{logs,dags,plugins,config}
-        mkdir -p /home/airflow/.dbt
         mkdir -p /opt/airflow/dbt/mart/local_data
         
-        echo "🔧 Setting up DBT profiles for Catalunya Data Pipeline..."
-        cat > /home/airflow/.dbt/profiles.yml << 'EOF'
-        # Catalunya Data Pipeline - DBT Profiles
-        # Local development configuration using DuckDB
+        echo "🔧 Setting up DBT profiles..."
+        # Copy profiles_template.yml to profiles.yml if it doesn't exist
+        if [[ -f "/opt/airflow/dbt/mart/profiles_template.yml" ]] && [[ ! -f "/opt/airflow/dbt/profiles.yml" ]]; then
+          cp /opt/airflow/dbt/mart/profiles_template.yml /opt/airflow/dbt/profiles.yml
+          echo "✅ DBT profiles.yml created from template"
+        else
+          echo "ℹ️ DBT profiles.yml already exists or template missing"
+        fi
         
-        catalunya_data:
-          outputs:
-            local:
-              type: duckdb
-              path: /opt/airflow/dbt/mart/local_data/catalunya_local.duckdb
-              threads: 4
-            localstack:
-              type: duckdb
-              path: /opt/airflow/dbt/mart/local_data/catalunya_localstack.duckdb
-              threads: 4
-          target: localstack
-        EOF
-        echo "✅ DBT profiles.yml created successfully"
+        # Set DBT target environment
+        export DBT_TARGET=${DBT_TARGET:-local}
+        echo "🔧 DBT_TARGET set to: $DBT_TARGET"
         
         echo "🔧 Setting file permissions..."
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/
-        chown -R "${AIRFLOW_UID}:0" /home/airflow/.dbt
         
         echo "🔧 Installing additional packages..."
         pip install awscli-local
