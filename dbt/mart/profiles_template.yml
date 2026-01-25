@@ -15,8 +15,9 @@ catalunya_data:
           key_id: test
           secret: test
           use_ssl: false
-          account_id: "00000000"
           endpoint: "localstack:4566"
+          url_style: path
+      threads: 2
 
     dev:
       type: athena
