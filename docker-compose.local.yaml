@@ -246,12 +246,8 @@ services:
         
         echo "🔧 Setting up DBT profiles..."
         # Copy profiles_template.yml to profiles.yml if it doesn't exist
-        if [[ -f "/opt/airflow/dbt/mart/profiles_template.yml" ]] && [[ ! -f "/opt/airflow/dbt/profiles.yml" ]]; then
-          cp /opt/airflow/dbt/mart/profiles_template.yml /opt/airflow/dbt/profiles.yml
-          echo "✅ DBT profiles.yml created from template"
-        else
-          echo "ℹ️ DBT profiles.yml already exists or template missing"
-        fi
+        cp /opt/airflow/dbt/mart/profiles_template.yml /opt/airflow/dbt/profiles.yml
+        echo "✅ DBT profiles.yml created from template"
         
         # Set DBT target environment
         export DBT_TARGET=${DBT_TARGET:-local}
