@@ -9,12 +9,14 @@ export interface GlueConstructProps {
   projectName: string;
   config: EnvironmentConfig;
   dataBucketName: string;
+  catalogBucketName: string;
   athenaDatabaseName: string;
   glueExecutorRole: iam.Role;
 }
 
 export class GlueConstruct extends Construct {
   public readonly socialServicesTable: glue.CfnTable;
+  public readonly municipalsTable: glue.CfnTable;
 
   constructor(scope: Construct, id: string, props: GlueConstructProps) {
     super(scope, id);
@@ -24,6 +26,7 @@ export class GlueConstruct extends Construct {
       projectName,
       athenaDatabaseName,
       dataBucketName,
+      catalogBucketName,
       glueExecutorRole
     } = props;
 
@@ -31,6 +34,11 @@ export class GlueConstruct extends Construct {
       athenaDatabaseName,
       dataBucketName,
       environmentName
+    );
+
+    this.municipalsTable = this.createMunicipalsTable(
+      athenaDatabaseName,
+      catalogBucketName
     );
   }
 
@@ -65,6 +73,33 @@ export class GlueConstruct extends Construct {
         partitionKeys: [
           { name: 'downloaded_date', type: 'string' }
         ]
+      }
+    });
+  }
+
+  private createMunicipalsTable(
+    databaseName: string,
+    catalogBucketName: string
+  ): glue.CfnTable {
+    return new glue.CfnTable(this, 'MunicipalsTable', {
+      catalogId: cdk.Aws.ACCOUNT_ID,
+      databaseName: databaseName,
+      tableInput: {
+        name: 'municipals',
+        tableType: 'EXTERNAL_TABLE',
+        storageDescriptor: {
+          columns: [
+            { name: 'municipal_id', type: 'string' },
+            { name: 'municipal_name', type: 'string' },
+            { name: 'comarca_id', type: 'string' }
+          ],
+          location: `s3://${catalogBucketName}/municipals/municipals.parquet`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+          }
+        }
       }
     });
   }

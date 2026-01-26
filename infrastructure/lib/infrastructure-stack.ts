@@ -147,6 +147,7 @@ export class CatalunyaDataStack extends cdk.Stack {
       projectName: this.projectName,
       config: this.config,
       dataBucketName: this.bucketName,
+      catalogBucketName: this.catalogBucketName,
       athenaDatabaseName: this.athenaDatabaseName,
       glueExecutorRole: this.iamInfrastructure.catalogExecutorRole,
     });
