@@ -91,7 +91,8 @@ export class GlueConstruct extends Construct {
           columns: [
             { name: 'municipal_id', type: 'string' },
             { name: 'municipal_name', type: 'string' },
-            { name: 'comarca_id', type: 'string' }
+            { name: 'comarca_id', type: 'string' },
+            { name: 'comarca_name', type: 'string' }
           ],
           location: `s3://${catalogBucketName}/municipals/municipals.parquet`,
           inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',

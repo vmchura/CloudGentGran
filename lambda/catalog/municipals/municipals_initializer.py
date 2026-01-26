@@ -9,7 +9,7 @@ import json
 import boto3
 import urllib.request
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, List
 import os
 import pandas as pd
@@ -42,7 +42,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         Dict containing execution results
     """
     try:
-        logger.info(f"Starting API extraction process at {datetime.utcnow()}")
+        logger.info(f"Starting API extraction process at {datetime.now(UTC)}")
 
         # Get configuration from environment variables
         bucket_name = os.environ['CATALOG_BUCKET_NAME']
@@ -50,7 +50,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
         api_endpoint_institution = f'https://analisi.transparenciacatalunya.cat/resource/{dataset_identifier}.json'
 
-        process_initiated_at = datetime.utcnow()
+        process_initiated_at = datetime.now(UTC)
         downloaded_date = process_initiated_at.strftime('%Y%m%d')
         list_json = []
         total_records = 0
@@ -98,7 +98,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'downloaded_date': downloaded_date,
             'total_records': total_records,
             's3_key': s3_key,
-            'extraction_completed_at': datetime.utcnow().isoformat(),
+            'extraction_completed_at': datetime.now(UTC).isoformat(),
             'next_step': 'trigger_transformer',  # Airflow coordination hint
             'transformer_payload': {
                 'bucket_name': bucket_name,
@@ -106,7 +106,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'downloaded_date': downloaded_date,
                 'total_records': total_records,
                 'source_prefix': f"catalog/municipals/",
-                'extraction_timestamp': datetime.utcnow().isoformat()
+                'extraction_timestamp': datetime.now(UTC).isoformat()
             }
         })
 
@@ -140,12 +140,14 @@ def upload_to_s3(bucket_name: str, json_data: list, table_name: str, downloaded_
         if existing_columns:
             df = df[existing_columns]
 
-        current_time = datetime.utcnow().isoformat()
-        df['created_at'] = current_time
+        df.rename({'codi': 'municipal_id',
+                   'nom': 'municipal_name',
+                   'codi_comarca': 'comarca_id',
+                   'nom_comarca': 'comarca_name'})
 
-        # Create S3 key with timestamp for uniqueness
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        s3_key = f"{table_name}/{timestamp}.parquet"
+        current_time = datetime.utcnow().isoformat()
+
+        s3_key = f"{table_name}/municipals.parquet"
 
         # Convert DataFrame to parquet in memory
         parquet_buffer = BytesIO()
