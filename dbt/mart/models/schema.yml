@@ -40,21 +40,6 @@ sources:
 
 
 models:
-  - name: social_services_empty_last_year
-    description: Complete time series of social services data starting from first non-zero capacity year
-    columns:
-      - name: municipal_id
-        description: Unique identifier for municipality
-      - name: service_type_id
-        description: Type of social service
-      - name: service_qualification_id
-        description: Qualification level of service
-      - name: comarca_id
-        description: Region identifier (comarca)
-      - name: year
-        description: Year of data
-      - name: total_capacit
-        description: Total capacity for the service
 
   - name: municipal_coverage
     description: Coverage ratio of residential social services vs population >65 years by municipality
