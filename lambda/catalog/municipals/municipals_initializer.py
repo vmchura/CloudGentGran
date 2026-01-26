@@ -130,11 +130,49 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return create_response(False, f"Error: {str(e)}")
 
 
+def upload_dataframe_to_s3(bucket_name: str, df: pd.DataFrame, table_name: str) -> str:
+    """
+    Upload processed DataFrame to S3 as parquet
+
+    Args:
+        bucket_name: S3 bucket name
+        df: Processed DataFrame ready for upload
+        table_name: Semantic identifier for the dataset
+
+    Returns:
+        S3 key of the uploaded file
+    """
+    s3_client = get_s3_client()
+    current_time = datetime.now(UTC).isoformat()
+    s3_key = f"{table_name}/municipals.parquet"
+
+    # Convert DataFrame to parquet in memory
+    parquet_buffer = BytesIO()
+    df.to_parquet(parquet_buffer, engine="fastparquet", index=False)
+    parquet_buffer.seek(0)
+
+    # Upload to S3
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key=s3_key,
+        Body=parquet_buffer.getvalue(),
+        ContentType="application/octet-stream",
+        Metadata={
+            "table_name": table_name,
+            "record_count": str(len(df)),
+            "created_at": current_time,
+        },
+    )
+
+    logger.info(f"Successfully uploaded to s3://{bucket_name}/{s3_key}")
+    return s3_key
+
+
 def upload_to_s3(
     bucket_name: str, json_data: list, table_name: str, downloaded_date: str
 ) -> str:
     """
-    Upload extracted data to S3 landing bucket
+    Process and upload extracted data to S3 landing bucket
 
     Args:
         bucket_name: S3 bucket name
@@ -146,52 +184,32 @@ def upload_to_s3(
         S3 key of the uploaded file
     """
     try:
+        # Process the JSON data into a clean DataFrame
+        df = process_municipal_data(json_data)
+
+        # Upload to S3 with all metadata included
+        s3_key = upload_dataframe_to_s3(bucket_name, df, table_name)
+
+        # Add additional metadata to the uploaded object
         s3_client = get_s3_client()
 
-        # Create DataFrame from the flattened JSON data
-        df = pd.DataFrame(json_data)
+        # Get the existing object to preserve its body
+        response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+        body = response["Body"].read()
 
-        # Filter columns if they exist (made optional to handle different data structures)
-        available_columns = ["codi", "nom", "codi_comarca", "nom_comarca"]
-        existing_columns = [col for col in available_columns if col in df.columns]
-        if existing_columns:
-            df = df[existing_columns]
-
-        df.rename(
-            columns={
-                "codi": "municipal_id",
-                "nom": "municipal_name",
-                "codi_comarca": "comarca_id",
-                "nom_comarca": "comarca_name",
-            }
-        )
-
-        current_time = datetime.now(UTC).isoformat()
-
-        s3_key = f"{table_name}/municipals.parquet"
-
-        # Convert DataFrame to parquet in memory
-        parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, engine="fastparquet", index=False)
-        parquet_buffer.seek(0)
-
-        # Upload to S3
+        # Update the object with additional metadata
         s3_client.put_object(
             Bucket=bucket_name,
             Key=s3_key,
-            Body=parquet_buffer.getvalue(),
+            Body=body,
             ContentType="application/octet-stream",
             Metadata={
                 "table_name": table_name,
                 "record_count": str(len(df)),
-                "created_at": current_time,
-                "original_columns": json.dumps(
-                    list(json_data[0].keys()) if json_data else []
-                ),
+                "created_at": datetime.now(UTC).isoformat(),
             },
         )
 
-        logger.info(f"Successfully uploaded to s3://{bucket_name}/{s3_key}")
         return s3_key
 
     except Exception as e:
@@ -199,8 +217,43 @@ def upload_to_s3(
         raise
 
 
+def process_municipal_data(json_data: list) -> pd.DataFrame:
+    """
+    Process municipal JSON data into a clean DataFrame with proper column names
+
+    Args:
+        json_data: List of JSON records from the API
+
+    Returns:
+        Processed DataFrame with standardized column names
+    """
+    # Create DataFrame from the JSON data
+    df = pd.DataFrame(json_data)
+
+    # Filter columns if they exist (made optional to handle different data structures)
+    available_columns = ["codi", "nom", "codi_comarca", "nom_comarca"]
+    existing_columns = [col for col in available_columns if col in df.columns]
+    if existing_columns:
+        df = df[existing_columns]
+
+    # Rename columns to match the target schema
+    column_mapping = {
+        "codi": "municipal_id",
+        "nom": "municipal_name",
+        "codi_comarca": "comarca_id",
+        "nom_comarca": "comarca_name",
+    }
+
+    # Only rename columns that exist
+    existing_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
+    if existing_mapping:
+        df = df.rename(columns=existing_mapping)
+
+    return df
+
+
 def create_response(
-    success: bool, message: str, data: Dict[str, Any] = None
+    success: bool, message: str, data: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
     """
     Create standardized Lambda response
@@ -225,4 +278,3 @@ def create_response(
         response["data"] = data
 
     return response
-
