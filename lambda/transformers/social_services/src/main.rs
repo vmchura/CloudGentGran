@@ -572,13 +572,13 @@ fn transform_social_services_data(
     df = df.join(
         &municipals_df,
         ["comarca"],
-        ["nom_comarca"],
+        ["comarca_name"],
         JoinArgs::new(JoinType::Left),
         None
     )?;
 
     // Calculate normalized strings and similarities using a simpler approach
-    let nom_series = df.column("nom")?.as_series().ok_or_else(|| anyhow!("Municipal series nom can not be serialized"))?;
+    let nom_series = df.column("municipal_name")?.as_series().ok_or_else(|| anyhow!("Municipal series municipal_name can not be serialized"))?;
     let municipi_series = df.column("municipi")?.as_series().ok_or_else(|| anyhow!("Municipal codes can not be serialized"))?;
 
     let mut normalized_nom_strings: Vec<Option<String>> = Vec::new();
@@ -664,8 +664,8 @@ fn transform_social_services_data(
             col("capacity"),
             col("service_type_id"),
             col("service_qualification_id"),
-            col("codi").alias("municipal_id"),
-            col("codi_comarca").alias("comarca_id"),
+            col("municipal_id"),
+            col("comarca_id"),
         ])
         .collect()?;
 

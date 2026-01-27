@@ -9,9 +9,14 @@ cargo lambda new population_municipal_greater_65_mart
 # Event type that this function receives: Empty
 # Implement code
 cargo lambda build --release --target x86_64-unknown-linux-gnu
-cargo lambda deploy -p localstack --endpoint-url http://localhost:4566 --env-var BUCKET_NAME=catalunya-data-dev --env-var SEMANTIC_IDENTIFIER=population_municipal_greater_65
+cargo lambda deploy -p localstack --endpoint-url http://localhost:4566 --env-var BUCKET_NAME=catalunya-data-dev --env-var SEMANTIC_IDENTIFIER=municipal_population
+
+cargo lambda deploy -p localstack --endpoint-url http://localhost:4566 --env-var BUCKET_NAME=catalunya-data-dev --env-var SEMANTIC_IDENTIFIER=social_services --env-var CATALOG_BUCKET_NAME=catalunya-catalog-dev --env-var ENVIRONMENT=local --binary-name social-services-transformer catalunya-dev-social-services-transformer
+
 
  cargo lambda invoke --remote -p localstack --endpoint-url http://localhost:4566 --data-ascii "{\"source_prefix\": \"landing/population_municipal_greater_65\" }" population_municipal_greater_65
+ 
+cargo lambda invoke --remote -p localstack --endpoint-url http://localhost:4566 --data-ascii "{\"athena_database_name\": \"catalunya_data_dev\", \"bucket_name\": \"catalunya-data-dev\", \"downloaded_date\": \"20260127\", \"environment\": \"local\", \"semantic_identifier\": \"social_services\"}" catalunya-dev-social-services-transformer
 
  cargo lambda invoke --remote -p localstack --endpoint-url http://localhost:4566 --data-ascii "{\"source_prefix\": \"staging/population_municipal_greater_65/population_municipal_greater_65.parquet\" }" population_municipal_greater_65_mart
 
