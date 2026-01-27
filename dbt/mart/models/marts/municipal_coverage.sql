@@ -1,7 +1,7 @@
 {{ adapter_aware_table_config() }}
 WITH municipals AS (
     SELECT DISTINCT
-        codi AS municipal_id
+        municipal_id
     FROM
         {{ read_catalog_data ('municipals') }}
 ),
@@ -21,19 +21,19 @@ all_combinations AS (
 -- Read population data and rename columns for consistency
 renamed_population AS (
     SELECT
-        municipal_code AS municipal_id,
+        municipal_id,
         year,
         population,
-        population_ge65
+        population_age_65_and_over
     FROM
-        {{ read_marts_data ('population_municipal_greater_65') }}
+        {{ read_marts_data ('municipal_population') }}
 ),
 joined_population AS (
     SELECT
         a.municipal_id,
         a.year,
         p.population,
-        p.population_ge65
+        p.population_age_65_and_over
     FROM
         all_combinations AS a
         LEFT JOIN renamed_population AS p ON a.municipal_id = p.municipal_id
@@ -44,7 +44,7 @@ filled_population AS (
         municipal_id,
         year,
 	{{forward_fill('population', 'municipal_id', 'year')}} AS population,
-	{{forward_fill('population_ge65', 'municipal_id', 'year')}} AS population_ge65
+	{{forward_fill('population_age_65_and_over', 'municipal_id', 'year')}} AS population_age_65_and_over
 FROM
     joined_population
 ),
@@ -96,8 +96,8 @@ with_coverage AS (
         municipal_id,
         year,
         total_capacit,
-        population_ge65,
-        total_capacit * 100.0 / population_ge65 AS coverage_ratio
+        population_age_65_and_over,
+        total_capacit * 100.0 / population_age_65_and_over AS coverage_ratio
     FROM
         complete_data
 )
@@ -105,7 +105,7 @@ SELECT
     municipal_id,
     year,
     total_capacit,
-    population_ge65,
+    population_age_65_and_over,
     ROUND(coverage_ratio, 2) AS coverage_ratio
 FROM
     with_coverage
