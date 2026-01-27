@@ -394,7 +394,7 @@ export class LambdaConstruct extends Construct {
             environment: {
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
-                SEMANTIC_IDENTIFIER: 'population_municipal_greater_65',
+                SEMANTIC_IDENTIFIER: 'municipal_population',
                 ENVIRONMENT: environmentName,
                 REGION: region
             },
@@ -451,7 +451,7 @@ export class LambdaConstruct extends Construct {
             environment: {
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
-                SEMANTIC_IDENTIFIER: 'population_municipal_greater_65',
+                SEMANTIC_IDENTIFIER: 'municipal_population',
                 ENVIRONMENT: environmentName,
                 REGION: region
             },

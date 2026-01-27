@@ -1,7 +1,4 @@
-{{config(materialized='external',
-format = 'parquet',
-location = "s3://{{ env_var('DATA_BUCKET') }}/marts/{{this.name}}",
-options = { "per_thread_output" : true }) }}
+{{ adapter_aware_table_config() }}
 WITH municipals AS (
     SELECT DISTINCT
         codi AS municipal_id
