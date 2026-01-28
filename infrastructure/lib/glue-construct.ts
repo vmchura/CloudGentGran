@@ -105,7 +105,7 @@ export class GlueConstruct extends Construct {
             { name: 'comarca_id', type: 'string' },
             { name: 'comarca_name', type: 'string' }
           ],
-          location: `s3://${catalogBucketName}/municipals/municipals.parquet`,
+          location: `s3://${catalogBucketName}/municipals/`,
           inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
           outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
           serdeInfo: {
@@ -132,7 +132,7 @@ export class GlueConstruct extends Construct {
             { name: 'service_type_description', type: 'string' },
             { name: 'created_at', type: 'string' }
           ],
-          location: `s3://${catalogBucketName}/service_type/service_type.parquet`,
+          location: `s3://${catalogBucketName}/service_type/`,
           inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
           outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
           serdeInfo: {
@@ -159,7 +159,7 @@ export class GlueConstruct extends Construct {
             { name: 'service_qualification_description', type: 'string' },
             { name: 'created_at', type: 'string' }
           ],
-          location: `s3://${catalogBucketName}/service_qualification/service_qualification.parquet`,
+          location: `s3://${catalogBucketName}/service_qualification/`,
           inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
           outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
           serdeInfo: {
