@@ -1,6 +1,6 @@
 {{ adapter_aware_table_config() }}
 WITH comarcas AS (
-  SELECT DISTINCT codi_comarca AS comarca_id
+  SELECT DISTINCT comarca_id
   FROM {{ read_catalog_data('municipals') }}
 ),
 
@@ -20,7 +20,7 @@ joined_population AS (
     a.comarca_id,
     a.year,
     p.population,
-    p.population_ge65
+    p.population_age_65_and_over
   FROM all_combinations AS a
   LEFT JOIN {{ ref('comarca_population') }} p
     USING (comarca_id, year)
@@ -32,7 +32,7 @@ filled_population AS (
     year,
     -- Forward fill population using LAST_VALUE window function
     {{forward_fill('population', 'comarca_id', 'year')}} AS population,
-    {{forward_fill('population_ge65', 'comarca_id', 'year')}} AS population_ge65,
+    {{forward_fill('population_age_65_and_over', 'comarca_id', 'year')}} AS population_age_65_and_over,
   FROM joined_population
 ),
 
@@ -98,8 +98,8 @@ with_coverage AS (
     comarca_id, 
     year, 
     total_capacit, 
-    population_ge65, 
-    total_capacit * 100.0 / population_ge65 as coverage_ratio 
+    population_age_65_and_over, 
+    total_capacit * 100.0 / population_age_65_and_over as coverage_ratio 
   FROM complete_data
 )
 
@@ -107,7 +107,7 @@ SELECT
   comarca_id, 
   year,
   total_capacit,
-  population_ge65,
+  population_age_65_and_over,
   ROUND(coverage_ratio, 2) as coverage_ratio 
 FROM with_coverage 
 ORDER BY comarca_id, year
