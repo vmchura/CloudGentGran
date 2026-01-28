@@ -15,6 +15,7 @@
 - AWS CLI configured
 - Node.js 18+ (for CDK)
 - Python 3.12+
+- Rust stable toolchain (for Lambda development)
 - Access to Dokku server
 
 ### Local Setup
@@ -35,6 +36,7 @@ CloudGentGran/
 ├── orchestration/       # Apache Airflow
 ├── infrastructure/      # AWS CDK
 ├── lambda/             # AWS Lambda functions
+├── rust_lambda_deployment/  # Compiled Lambda rust binaries (should be created before deploying locally)
 ├── dbt/                
 ├── observable/         
 └── scripts/            # Utility scripts
