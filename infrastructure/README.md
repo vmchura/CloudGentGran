@@ -10,7 +10,14 @@ infrastructure/
 │   └── infrastructure.ts      # CDK app entry point with dev/prod stacks
 ├── lib/
 │   ├── infrastructure-stack.ts # Main Catalunya Data Stack
-│   └── config.ts              # Configuration helper utilities
+│   ├── config.ts              # Configuration helper utilities
+│   ├── iam-construct.ts       # IAM roles and policies
+│   ├── s3-construct.ts        # S3 buckets with lifecycle policies
+│   ├── lambda-construct.ts    # Lambda functions and triggers
+│   ├── analytics-construct.ts # Athena workgroups and databases
+│   ├── catalog-construct.ts   # Data catalog functions
+│   ├── glue-construct.ts      # Glue jobs and crawlers
+│   └── web-construct.ts       # CloudFront and Route53 (optional)
 ├── test/
 │   └── infrastructure.test.ts # Unit tests for the stack
 ├── cdk.json                   # CDK configuration and context
@@ -83,29 +90,44 @@ Environment-specific configuration is managed in `cdk.json` under the `Catalunya
 |-------------------|---------------------------------------|----------------------|-----------------------|
 | `region`          | AWS region for deployment             | `eu-west-1`          | `eu-west-1`           |
 | `bucketName`      | S3 bucket name                        | `catalunya-data-dev` | `catalunya-data-prod` |
+| `catalogBucketName` | Catalog data bucket name            | `catalunya-catalog-dev` | `catalunya-catalog-prod` |
+| `serviceBucketName` | Service/static assets bucket name   | `catalunya-service-dev` | `catalunya-service-prod` |
 | `lambdaMemory`    | Lambda memory allocation (MB)         | `512`                | `1024`                |
 | `lambdaTimeout`   | Lambda timeout (seconds)              | `300`                | `900`                 |
 | `retentionPeriod` | Data retention period (days)[landing] | `7` or `ephemeral`   | `7` or `ephemeral`    |
 | `retentionPeriod` | Data retention period (days)[staging] | `60`                 | `60`                  |
 | `retentionPeriod` | Data retention period (days)[marts]   | `60`                 | `60`                  |
-| `scheduleCron`    | Execution schedule (cron)             | `End of each friday` | `End of each friday`  |
+| `webDomain`       | Web domain (optional)                 | `gentgran.cat`       | `gentgran.cat`        |
+| `webSubdomain`    | Web subdomain (optional)              | `observatori`        | `observatori`         |
 
 ## 📦 Stack Resources
 
 The `CatalunyaDataStack` creates the following resources:
 
-### Current Resources (Phase 2.1)
-
-- **CloudFormation Outputs**: Environment, bucket name, Athena workgroup, database, Lambda prefix, region
-- **Tags**: Automatic tagging with project, environment, owner, and management info
-
-### Planned Resources (Phase 2.2-2.5)
+### Implemented Resources
 
 - **S3 Buckets**: Data storage with medallion architecture (landing/staging/marts)
-- **Lambda Functions**: Data extraction and transformation
-- **EventBridge Rules**: Scheduled pipeline execution
-- **Athena Workgroups**: Query processing and cost controls
+  - Landing bucket: 7-day retention
+  - Staging/Marts: 60-day IA transition after 60 days
+  - Athena results bucket for query outputs
+- **Lambda Functions**: Rust-based data extraction and transformation
+  - Social services transformer
+  - Population municipal processors
+  - Mart generators
 - **IAM Roles**: Service-specific permissions with least privilege
+  - Extractor, Transformer, Mart, Monitoring roles
+  - Data engineer human access role
+  - Airflow cross-account execution role
+- **Athena Infrastructure**: Query processing and cost controls
+  - Workgroups with result configuration
+  - Database for data catalog
+- **Glue Infrastructure**: Table schema management
+  - Crawlers for data discovery
+  - Database catalog integration
+- **Web Infrastructure** (Optional): CloudFront + Route53
+  - Requires WEB_CERTIFICATE_ID environment variable
+- **CloudFormation Outputs**: Complete resource reference exports
+- **Tags**: Automatic tagging with project, environment, owner, and management info
 
 ## 🌍 Environments
 
@@ -168,14 +190,24 @@ npm run test -- --coverage
 
 Each stack exports the following values for use by other stacks:
 
-| Output            | Description                 | Export Name Format              |
-|-------------------|-----------------------------|---------------------------------|
-| `Environment`     | Environment name (dev/prod) | `{projectName}-Environment`     |
-| `BucketName`      | S3 bucket name              | `{projectName}-BucketName`      |
-| `AthenaWorkgroup` | Athena workgroup name       | `{projectName}-AthenaWorkgroup` |
-| `AthenaDatabase`  | Athena database name        | `{projectName}-AthenaDatabase`  |
-| `LambdaPrefix`    | Lambda function prefix      | `{projectName}-LambdaPrefix`    |
-| `Region`          | Deployment region           | `{projectName}-Region`          |
+| Output                       | Description                              | Export Name Format                      |
+|------------------------------|------------------------------------------|-----------------------------------------|
+| `Environment`                | Environment name (dev/prod)              | `{projectName}-Environment`            |
+| `BucketName`                 | Main S3 bucket name                      | `{projectName}-BucketName`             |
+| `AthenaResultsBucketName`    | Athena query results bucket              | `{projectName}-AthenaResultsBucket`    |
+| `AthenaWorkgroup`            | Athena workgroup name                   | `{projectName}-AthenaWorkgroup`        |
+| `AthenaDatabase`             | Athena database name                    | `{projectName}-AthenaDatabase`         |
+| `LambdaPrefix`               | Lambda function prefix                  | `{projectName}-LambdaPrefix`           |
+| `Region`                     | Deployment region                       | `{projectName}-Region`                 |
+| `ExtractorRoleArn`           | Lambda extractor execution role ARN     | `{projectName}-ExtractorRoleArn`        |
+| `TransformerRoleArn`         | Lambda transformer execution role ARN   | `{projectName}-TransformerRoleArn`      |
+| `MartRoleArn`                | Mart execution role ARN                 | `{projectName}-MartRoleArn`            |
+| `DataEngineerRoleArn`        | Data engineer human role ARN            | `{projectName}-DataEngineerRoleArn`     |
+| `CatalogExecutorRoleArn`     | Catalog executor role ARN               | `{projectName}-CatalogExecutorRoleArn`  |
+| `AirflowCrossAccountRoleArn` | Airflow cross-account role ARN          | `{projectName}-AirflowCrossAccountRoleArn` |
+| `AirflowAssumerUserName`     | Airflow assumer IAM user name           | `{projectName}-AirflowAssumerUserName`  |
+| `AirflowTargetRoleArn`       | Airflow target role ARN                 | `{projectName}-AirflowTargetRoleArn`    |
+| `AirflowExternalId`          | External ID for AssumeRole              | `{projectName}-AirflowExternalId`       |
 
 ## 🔐 Security & Best Practices
 
@@ -194,24 +226,46 @@ Each stack exports the following values for use by other stacks:
 - 🔄 Cost optimization policies
 - 🔄 CloudTrail logging
 
-## 📈 Next Steps (Phase 2.2-2.5)
+## 🏗️ Architecture Overview
 
-1. **S3 Infrastructure** (Phase 2.2)
-    - Create medallion architecture buckets
-    - Configure lifecycle policies
+The infrastructure follows a **layered architecture pattern** with clear separation of concerns:
 
-2. **Lambda Infrastructure** (Phase 2.3)
-    - Data extraction Lambda functions
-    - Execution roles and permissions
-    - CloudWatch logging configuration
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Web Layer (Optional)                     │
+│  CloudFront + Route53 + S3 (static assets)                 │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   Processing Layer                          │
+│  Lambda Functions (Rust) - Extract/Transform/Mart           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                  Analytics Layer                            │
+│  Athena Workgroups + Databases + Query Results             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                  Storage Layer                              │
+│  S3 Buckets (Landing/Staging/Marts) + Catalog Buckets     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   Security Layer                            │
+│  IAM Roles + Policies + Cross-Account Access               │
+└─────────────────────────────────────────────────────────────┘
+```
 
-3. **EventBridge & Scheduling** (Phase 2.4)
-    - Daily pipeline execution rules
-    - Lambda triggers and permissions
+### Key Features
 
-4. **Athena Configuration** (Phase 2.5)
-    - Workgroups and databases
-    - Cost controls and query limits
+- **Multi-Environment**: Complete dev/prod isolation
+- **Medallion Architecture**: Landing → Staging → Marts data flow
+- **Rust Lambda Functions**: High-performance data processing
+- **Cross-Account Access**: Airflow integration with secure role assumption
+- **Automated Lifecycle**: Cost-optimized data retention policies
+- **Web Hosting**: Optional static site deployment
+- **Comprehensive Monitoring**: IAM roles for observability
 
 ## 🚨 Troubleshooting
 
