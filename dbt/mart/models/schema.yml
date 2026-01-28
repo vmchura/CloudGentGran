@@ -4,7 +4,7 @@ sources:
  
   - name: catalog
     description: Catalunya data catalog
-    schema: "{{ 'catalunya_catalog_dev' if target.name in ['dev', 'local'] else 'catalunya_catalog_prod' }}"
+    schema: "{{ 'catalunya_data_dev' if target.name in ['dev', 'local'] else 'catalunya_data_prod' }}"
     meta:
       external_location: "s3://{{ var('catalog_bucket') }}/"
     tables:
