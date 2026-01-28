@@ -32,7 +32,7 @@ filled_population AS (
     year,
     -- Forward fill population using LAST_VALUE window function
     {{forward_fill('population', 'comarca_id', 'year')}} AS population,
-    {{forward_fill('population_age_65_and_over', 'comarca_id', 'year')}} AS population_age_65_and_over,
+    {{forward_fill('population_age_65_and_over', 'comarca_id', 'year')}} AS population_age_65_and_over
   FROM joined_population
 ),
 

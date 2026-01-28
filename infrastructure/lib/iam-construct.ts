@@ -247,6 +247,8 @@ export class IamConstruct extends Construct {
           resources: [
             `arn:aws:s3:::${bucketName}`,
             `arn:aws:s3:::${bucketName}/staging/*`,
+            `arn:aws:s3:::${catalogBucketName}`,
+            `arn:aws:s3:::${catalogBucketName}/*`,
           ],
         }),
         // S3 Marts Layer Write
