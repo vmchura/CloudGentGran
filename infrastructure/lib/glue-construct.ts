@@ -17,6 +17,8 @@ export interface GlueConstructProps {
 export class GlueConstruct extends Construct {
   public readonly socialServicesTable: glue.CfnTable;
   public readonly municipalsTable: glue.CfnTable;
+  public readonly serviceTypeTable: glue.CfnTable;
+  public readonly serviceQualificationTable: glue.CfnTable;
 
   constructor(scope: Construct, id: string, props: GlueConstructProps) {
     super(scope, id);
@@ -39,6 +41,15 @@ export class GlueConstruct extends Construct {
     this.municipalsTable = this.createMunicipalsTable(
       athenaDatabaseName,
       catalogBucketName
+    );
+
+    this.serviceTypeTable = this.createServiceTypeTable(
+	athenaDatabaseName,
+	catalogBucketName
+    );
+    this.serviceQualificationTable = this.createServiceQualificationTable(
+	athenaDatabaseName,
+	catalogBucketName
     );
   }
 
@@ -95,6 +106,60 @@ export class GlueConstruct extends Construct {
             { name: 'comarca_name', type: 'string' }
           ],
           location: `s3://${catalogBucketName}/municipals/municipals.parquet`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+          }
+        }
+      }
+    });
+  }
+
+  private createServiceTypeTable(
+    databaseName: string,
+    catalogBucketName: string
+  ): glue.CfnTable {
+    return new glue.CfnTable(this, 'ServiceTypeTable', {
+      catalogId: cdk.Aws.ACCOUNT_ID,
+      databaseName: databaseName,
+      tableInput: {
+        name: 'service_type',
+        tableType: 'EXTERNAL_TABLE',
+        storageDescriptor: {
+          columns: [
+            { name: 'service_type_id', type: 'string' },
+            { name: 'service_type_description', type: 'string' },
+            { name: 'created_at', type: 'string' }
+          ],
+          location: `s3://${catalogBucketName}/service_type/service_type.parquet`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+          }
+        }
+      }
+    });
+  }
+
+  private createServiceQualificationTable(
+    databaseName: string,
+    catalogBucketName: string
+  ): glue.CfnTable {
+    return new glue.CfnTable(this, 'ServiceQualificationTable', {
+      catalogId: cdk.Aws.ACCOUNT_ID,
+      databaseName: databaseName,
+      tableInput: {
+        name: 'service_qualification',
+        tableType: 'EXTERNAL_TABLE',
+        storageDescriptor: {
+          columns: [
+            { name: 'service_qualification_id', type: 'string' },
+            { name: 'service_qualification_description', type: 'string' },
+            { name: 'created_at', type: 'string' }
+          ],
+          location: `s3://${catalogBucketName}/service_qualification/service_qualification.parquet`,
           inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
           outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
           serdeInfo: {
