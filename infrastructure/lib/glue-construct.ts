@@ -19,6 +19,7 @@ export class GlueConstruct extends Construct {
   public readonly municipalsTable: glue.CfnTable;
   public readonly serviceTypeTable: glue.CfnTable;
   public readonly serviceQualificationTable: glue.CfnTable;
+  public readonly municipalPopulationTable: glue.CfnTable;
 
   constructor(scope: Construct, id: string, props: GlueConstructProps) {
     super(scope, id);
@@ -50,6 +51,11 @@ export class GlueConstruct extends Construct {
     this.serviceQualificationTable = this.createServiceQualificationTable(
 	athenaDatabaseName,
 	catalogBucketName
+    );
+
+    this.municipalPopulationTable = this.createMunicipalPopulationTable(
+      athenaDatabaseName,
+      dataBucketName
     );
   }
 
@@ -84,6 +90,34 @@ export class GlueConstruct extends Construct {
         partitionKeys: [
           { name: 'downloaded_date', type: 'string' }
         ]
+      }
+    });
+  }
+
+  private createMunicipalPopulationTable(
+    databaseName: string,
+    bucketName: string
+  ): glue.CfnTable {
+    return new glue.CfnTable(this, 'MunicipalPopulationTable', {
+      catalogId: cdk.Aws.ACCOUNT_ID,
+      databaseName: databaseName,
+      tableInput: {
+        name: 'municipal_population',
+        tableType: 'EXTERNAL_TABLE',
+        storageDescriptor: {
+          columns: [
+            { name: 'municipal_id', type: 'string' },
+            { name: 'population_age_65_and_over', type: 'int' },
+            { name: 'population', type: 'int' },
+            { name: 'year', type: 'int' }
+          ],
+          location: `s3://${bucketName}/marts/municipal_population/`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+          }
+        }
       }
     });
   }
