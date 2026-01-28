@@ -33,9 +33,9 @@ sources:
     meta:
       external_location: "s3://{{ var('data_bucket') }}/marts/"
     tables:
-      - name: population_municipal_greater_65
+      - name: municipal_population
         description: Popluation by municipal and greater than 65
-        external_location: "s3://{{ var('data_bucket') }}/marts/population_municipal_greater_65/"
+        external_location: "s3://{{ var('data_bucket') }}/marts/municipal_population/"
         file_format: parquet
 
 
