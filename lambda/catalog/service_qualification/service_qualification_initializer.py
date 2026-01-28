@@ -76,9 +76,7 @@ def create_parquet_file(s3_client, bucket_name: str, table_name: str,
         current_time = datetime.utcnow().isoformat()
         df['created_at'] = current_time
 
-        # Create S3 key with timestamp for uniqueness
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        s3_key = f"{table_name}/{timestamp}.parquet"
+        s3_key = "service_qualification/service_qualification.parquet"
 
         # Convert DataFrame to parquet in memory
         parquet_buffer = BytesIO()

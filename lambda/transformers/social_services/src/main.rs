@@ -357,51 +357,34 @@ async fn load_catalog_data(
 ) -> Result<DataFrame> {
     println!("Loading catalog: {}", catalog_name);
 
-    // List all parquet files in the catalog folder
-    let resp = s3_client
-        .list_objects_v2()
+    // Construct direct file path: catalogName/catalogName.parquet
+    let file_key = format!("{}/{}.parquet", catalog_name, catalog_name);
+    println!("Loading catalog file: {}", file_key);
+
+    // Validate file exists before attempting to download
+    match s3_client
+        .head_object()
         .bucket(bucket)
-        .prefix(&format!("{}/", catalog_name))
+        .key(&file_key)
         .send()
-        .await?;
-
-    let contents = resp.contents();
-    if contents.is_empty() {
-        return Err(anyhow!("No catalog files found for {}", catalog_name));
+        .await
+    {
+        Ok(_) => println!("File exists: {}", file_key),
+        Err(e) => {
+            return Err(anyhow!(
+                "Catalog file not found: {} in bucket: {} - Error: {}",
+                file_key,
+                bucket,
+                e
+            ));
+        }
     }
-
-    // Find the most recent parquet file
-    let mut parquet_keys: Vec<String> = contents
-        .iter()
-        .filter_map(|obj| {
-            obj.key().and_then(|key| {
-                if key.ends_with(".parquet") {
-                    Some(key.to_string())
-                } else {
-                    None
-                }
-            })
-        })
-        .collect();
-
-    if parquet_keys.is_empty() {
-        return Err(anyhow!(
-            "No parquet files found for catalog {}",
-            catalog_name
-        ));
-    }
-
-    // Find the most recent parquet file
-    parquet_keys.sort();
-    let latest_key = parquet_keys.last().unwrap();
-
-    println!("Loading catalog file: {}", latest_key);
 
     // Download the parquet file
     let obj = s3_client
         .get_object()
         .bucket(bucket)
-        .key(latest_key)
+        .key(&file_key)
         .send()
         .await?;
 
