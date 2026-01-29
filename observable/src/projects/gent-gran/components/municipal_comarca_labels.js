@@ -1,17 +1,17 @@
 export function build_labels(municipal) {
     const municipal_name_label = Object.fromEntries(
         municipal.
-            select("codi", "nom").
-            dedupe("codi", "nom").
+            select("municipal_id", "municipal_name").
+            dedupe("municipal_id", "municipal_name").
             objects().
-            map(d => [d.codi, d.nom])
+            map(d => [d.municipal_id, d.municipal_name])
     );
     const comarca_name_label = Object.fromEntries(
         municipal.
-            select("codi_comarca", "nom_comarca").
-            dedupe("codi_comarca", "nom_comarca").
+            select("comarca_id", "comarca_name").
+            dedupe("comarca_id", "comarca_name").
             objects().
-            map(d => [d.codi_comarca, d.nom_comarca])
+            map(d => [d.comarca_id, d.comarca_name])
     );
     return { municipal_name_label, comarca_name_label };
 }

@@ -175,7 +175,7 @@ const service_type = await conn.runAndReadAll("SELECT *  FROM service_type");
 zip.file("service_type.json", JSON.stringify(service_type.getRowObjectsJson()));
 const service_qualification = await conn.runAndReadAll("SELECT *  FROM service_qualification");
 zip.file("service_qualification.json", JSON.stringify(service_qualification.getRowObjectsJson()));
-const population = await conn.runAndReadAll("SELECT municipal_code, CAST(population_age_65_and_over AS INT) as population_age_65_and_over, CAST(population AS INT) as population, CAST(year AS INT) as year  FROM population");
+const population = await conn.runAndReadAll("SELECT municipal_id, CAST(population_age_65_and_over AS INT) as population_age_65_and_over, CAST(population AS INT) as population, CAST(year AS INT) as year  FROM population");
 zip.file("population.json", JSON.stringify(population.getRowObjectsJson()));
 
 zip

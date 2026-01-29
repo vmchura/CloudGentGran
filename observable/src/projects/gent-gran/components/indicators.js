@@ -15,7 +15,7 @@ export function calculateIndicators(population, comarca_population, social_servi
     .get('total', 0);
 
   const gent_gran_population_latest_year = population_latest_year
-    .rollup({ total: d => aq.op.sum(d.population_ge65) })
+    .rollup({ total: d => aq.op.sum(d.population_age_65_and_over) })
     .get('total', 0);
 
   const latest_indicator_average_catalunya = Math.round(gent_gran_population_latest_year * 1000 / total_population_latest_year) / 10.0;
@@ -35,7 +35,7 @@ export function calculateIndicators(population, comarca_population, social_servi
     .get('total', 0);
 
   const gent_gran_population_reference_year = population_reference_year
-    .rollup({ total: d => aq.op.sum(d.population_ge65) })
+    .rollup({ total: d => aq.op.sum(d.population_age_65_and_over) })
     .get('total', 0);
 
   const reference_year_indicator_average_catalunya = Math.round(gent_gran_population_reference_year * 1000 / total_population_reference_year) / 10.0;
@@ -55,7 +55,7 @@ export function calculateIndicators(population, comarca_population, social_servi
       .filter((d, $) => d.year === $.latest_year)
       .objects()
       .map(d => [d.comarca_id, { ...d, coverage_ratio: d.coverage_ratio,
-        deficit_411: Math.round(0.0411*d.population_ge65 - d.total_capacit) }])
+        deficit_411: Math.round(0.0411*d.population_age_65_and_over - d.total_capacit) }])
   );
   const ratio_attention_municipal_latest_year = Object.fromEntries(
     municipal_coverage.params({ latest_year: census_latest_year })
@@ -67,13 +67,13 @@ export function calculateIndicators(population, comarca_population, social_servi
   const comarques_latest_population = Object.fromEntries(
     comarca_population.params({ latest_year: census_latest_year })
       .filter((d, $) => d.year === $.latest_year)
-      .select("comarca_id", "population_ge65", "population")
+      .select("comarca_id", "population_age_65_and_over", "population")
       .objects()
       .map(d => [
         d.comarca_id,
         {
           ...d,
-          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
+          elderly_indicator: Math.round((d.population_age_65_and_over * 1000.0) / d.population) / 10.0
         }
       ])
   );
@@ -81,13 +81,13 @@ export function calculateIndicators(population, comarca_population, social_servi
   const municipal_latest_population = Object.fromEntries(
     population.params({ latest_year: census_latest_year })
       .filter((d, $) => d.year === $.latest_year)
-      .select("municipal_code", "population_ge65", "population")
+      .select("municipal_id", "population_age_65_and_over", "population")
       .objects()
       .map(d => [
-        d.municipal_code,
+        d.municipal_id,
         {
           ...d,
-          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0,
+          elderly_indicator: Math.round((d.population_age_65_and_over * 1000.0) / d.population) / 10.0,
         }
       ])
   );
@@ -95,13 +95,13 @@ export function calculateIndicators(population, comarca_population, social_servi
   const comarques_reference_population = Object.fromEntries(
     comarca_population.params({ reference_year: reference_year })
       .filter((d, $) => d.year === $.reference_year)
-      .select("comarca_id", "population_ge65", "population")
+      .select("comarca_id", "population_age_65_and_over", "population")
       .objects()
       .map(d => [
         d.comarca_id,
         {
           ...d,
-          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
+          elderly_indicator: Math.round((d.population_age_65_and_over * 1000.0) / d.population) / 10.0
         }
       ])
   );

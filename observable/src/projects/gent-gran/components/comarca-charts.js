@@ -17,7 +17,7 @@ export const map_inciative_color = new Map([
   ["PUB-001", "#3b5fc0"]
 ]);
 
-export function plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population) {
+export function plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -42,7 +42,7 @@ export function plot_trend_population_groups_by_comarca(width, locale_value, com
       domain: [min_year_serveis, max_year_serveis]
     },
     marks: [
-      Plot.lineY(comarca_population.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
+      Plot.lineY(comarca_population.params({ comarca_id: comarca_name.comarca_id, min_year_serveis: min_year_serveis })
         .filter((row, $) => ((row.comarca_id == $.comarca_id) && (row.year >= $.min_year_serveis))),
         {
           x: "year",
@@ -55,7 +55,7 @@ export function plot_trend_population_groups_by_comarca(width, locale_value, com
   });
 }
 
-export function plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_services) {
+export function plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, comarca_name, min_year_serveis, max_year_serveis, all_services) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -79,7 +79,7 @@ export function plot_comarca_by_serveis(width, locale_value, social_services_emp
       interval: 1
     },
     marks: [
-      Plot.lineY(social_services_empty_last_year.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
+      Plot.lineY(social_services_empty_last_year.params({ comarca_id: comarca_name.comarca_id, min_year_serveis: min_year_serveis })
         .filter((row, $) => (row.comarca_id === $.comarca_id)),
         Plot.mapY(
           "cumsum",
@@ -92,7 +92,7 @@ export function plot_comarca_by_serveis(width, locale_value, social_services_emp
   });
 }
 
-export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis) {
+export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage, comarca_name, min_year_serveis, max_year_serveis) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -112,7 +112,7 @@ export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage,
       domain: [min_year_serveis, max_year_serveis]
     },
     marks: [
-      Plot.lineY(comarca_coverage.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
+      Plot.lineY(comarca_coverage.params({ comarca_id: comarca_name.comarca_id, min_year_serveis: min_year_serveis })
         .filter((row, $) => (row.comarca_id === $.comarca_id)),
         {
           x: "year", y: "coverage_ratio", stroke: "#ff9c38", strokeWidth: 2
@@ -121,7 +121,7 @@ export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage,
   });
 }
 
-export function plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis) {
+export function plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, comarca_name, serveis_selected, min_year_serveis, max_year_serveis) {
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -149,7 +149,7 @@ export function plot_services_comarca_by_iniciatives(width, locale_value, social
       interval: 1
     },
     marks: [
-      Plot.areaY(social_services_empty_last_year.params({ comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected })
+      Plot.areaY(social_services_empty_last_year.params({ comarca_id: comarca_name.comarca_id, service_type_id: serveis_selected })
         .filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id))
         .orderby('service_qualification_id', 'year'),
         Plot.mapY(
