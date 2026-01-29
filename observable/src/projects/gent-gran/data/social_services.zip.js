@@ -81,13 +81,13 @@ await conn.run(`
     SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/service_type/*');
 
     CREATE TABLE comarca_population AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/comarca_population/*');
+    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/comarca_population/*');
 
     CREATE TABLE municipal_coverage AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/municipal_coverage/*');
+    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/municipal_coverage/*');
 
     CREATE TABLE comarca_coverage AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/comarca_coverage/*');
+    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/comarca_coverage/*');
 `);
 
 console.error(`Processing: social_services_empty_last_year`);
