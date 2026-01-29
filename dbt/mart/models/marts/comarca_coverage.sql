@@ -17,8 +17,8 @@ all_combinations AS (
 
 joined_population AS (
   SELECT
-    a.comarca_id,
-    a.year,
+    comarca_id,
+    year,
     p.population,
     p.population_age_65_and_over
   FROM all_combinations AS a
@@ -58,8 +58,8 @@ social_services_comarca AS (
 
 joined_social_services AS (
   SELECT
-    a.comarca_id,
-    a.year,
+    comarca_id,
+    year,
     ss.total_capacit
   FROM all_combinations AS a
   LEFT JOIN social_services_comarca ss
