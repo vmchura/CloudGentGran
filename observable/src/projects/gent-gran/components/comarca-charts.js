@@ -65,7 +65,18 @@ export async function plot_trend_population_groups_by_comarca(width, locale_valu
   });
 }
 
-export function plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, comarca_name, min_year_serveis, max_year_serveis, all_services) {
+export async function plot_comarca_by_serveis(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, all_services) {
+  const servicesData = await db.sql`
+    SELECT 
+      year,
+      service_type_id,
+      total_capacit
+    FROM social_services.social_services_empty_last_year
+    WHERE comarca_id = ${comarca_name.comarca_id}
+      AND year >= ${min_year_serveis}
+    ORDER BY year, service_type_id
+  `;
+
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -89,8 +100,7 @@ export function plot_comarca_by_serveis(width, locale_value, social_services_emp
       interval: 1
     },
     marks: [
-      Plot.lineY(social_services_empty_last_year.params({ comarca_id: comarca_name.comarca_id, min_year_serveis: min_year_serveis })
-        .filter((row, $) => (row.comarca_id === $.comarca_id)),
+      Plot.lineY(servicesData,
         Plot.mapY(
           "cumsum",
           Plot.groupX(
@@ -102,7 +112,17 @@ export function plot_comarca_by_serveis(width, locale_value, social_services_emp
   });
 }
 
-export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage, comarca_name, min_year_serveis, max_year_serveis) {
+export async function plot_comarca_by_cobertura(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis) {
+  const coverageData = await db.sql`
+    SELECT 
+      year,
+      coverage_ratio
+    FROM social_services.comarca_coverage
+    WHERE comarca_id = ${comarca_name.comarca_id}
+      AND year >= ${min_year_serveis}
+    ORDER BY year
+  `;
+
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -122,8 +142,7 @@ export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage,
       domain: [min_year_serveis, max_year_serveis]
     },
     marks: [
-      Plot.lineY(comarca_coverage.params({ comarca_id: comarca_name.comarca_id, min_year_serveis: min_year_serveis })
-        .filter((row, $) => (row.comarca_id === $.comarca_id)),
+      Plot.lineY(coverageData,
         {
           x: "year", y: "coverage_ratio", stroke: "#ff9c38", strokeWidth: 2
         })
@@ -131,7 +150,18 @@ export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage,
   });
 }
 
-export function plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, comarca_name, serveis_selected, min_year_serveis, max_year_serveis) {
+export async function plot_services_comarca_by_iniciatives(width, locale_value, db, comarca_name, serveis_selected, min_year_serveis, max_year_serveis) {
+  const initiativesData = await db.sql`
+    SELECT 
+      year,
+      service_qualification_id,
+      total_capacit
+    FROM social_services.social_services_empty_last_year
+    WHERE comarca_id = ${comarca_name.comarca_id}
+      AND service_type_id = ${serveis_selected}
+    ORDER BY service_qualification_id, year
+  `;
+
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -159,9 +189,7 @@ export function plot_services_comarca_by_iniciatives(width, locale_value, social
       interval: 1
     },
     marks: [
-      Plot.areaY(social_services_empty_last_year.params({ comarca_id: comarca_name.comarca_id, service_type_id: serveis_selected })
-        .filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id))
-        .orderby('service_qualification_id', 'year'),
+      Plot.areaY(initiativesData,
         Plot.mapY(
           "cumsum",
           Plot.groupX(
@@ -194,11 +222,11 @@ export function plot_legend_trend_population(width, locale_value, single_comarca
   });
 }
 
-export function plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type) {
+export function plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, serviceTypeLabel) {
   return serveis_residence_ratio ? Plot.legend({
     width: width,
     color: {
-      domain: all_available_services.map(row => service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(row)]),
+      domain: all_available_services.map(row => serviceTypeLabel.get(row)),
       range: all_available_services.map(row => colour_by_service.get(row)),
       legend: false,
       columns: 1,

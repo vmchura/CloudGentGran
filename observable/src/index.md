@@ -228,6 +228,17 @@ const serviceQualificationLabel = new Map(
     .map(d => [d.service_qualification_id, d.service_qualification_description])
 );
 
+const serviceTypeLabel = new Map(
+  (
+    await social_services_db.query(`
+      SELECT service_type_id, service_type_description
+      FROM social_services.service_type
+    `)
+  )
+    .toArray()
+    .map(d => [d.service_type_id, d.service_type_description])
+);
+
 ```
 # ${t(locale_value, "TITLE")} (${coverage_latest_year})
 
@@ -344,14 +355,14 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
       <div class="card grid-colspan-1">
           <h4>${t(locale_value, "ASSISTANCE_SERVICES")}</h4>
           ${serveis_residence_ratio_input}
-          ${resize((width) => plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type))}
-          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, comarca_name, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, locale_value, comarca_coverage, comarca_name, min_year_serveis, max_year_serveis))}</figure>
+          ${resize((width) => plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, serviceTypeLabel))}
+          <figure>${resize((width) => serveis_residence_ratio ? plot_comarca_by_serveis(width, locale_value, social_services_db, comarca_name, min_year_serveis, max_year_serveis, all_available_services) : plot_comarca_by_cobertura(width, locale_value, social_services_db, comarca_name, min_year_serveis, max_year_serveis))}</figure>
       </div>
       <div class="card grid-colspan-1">
           <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
           ${serveis_input}
           ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, serviceQualificationLabel))} 
-          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, comarca_name, serveis_selected, min_year_serveis, max_year_serveis, all_available_services))}</figure>
+          <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, locale_value, social_services_db, comarca_name, serveis_selected, min_year_serveis, max_year_serveis))}</figure>
       </div>
   </div>
 
