@@ -71,8 +71,8 @@ export class SocialServicesDataService {
 
     const result = await this.db.queryRow(`
       SELECT
-        MAX(year) AS max_year_serveis,
-        MIN(year) AS min_year_serveis
+        CAST(MAX(year) AS INTEGER) AS max_year_serveis,
+        CAST(MIN(year) AS INTEGER) AS min_year_serveis
       FROM social_services.social_services_empty_last_year
       WHERE comarca_id = ${comarcaId}
     `);
