@@ -28,7 +28,7 @@ const locale_value = Generators.input(locale_input);
 const comarques_boundaries = FileAttachment("./projects/gent-gran/data/comarques-1000000.json").json();
 const municipals_boundaries = FileAttachment("./projects/gent-gran/data/municipis-1000000.json").json();
   
-import {loadData} from "./projects/gent-gran/components/data-loader.js";
+import { SocialServicesDataService } from "./projects/gent-gran/components/data-service.js";
 import {calculateIndicators} from "./projects/gent-gran/components/indicators.js";
 import {build_labels} from "./projects/gent-gran/components/municipal_comarca_labels.js";
 import {
@@ -51,6 +51,9 @@ import {
 ```
 ```js
 const {municipal_name_label, comarca_name_label} = await build_labels(social_services_db);
+```
+```js
+const dataService = new SocialServicesDataService(social_services_db);
 ```
 ```js
 const indicators = await calculateIndicators(social_services_db);
@@ -118,25 +121,15 @@ const color_catalunya_map = getColorCatalunyaMap(catalunya_indicator_or_variatio
 const color_municipal_map = getColorCatalunyaMap(municipal_indicator_type, latest_indicator_average_catalunya_integer, range_colours_indicator);
 ```
 ```js
-const comarques = (await social_services_db.query(`
-  SELECT DISTINCT comarca_name, comarca_id
-  FROM social_services.municipal
-  ORDER BY comarca_name
-`)).toArray();
+const comarques = await dataService.getComarcas();
 ```
 ```js
 const nom_comarca_input = Inputs.select(comarques, {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.comarca_name, unique: true})
 const comarca_name = Generators.input(nom_comarca_input);
 ```
 ```js
-const { max_year_serveis, min_year_serveis } =
-  await social_services_db.queryRow(`
-    SELECT
-      MAX(year) AS max_year_serveis,
-      MIN(year) AS min_year_serveis
-    FROM social_services.social_services_empty_last_year
-    WHERE comarca_id = ?
-  `, [comarca_name.comarca_id]);
+const { max_year_serveis, min_year_serveis } = 
+  await dataService.getComarcaTimeRange(comarca_name.comarca_id);
 ```
 ```js
 const single_comarca_population_input = Inputs.radio(new Map([[t(locale_value, "TREND_POPULATION_65_PLUS"), true],
@@ -150,26 +143,11 @@ const serveis_residence_ratio_input = Inputs.radio(new Map([[t(locale_value, "AL
 const serveis_residence_ratio = Generators.input(serveis_residence_ratio_input)
 ```
 ```js
-const all_available_services = (await social_services_db.query(`
-  SELECT DISTINCT service_type_id
-  FROM social_services.social_services_empty_last_year
-  WHERE comarca_id = ?
-    AND total_capacit > 0
-`, [comarca_name.comarca_id])).toArray().map(d => d.service_type_id);
+const all_available_services = await dataService.getComarcaServices(comarca_name.comarca_id, min_year_serveis);
 
 ```
 ```js
-const service_rows = (await social_services_db.query(`
-  SELECT DISTINCT
-    st.service_type_id,
-    st.service_type_description
-  FROM social_services.social_services_empty_last_year s
-  JOIN social_services.service_type st
-    USING (service_type_id)
-  WHERE s.comarca_id = ?
-    AND s.total_capacit > 0
-  ORDER BY st.service_type_description
-`, [comarca_name.comarca_id])).toArray();
+const service_rows = await dataService.getComarcaServiceRows(comarca_name.comarca_id);
 ```
 ```js
 
@@ -217,27 +195,8 @@ color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
 municipal_name_label);
 ```
 ```js
-const serviceQualificationLabel = new Map(
-  (
-    await social_services_db.query(`
-      SELECT service_qualification_id, service_qualification_description
-      FROM social_services.service_qualification
-    `)
-  )
-    .toArray()
-    .map(d => [d.service_qualification_id, d.service_qualification_description])
-);
-
-const serviceTypeLabel = new Map(
-  (
-    await social_services_db.query(`
-      SELECT service_type_id, service_type_description
-      FROM social_services.service_type
-    `)
-  )
-    .toArray()
-    .map(d => [d.service_type_id, d.service_type_description])
-);
+const serviceQualificationLabel = await dataService.getServiceQualificationLabels();
+const serviceTypeLabel = await dataService.getServiceTypeLabels();
 
 ```
 # ${t(locale_value, "TITLE")} (${coverage_latest_year})
