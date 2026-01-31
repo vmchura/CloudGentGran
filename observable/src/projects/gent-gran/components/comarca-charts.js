@@ -17,7 +17,18 @@ export const map_inciative_color = new Map([
   ["PUB-001", "#3b5fc0"]
 ]);
 
-export function plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
+export async function plot_trend_population_groups_by_comarca(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
+  const comarcaPopulationPlot = await db.sql`
+  SELECT 
+    year,
+    population_age_65_and_over,
+    elderly_indicator
+  FROM social_services.comarca_population
+  WHERE comarca_id = ${comarca_name.comarca_id}
+    AND year >= ${min_year_serveis}
+  ORDER BY year
+`;
+
   return Plot.plot({
     marginLeft: 50,
     width: width,
@@ -26,13 +37,13 @@ export function plot_trend_population_groups_by_comarca(width, locale_value, com
       label: single_comarca_population ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"),
     },
     color: {
-      domain: single_comarca_population ? ["population_ge65"] : ["elderly_indicator"],
+      domain: single_comarca_population ? ["population_age_65_and_over"] : ["elderly_indicator"],
       range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
       legend: false,
       columns: 1,
       rows: 2,
       label: null,
-      tickFormat: d => d === "population_ge65" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
+      tickFormat: d => d === "population_age_65_and_over" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
     },
     x: {
       grid: true,
@@ -42,11 +53,10 @@ export function plot_trend_population_groups_by_comarca(width, locale_value, com
       domain: [min_year_serveis, max_year_serveis]
     },
     marks: [
-      Plot.lineY(comarca_population.params({ comarca_id: comarca_name.comarca_id, min_year_serveis: min_year_serveis })
-        .filter((row, $) => ((row.comarca_id == $.comarca_id) && (row.year >= $.min_year_serveis))),
+      Plot.lineY(comarcaPopulationPlot,
         {
           x: "year",
-          y: (single_comarca_population ? "population_ge65" : "elderly_indicator"),
+          y: (single_comarca_population ? "population_age_65_and_over" : "elderly_indicator"),
           stroke: single_comarca_population ? "#ffd754" : "#3b5fc0",
           strokeWidth: 4
         }),
@@ -206,15 +216,21 @@ export function plot_legend_trend_services(width, locale_value, serveis_residenc
   });
 }
 
-export function plot_legend_trend_iniciative(width, locale_value, domain_iniciatives, map_inciative_color, service_qualification) {
+export function plot_legend_trend_iniciative(
+  width,
+  locale_value,
+  domain_iniciatives,
+  map_inciative_color,
+  serviceQualificationLabel
+) {
   return Plot.legend({
-    width: width,
+    width,
     color: {
-      domain: domain_iniciatives.map(row => service_qualification._data['service_qualification_description'][service_qualification._data['service_qualification_id'].indexOf(row)]),
-      range: domain_iniciatives.map(row => map_inciative_color.get(row)),
+      domain: domain_iniciatives.map(id => serviceQualificationLabel.get(id)),
+      range: domain_iniciatives.map(id => map_inciative_color.get(id)),
       columns: 1,
       rows: 3,
-      label: "Age Groups",
+      label: "Age Groups"
     }
   });
 }

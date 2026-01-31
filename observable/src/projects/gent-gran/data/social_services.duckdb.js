@@ -1,7 +1,5 @@
 import { DuckDBInstance } from '@duckdb/node-api';
-
-
-import JSZip from "jszip";
+import fs from "fs";
 
 const isLocal = process.env.AWS_PROFILE === "localstack";
 const BUCKET_DATA = process.env.S3_BUCKET_DATA;
@@ -9,7 +7,11 @@ const BUCKET_CATALOG = process.env.S3_BUCKET_CATALOG;
 
 console.error(`Using bucket data: ${BUCKET_DATA}: bucket catalog: ${BUCKET_CATALOG} (local: ${isLocal})`);
 
-const instance = await DuckDBInstance.create(':memory:');
+const DB_FILE = "social_services.duckdb";
+if (fs.existsSync(DB_FILE)) {
+  fs.unlinkSync(DB_FILE);
+}
+const instance = await DuckDBInstance.create(DB_FILE);
 const conn = await instance.connect();
 console.error(`Connected`);
 
@@ -158,26 +160,10 @@ await conn.run(`CREATE TABLE social_services_empty_last_year as
       WHERE j.year >= f.first_year
       ORDER BY year, comarca_id, municipal_id, service_type_id;`);
 
+await conn.disconnectSync();
+await instance.closeSync();
 
-const zip = new JSZip();
+// Now the file is fully written
+console.error("Final file size:", fs.statSync(DB_FILE).size);
 
-const social_services_empty_last_year = await conn.runAndReadAll("SELECT *  FROM social_services_empty_last_year");
-zip.file("social_services_empty_last_year.json", JSON.stringify(social_services_empty_last_year.getRowObjectsJson()));
-const municipal_coverage = await conn.runAndReadAll("SELECT *  FROM municipal_coverage");
-zip.file("municipal_coverage.json", JSON.stringify(municipal_coverage.getRowObjectsJson()));
-const comarca_population = await conn.runAndReadAll("SELECT *  FROM comarca_population");
-zip.file("comarca_population.json", JSON.stringify(comarca_population.getRowObjectsJson()));
-const comarca_coverage = await conn.runAndReadAll("SELECT *  FROM comarca_coverage");
-zip.file("comarca_coverage.json", JSON.stringify(comarca_coverage.getRowObjectsJson()));
-const municipal = await conn.runAndReadAll("SELECT *  FROM municipal");
-zip.file("municipal.json", JSON.stringify(municipal.getRowObjectsJson()));
-const service_type = await conn.runAndReadAll("SELECT *  FROM service_type");
-zip.file("service_type.json", JSON.stringify(service_type.getRowObjectsJson()));
-const service_qualification = await conn.runAndReadAll("SELECT *  FROM service_qualification");
-zip.file("service_qualification.json", JSON.stringify(service_qualification.getRowObjectsJson()));
-const population = await conn.runAndReadAll("SELECT municipal_id, CAST(population_age_65_and_over AS INT) as population_age_65_and_over, CAST(population AS INT) as population, CAST(year AS INT) as year  FROM population");
-zip.file("population.json", JSON.stringify(population.getRowObjectsJson()));
-
-zip
-  .generateNodeStream({ type: "nodebuffer", streamFiles: true })
-  .pipe(process.stdout);
+fs.createReadStream(DB_FILE).pipe(process.stdout);

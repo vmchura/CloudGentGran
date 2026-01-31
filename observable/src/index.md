@@ -19,10 +19,12 @@ const locale_input = Inputs.select(new Map([['Català', ca_translations],
 });
 ```
 ```js
+const social_services_db = await DuckDBClient.of({social_services: FileAttachment("./projects/gent-gran/data/social_services.duckdb")});
+```
+```js
 const locale_value = Generators.input(locale_input);
 ```
 ```js
-const social_services_zip_data = FileAttachment("./projects/gent-gran/data/social_services.zip").zip();
 const comarques_boundaries = FileAttachment("./projects/gent-gran/data/comarques-1000000.json").json();
 const municipals_boundaries = FileAttachment("./projects/gent-gran/data/municipis-1000000.json").json();
   
@@ -48,23 +50,12 @@ import {
 } from "./projects/gent-gran/components/comarca-charts.js";
 ```
 ```js
-const data = await loadData(social_services_zip_data);
-const {
-  comarca_population,
-  social_services_empty_last_year,
-  municipal_coverage,
-  comarca_coverage,
-  municipal,
-  service_type,
-  service_qualification,
-  population
-} = data;
+const {municipal_name_label, comarca_name_label} = await build_labels(social_services_db);
 ```
 ```js
-const {municipal_name_label, comarca_name_label} = build_labels(municipal);
+const indicators = await calculateIndicators(social_services_db);
 ```
 ```js
-const indicators = calculateIndicators(population, comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage);
 const {
   all_years,
   census_latest_year,
@@ -89,9 +80,6 @@ const {
   municipal_latest_population,
   coverage_latest_year
 } = indicators;
-```
-```js
-const nom_comarques = municipal.select('comarca_name').dedupe('comarca_name').array('comarca_name');
 ```
 ```js
 const catalunya_indicator_or_variation_input = Inputs.radio(new Map([
@@ -130,13 +118,25 @@ const color_catalunya_map = getColorCatalunyaMap(catalunya_indicator_or_variatio
 const color_municipal_map = getColorCatalunyaMap(municipal_indicator_type, latest_indicator_average_catalunya_integer, range_colours_indicator);
 ```
 ```js
-const nom_comarca_input = Inputs.select(municipal.select('comarca_name', 'comarca_id').dedupe('comarca_name', 'comarca_id').orderby('comarca_name'), {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.comarca_name, unique: true})
+const comarques = (await social_services_db.query(`
+  SELECT DISTINCT comarca_name, comarca_id
+  FROM social_services.municipal
+  ORDER BY comarca_name
+`)).toArray();
+```
+```js
+const nom_comarca_input = Inputs.select(comarques, {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.comarca_name, unique: true})
 const comarca_name = Generators.input(nom_comarca_input);
 ```
 ```js
-const all_year_serveis_selected = social_services_empty_last_year.params({comarca_id: comarca_name.comarca_id}).filter((d, $) => d.comarca_id == $.comarca_id).select('year').array('year');
-const max_year_serveis = Math.max(...all_year_serveis_selected);
-const min_year_serveis = Math.min(...all_year_serveis_selected);
+const { max_year_serveis, min_year_serveis } =
+  await social_services_db.queryRow(`
+    SELECT
+      MAX(year) AS max_year_serveis,
+      MIN(year) AS min_year_serveis
+    FROM social_services.social_services_empty_last_year
+    WHERE comarca_id = ?
+  `, [comarca_name.comarca_id]);
 ```
 ```js
 const single_comarca_population_input = Inputs.radio(new Map([[t(locale_value, "TREND_POPULATION_65_PLUS"), true],
@@ -150,28 +150,59 @@ const serveis_residence_ratio_input = Inputs.radio(new Map([[t(locale_value, "AL
 const serveis_residence_ratio = Generators.input(serveis_residence_ratio_input)
 ```
 ```js
-const social_services_comarca = social_services_empty_last_year.params({comarca_id: comarca_name.comarca_id}).filter((row, $) => (row.comarca_id === $.comarca_id));
-const all_available_services = social_services_comarca.filter(row =>  row.total_capacit > 0).select('service_type_id').dedupe('service_type_id').array('service_type_id');
+const all_available_services = (await social_services_db.query(`
+  SELECT DISTINCT service_type_id
+  FROM social_services.social_services_empty_last_year
+  WHERE comarca_id = ?
+    AND total_capacit > 0
+`, [comarca_name.comarca_id])).toArray().map(d => d.service_type_id);
+
 ```
 ```js
-const serveis_input = Inputs.select(new Map(all_available_services.map(s => [service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(s)], s])), {
-    value: [all_available_services[0]],
+const service_rows = (await social_services_db.query(`
+  SELECT DISTINCT
+    st.service_type_id,
+    st.service_type_description
+  FROM social_services.social_services_empty_last_year s
+  JOIN social_services.service_type st
+    USING (service_type_id)
+  WHERE s.comarca_id = ?
+    AND s.total_capacit > 0
+  ORDER BY st.service_type_description
+`, [comarca_name.comarca_id])).toArray();
+```
+```js
+
+const serveis_input = Inputs.select(
+  new Map(service_rows.map(d => [d.service_type_description, d.service_type_id])),
+  {
+    value: service_rows[0]?.service_type_id,
     label: t(locale_value, "SERVICE_LABEL")
-})
-const serveis_selected = Generators.input(serveis_input)
+  }
+);
+
+const serveis_selected = Generators.input(serveis_input);
 ```
 ```js
-const serveis_by_iniciative = social_services_comarca.params({service_type_id: serveis_selected}).filter((row, $) => (row.service_type_id === $.service_type_id))
+const domain_iniciatives = (
+  await social_services_db.query(`
+    SELECT DISTINCT service_qualification_id
+    FROM social_services.social_services_empty_last_year
+    WHERE comarca_id = ?
+      AND service_type_id = ?
+  `, [
+    comarca_name.comarca_id,
+    serveis_selected
+  ])
+).toArray().map(d => d.service_qualification_id);
+
 ```
 ```js
-const domain_iniciatives = serveis_by_iniciative.select('service_qualification_id').dedupe('service_qualification_id').array('service_qualification_id');
-```
-```js
-const comarca_name_for_distrit_input = Inputs.select(municipal.select('comarca_name', 'comarca_id').dedupe('comarca_name', 'comarca_id').orderby('comarca_name'), {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.comarca_name, unique: true, value: "01"})
+const comarca_name_for_distrit_input = Inputs.select(comarques, {label: t(locale_value, "COMARCA_LABEL") + ": ", format: x => x.comarca_name, unique: true, value: "01"})
 const comarca_code_for_distrit_value = Generators.input(comarca_name_for_distrit_input);
 ```
 ```js
-const valid_municipal_codes = municipal.params({comarca_id: comarca_code_for_distrit_value.comarca_id}).filter((d, $) => d.comarca_id === $.comarca_id).array("municipal_id");
+const valid_municipal_codes = (await social_services_db.query(`SELECT DISTINCT municipal_id FROM social_services.municipal WHERE comarca_id=?`, [comarca_code_for_distrit_value.comarca_id])).toArray().map(d => d.municipal_id);
 const single_comarca_map = {
   ...municipals_boundaries,
   features: municipals_boundaries.features.filter(
@@ -184,6 +215,19 @@ const municipal_plot = plot_catalunya_map_coverage_municipal(500, locale_value, 
 ratio_attention_municipal_latest_year, municipal_latest_population, municipal_indicator_type,
 color_municipal_map, all_title_map_by_indicator.get(municipal_indicator_type),
 municipal_name_label);
+```
+```js
+const serviceQualificationLabel = new Map(
+  (
+    await social_services_db.query(`
+      SELECT service_qualification_id, service_qualification_description
+      FROM social_services.service_qualification
+    `)
+  )
+    .toArray()
+    .map(d => [d.service_qualification_id, d.service_qualification_description])
+);
+
 ```
 # ${t(locale_value, "TITLE")} (${coverage_latest_year})
 
@@ -295,7 +339,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
           <h4>${t(locale_value, "EVOLUTION_POPULATION_65_PLUS")}</h4>
           ${single_comarca_population_input}
           ${resize((width) => plot_legend_trend_population(width, locale_value, single_comarca_population))}
-          <figure>${resize((width) => plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population))}</figure>
+          <figure>${resize((width) => plot_trend_population_groups_by_comarca(width, locale_value, social_services_db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population))}</figure>
       </div>
       <div class="card grid-colspan-1">
           <h4>${t(locale_value, "ASSISTANCE_SERVICES")}</h4>
@@ -306,7 +350,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
       <div class="card grid-colspan-1">
           <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
           ${serveis_input}
-          ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, service_qualification))} 
+          ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, serviceQualificationLabel))} 
           <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, comarca_name, serveis_selected, min_year_serveis, max_year_serveis, all_available_services))}</figure>
       </div>
   </div>
@@ -338,7 +382,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
         <h2>${comarca_code_for_distrit_value.comarca_name} ${coverage_latest_year}</h2>
         <div class="card">
             <h4>${t(locale_value, "POPULATION_65_PLUS")}</h4>
-            <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.comarca_id]?.population_ge65).toLocaleString('ca-ES')}</span>
+            <span class="big">${Number(comarques_latest_population[comarca_code_for_distrit_value.comarca_id]?.population_age_65_and_over).toLocaleString('ca-ES')}</span>
         </div>  
         <div class="card">
             <h4>${t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")}</h4>

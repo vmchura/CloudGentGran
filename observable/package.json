@@ -17,6 +17,7 @@
     "arquero": "^8.0.3",
     "d3-dsv": "^3.0.1",
     "d3-time-format": "^4.1.0",
+    "jszip": "^3.10.1",
     "parquet-wasm": "^0.6.1"
   },
   "devDependencies": {
