@@ -74,7 +74,15 @@ await conn.run(`
     SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/municipals/*');
 
     CREATE TABLE social_services AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/social_services_by_service_municipal/*');
+    SELECT 
+      CAST(service_qualification_id AS STRING) AS service_qualification_id,
+      CAST(service_type_id AS STRING) AS service_type_id,
+      CAST(comarca_id AS STRING) AS comarca_id,
+      CAST(municipal_id AS STRING) AS municipal_id,
+      CAST(year AS INTEGER) AS year,
+      CAST(month AS INTEGER) AS month,
+      CAST(total_capacit AS INTEGER) AS total_capacit
+    FROM read_parquet('s3://${BUCKET_DATA}/marts/social_services_by_service_municipal/*');
 
     CREATE TABLE service_qualification AS
     SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/service_qualification/*');
