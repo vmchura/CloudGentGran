@@ -8,6 +8,7 @@ import { AnalyticsConstruct } from './analytics-construct';
 import { CatalogConstruct } from './catalog-construct';
 import { GlueConstruct } from './glue-construct';
 import { WebConstruct } from './web-construct';
+import { WebConstructLocalStack } from './web-construct_localstack';
 
 export interface CatalunyaDataStackProps extends cdk.StackProps {
   environmentName: string;
@@ -35,6 +36,7 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly catalogInfrastructure: CatalogConstruct;
   public readonly glueInfrastructure: GlueConstruct;
   public readonly webInfrastructure: WebConstruct;
+  public readonly webInfrastructureLocalStack: WebConstructLocalStack;
 
   constructor(scope: Construct, id: string, props: CatalunyaDataStackProps) {
     super(scope, id, props);
@@ -195,6 +197,13 @@ export class CatalunyaDataStack extends cdk.Stack {
 
     } else {
       console.log('Skipping: NOT constructing WebInfrastructure (missing certificateId)');
+      this.webInfrastructureLocalStack = new WebConstructLocalStack(this, 'WebInfrastructureLocalStack', {
+	projectName: this.projectName,
+	environmentName: this.environmentName,
+        accountId: this.account,
+        bucketName: this.config.serviceBucketName,
+      });
+
     }
 
 
