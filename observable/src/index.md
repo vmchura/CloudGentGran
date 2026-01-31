@@ -320,7 +320,7 @@ ${t(locale_value, "TERRITORY_ANALYSIS_DESC")}
       <div class="card grid-colspan-1">
           <h4>${t(locale_value, "SERVICE_QUALIFICATION")}</h4>
           ${serveis_input}
-          ${resize((width) => plot_legend_trend_iniciative(width, locale_value, domain_iniciatives, map_inciative_color, serviceQualificationLabel))} 
+          ${resize((width) => plot_legend_trend_iniciative(width, plot_legend_trend_services, domain_iniciatives, map_inciative_color, serviceQualificationLabel))} 
           <figure>${resize((width) => plot_services_comarca_by_iniciatives(width, locale_value, social_services_db, comarca_name, serveis_selected, min_year_serveis, max_year_serveis))}</figure>
       </div>
   </div>
