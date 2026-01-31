@@ -6,7 +6,7 @@ WITH comarcas AS (
 
 -- Generate series of years from 1975 to 2025 for Athena
 year_series AS (
-	{{generate_years(1975, 2025)}}
+	{{generate_years(1975, 2026)}}
 ),
 
 all_combinations AS (
