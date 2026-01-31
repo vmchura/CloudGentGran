@@ -17,6 +17,14 @@ export const map_inciative_color = new Map([
   ["PUB-001", "#3b5fc0"]
 ]);
 
+const createTimeSeriesXAxis = (min_year_serveis, max_year_serveis) => ({
+  label: null,
+  grid: true,
+  tickFormat: d => d.toString(),
+  domain: [min_year_serveis, max_year_serveis],
+  interval: 1
+});
+
 export async function plot_trend_population_groups_by_comarca(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
   const comarcaPopulationPlot = await db.sql`
   SELECT 
@@ -45,13 +53,7 @@ export async function plot_trend_population_groups_by_comarca(width, locale_valu
       label: null,
       tickFormat: d => d === "population_age_65_and_over" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
     },
-    x: {
-      grid: true,
-      tickFormat: d => d.toString(),
-      interval: 1,
-      label: null,
-      domain: [min_year_serveis, max_year_serveis]
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
       Plot.lineY(comarcaPopulationPlot,
         {
@@ -92,13 +94,7 @@ export async function plot_comarca_by_serveis(width, locale_value, db, comarca_n
       columns: 1,
       label: "Age Groups",
     },
-    x: {
-      label: null,
-      grid: true,
-      tickFormat: d => d.toString(),
-      domain: [min_year_serveis, max_year_serveis],
-      interval: 1
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
       Plot.lineY(servicesData,
         Plot.mapY(
@@ -135,12 +131,7 @@ export async function plot_comarca_by_cobertura(width, locale_value, db, comarca
       legend: false,
       columns: 1,
     },
-    x: {
-      label: null,
-      grid: true,
-      tickFormat: d => d.toString(),
-      domain: [min_year_serveis, max_year_serveis]
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
       Plot.lineY(coverageData,
         {
@@ -181,13 +172,7 @@ export async function plot_services_comarca_by_iniciatives(width, locale_value, 
       rows: 3,
       label: "Age Groups",
     },
-    x: {
-      label: null,
-      grid: true,
-      tickFormat: d => d.toString(),
-      domain: [min_year_serveis, max_year_serveis],
-      interval: 1
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
       Plot.areaY(initiativesData,
         Plot.mapY(
