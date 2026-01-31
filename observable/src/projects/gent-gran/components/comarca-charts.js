@@ -36,6 +36,54 @@ const createLinearYAxis = (label, locale_value) => ({
   label: t(locale_value, label)
 });
 
+const createColorLegend = (width, domain, range, options = {}) => ({
+  width,
+  color: {
+    domain,
+    range,
+    legend: false,
+    columns: 1,
+    label: null,
+    ...options
+  }
+});
+
+const createPopulationLegend = (width, locale_value, showAbsolute) => ({
+  width,
+  color: {
+    domain: showAbsolute ? ["population_age_65_and_over"] : ["elderly_indicator"],
+    range: showAbsolute ? ["#ffd754"] : ["#3b5fc0"],
+    legend: false,
+    columns: 1,
+    rows: 2,
+    label: null,
+    tickFormat: d => d === "population_age_65_and_over" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
+  }
+});
+
+const createServicesLegend = (width, locale_value, all_available_services, serviceTypeLabel) => 
+  createColorLegend(width, 
+    all_available_services.map(row => serviceTypeLabel.get(row)),
+    all_available_services.map(row => colour_by_service.get(row))
+  );
+
+const createCoverageLegend = (width, locale_value) =>
+  createColorLegend(width, 
+    [t(locale_value, "COVERAGE_RATE")],
+    ["#ff9c38"]
+  );
+
+const createInitiativesLegend = (width, locale_value, domain_iniciatives, map_inciative_color, serviceQualificationLabel) => ({
+  width,
+  color: {
+    domain: (domain_iniciatives || []).map(id => serviceQualificationLabel.get(id)),
+    range: (domain_iniciatives || []).map(id => map_inciative_color.get(id)),
+    columns: 1,
+    rows: 3,
+    label: "Age Groups"
+  }
+});
+
 export async function plot_trend_population_groups_by_comarca(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
   const comarcaPopulationPlot = await db.sql`
   SELECT 
@@ -191,58 +239,11 @@ export async function plot_services_comarca_by_iniciatives(width, locale_value, 
   });
 }
 
-export function plot_legend_trend_population(width, locale_value, single_comarca_population) {
-  return Plot.legend({
-    width: width,
-    color: {
-      domain: single_comarca_population ? ["population_over_65"] : ["indicator_elderly"],
-      range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
-      legend: false,
-      columns: 1,
-      rows: 2,
-      label: null,
-      tickFormat: d => d === "population_over_65" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
-    }
-  });
-}
+export const plot_legend_trend_population = createPopulationLegend;
 
-export function plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, serviceTypeLabel) {
-  return serveis_residence_ratio ? Plot.legend({
-    width: width,
-    color: {
-      domain: all_available_services.map(row => serviceTypeLabel.get(row)),
-      range: all_available_services.map(row => colour_by_service.get(row)),
-      legend: false,
-      columns: 1,
-      label: null,
-    }
-  }) : Plot.legend({
-    width: width,
-    color: {
-      domain: [t(locale_value, "COVERAGE_RATE")],
-      range: ["#ff9c38"],
-      legend: false,
-      columns: 1,
-      label: null,
-    }
-  });
-}
+export const plot_legend_trend_services = (width, locale_value, serveis_residence_ratio, all_available_services, serviceTypeLabel) => 
+  serveis_residence_ratio 
+    ? createServicesLegend(width, locale_value, all_available_services, serviceTypeLabel)
+    : createCoverageLegend(width, locale_value);
 
-export function plot_legend_trend_iniciative(
-  width,
-  locale_value,
-  domain_iniciatives,
-  map_inciative_color,
-  serviceQualificationLabel
-) {
-  return Plot.legend({
-    width,
-    color: {
-      domain: domain_iniciatives.map(id => serviceQualificationLabel.get(id)),
-      range: domain_iniciatives.map(id => map_inciative_color.get(id)),
-      columns: 1,
-      rows: 3,
-      label: "Age Groups"
-    }
-  });
-}
+export const plot_legend_trend_iniciative = createInitiativesLegend;
