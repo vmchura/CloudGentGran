@@ -25,6 +25,17 @@ const createTimeSeriesXAxis = (min_year_serveis, max_year_serveis) => ({
   interval: 1
 });
 
+const createBaseChartConfig = (width) => ({
+  marginLeft: 50,
+  width: width
+});
+
+const createLinearYAxis = (label, locale_value) => ({
+  type: "linear",
+  grid: true,
+  label: t(locale_value, label)
+});
+
 export async function plot_trend_population_groups_by_comarca(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
   const comarcaPopulationPlot = await db.sql`
   SELECT 
@@ -38,8 +49,7 @@ export async function plot_trend_population_groups_by_comarca(width, locale_valu
 `;
 
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
+    ...createBaseChartConfig(width),
     y: {
       grid: true,
       label: single_comarca_population ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"),
@@ -80,8 +90,7 @@ export async function plot_comarca_by_serveis(width, locale_value, db, comarca_n
   `;
 
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
+    ...createBaseChartConfig(width),
     y: {
       type: "linear",
       grid: true,
@@ -120,13 +129,8 @@ export async function plot_comarca_by_cobertura(width, locale_value, db, comarca
   `;
 
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
-    y: {
-      type: "linear",
-      grid: true,
-      label: t(locale_value, "COVERAGE_RATE"),
-    },
+    ...createBaseChartConfig(width),
+    y: createLinearYAxis("COVERAGE_RATE", locale_value),
     color: {
       legend: false,
       columns: 1,
@@ -154,13 +158,8 @@ export async function plot_services_comarca_by_iniciatives(width, locale_value, 
   `;
 
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
-    y: {
-      type: "linear",
-      grid: true,
-      label: t(locale_value, "TOTAL_OFFERED_PLACES_ACCUMULATED"),
-    },
+    ...createBaseChartConfig(width),
+    y: createLinearYAxis("TOTAL_OFFERED_PLACES_ACCUMULATED", locale_value),
     color: {
       domain: [
         "PRV-001",
