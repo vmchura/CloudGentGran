@@ -1,292 +1,147 @@
 # Catalunya Data Pipeline Infrastructure
 
-This directory contains the AWS CDK TypeScript infrastructure code for the Catalunya Open Data Pipeline project.
+AWS CDK TypeScript infrastructure for the Catalunya Open Data Pipeline project with multi-environment support.
 
-## 📁 Project Structure
+## 🏗️ Architecture
+
+Multi-environment architecture with complete dev/prod isolation:
+- **Environment Isolation**: Separate dev and prod stacks
+- **Configuration-Driven**: Environment-specific settings in `cdk.json`
+- **Medallion Architecture**: Landing → Staging → Marts data flow
+- **Least Privilege**: IAM roles with minimal permissions
+- **Export Values**: Stack outputs for cross-stack references
+
+### Layer Architecture
+
+```
+Web Layer                   CloudFront + Route53 + S3 (static)
+Processing Layer            Lambda Functions (Rust) - Extract/Transform/Mart
+Analytics Layer             Athena Workgroups + Databases
+Storage Layer               S3 Buckets (Landing/Staging/Marts) + Catalog
+Security Layer              IAM Roles + Policies + Cross-Account Access
+```
+
+## 📁 Structure
 
 ```
 infrastructure/
-├── bin/
-│   └── infrastructure.ts      # CDK app entry point with dev/prod stacks
-├── lib/
-│   ├── infrastructure-stack.ts # Main Catalunya Data Stack
-│   ├── config.ts              # Configuration helper utilities
+├── bin/infrastructure.ts       # CDK app entry point
+├── lib/                        # Infrastructure constructs
+│   ├── infrastructure-stack.ts # Main stack
+│   ├── config.ts              # Configuration utilities
 │   ├── iam-construct.ts       # IAM roles and policies
 │   ├── s3-construct.ts        # S3 buckets with lifecycle policies
-│   ├── lambda-construct.ts    # Lambda functions and triggers
+│   ├── lambda-construct.ts    # Lambda functions
 │   ├── analytics-construct.ts # Athena workgroups and databases
 │   ├── catalog-construct.ts   # Data catalog functions
 │   ├── glue-construct.ts      # Glue jobs and crawlers
 │   └── web-construct.ts       # CloudFront and Route53 (optional)
-├── test/
-│   └── infrastructure.test.ts # Unit tests for the stack
-├── cdk.json                   # CDK configuration and context
-├── package.json               # Dependencies and scripts
-└── tsconfig.json             # TypeScript configuration
+├── test/infrastructure.test.ts # Unit tests
+├── cdk.json                   # CDK configuration
+├── package.json               # Dependencies
+└── tsconfig.json             # TypeScript config
 ```
 
-## 🏗️ Architecture Overview
-
-The infrastructure follows a **multi-environment architecture** with separate dev and prod stacks:
-
-- **Environment Isolation**: Complete separation between dev and prod environments
-- **Configuration-Driven**: Environment-specific settings managed via `cdk.json`
-- **Scalable Naming**: Consistent resource naming with environment prefixes
-- **Export Values**: Stack outputs are exported for cross-stack references
-
-## 🚀 Getting Started
+## 🚀 Setup
 
 ### Prerequisites
-
-- Node.js 18+ installed
-- AWS CLI configured with appropriate credentials
-- AWS CDK CLI installed globally: `npm install -g aws-cdk`
+- Node.js 18+
+- AWS CLI configured
+- AWS CDK CLI: `npm install -g aws-cdk`
 
 ### Installation
-
 ```bash
 cd infrastructure
 npm install
 ```
 
-### Build and Test
-
+### Development
 ```bash
-# Build TypeScript
-npm run build
-
-# Run unit tests
-npm test
-
-# List all stacks
-npx cdk list
-
-# Synthesize a specific stack
-npx cdk synth CatalunyaDataStack-dev
+npm run build      # Build TypeScript
+npm test           # Run unit tests
+npx cdk list       # List all stacks
+npx cdk synth CatalunyaDataStack-dev  # Synthesize dev stack
 ```
 
-## 🔧 Configuration
+## ⚙️ Configuration
 
-Environment-specific configuration is managed in `cdk.json` under the `Catalunya-Data-Pipeline` context:
+Configuration is managed in `cdk.json` under the `Catalunya-Data-Pipeline` context:
 
-```json
-{
-  "context": {
-    "Catalunya-Data-Pipeline": {
-      "dev": {
-        "...": ""
-      },
-      "prod": {
-        "...": ""
-      }
-    }
-  }
-}
-```
+| Parameter | Description | Dev | Prod |
+|-----------|-------------|-----|------|
+| `region` | AWS region | `eu-west-1` | `eu-west-1` |
+| `bucketName` | Main data bucket | `catalunya-data-dev` | `catalunya-data-prod` |
+| `catalogBucketName` | Catalog bucket | `catalunya-catalog-dev` | `catalunya-catalog-prod` |
+| `serviceBucketName` | Service bucket | `catalunya-service-dev` | `catalunya-service-prod` |
+| `lambdaMemory` | Lambda memory (MB) | `512` | `1024` |
+| `lambdaTimeout` | Lambda timeout (seconds) | `300` | `900` |
+| `retentionPeriod` | Landing retention (days) | `7` | `7` |
+| `retentionPeriod` | Staging/Marts retention (days) | `60` | `60` |
+| `webDomain` | Web domain | `analitica.academy/` | `analitica.academy/` |
+| `webSubdomain` | Web subdomain | `dev` | `` |
 
-### Configuration Parameters
+## 📦 Resources
 
-| Parameter         | Description                           | Dev Value            | Prod Value            |
-|-------------------|---------------------------------------|----------------------|-----------------------|
-| `region`          | AWS region for deployment             | `eu-west-1`          | `eu-west-1`           |
-| `bucketName`      | S3 bucket name                        | `catalunya-data-dev` | `catalunya-data-prod` |
-| `catalogBucketName` | Catalog data bucket name            | `catalunya-catalog-dev` | `catalunya-catalog-prod` |
-| `serviceBucketName` | Service/static assets bucket name   | `catalunya-service-dev` | `catalunya-service-prod` |
-| `lambdaMemory`    | Lambda memory allocation (MB)         | `512`                | `1024`                |
-| `lambdaTimeout`   | Lambda timeout (seconds)              | `300`                | `900`                 |
-| `retentionPeriod` | Data retention period (days)[landing] | `7` or `ephemeral`   | `7` or `ephemeral`    |
-| `retentionPeriod` | Data retention period (days)[staging] | `60`                 | `60`                  |
-| `retentionPeriod` | Data retention period (days)[marts]   | `60`                 | `60`                  |
-| `webDomain`       | Web domain (optional)                 | `gentgran.cat`       | `gentgran.cat`        |
-| `webSubdomain`    | Web subdomain (optional)              | `observatori`        | `observatori`         |
+### Infrastructure Components
 
-## 📦 Stack Resources
+**Storage**
+- S3 buckets with medallion architecture (landing/staging/marts)
+- Landing: 7-day retention, Staging/Marts: 60-day IA transition
+- Athena results bucket for query outputs
 
-The `CatalunyaDataStack` creates the following resources:
+**Processing**
+- Rust-based Lambda functions for data extraction/transform/mart generation
+- Social services transformer, population municipal processors
 
-### Implemented Resources
+**Security**
+- IAM roles with least privilege (Extractor, Transformer, Mart, Monitoring)
+- Data engineer human access role
+- Airflow cross-account execution role
 
-- **S3 Buckets**: Data storage with medallion architecture (landing/staging/marts)
-  - Landing bucket: 7-day retention
-  - Staging/Marts: 60-day IA transition after 60 days
-  - Athena results bucket for query outputs
-- **Lambda Functions**: Rust-based data extraction and transformation
-  - Social services transformer
-  - Population municipal processors
-  - Mart generators
-- **IAM Roles**: Service-specific permissions with least privilege
-  - Extractor, Transformer, Mart, Monitoring roles
-  - Data engineer human access role
-  - Airflow cross-account execution role
-- **Athena Infrastructure**: Query processing and cost controls
-  - Workgroups with result configuration
-  - Database for data catalog
-- **Glue Infrastructure**: Table schema management
-  - Crawlers for data discovery
-  - Database catalog integration
-- **Web Infrastructure** (Optional): CloudFront + Route53
-  - Requires WEB_CERTIFICATE_ID environment variable
-- **CloudFormation Outputs**: Complete resource reference exports
-- **Tags**: Automatic tagging with project, environment, owner, and management info
+**Analytics**
+- Athena workgroups with cost controls
+- Database for data catalog
+- Glue crawlers for schema discovery
+
+**Optional**
+- Web infrastructure (CloudFront + Route53) - requires `WEB_CERTIFICATE_ID`
 
 ## 🌍 Environments
 
-### Development (`dev`)
+| Environment | Stack Name | Prefix | Purpose |
+|-------------|------------|--------|---------|
+| `dev` | `CatalunyaDataStack-dev` | `catalunya-dev` | Testing/development |
+| `prod` | `CatalunyaDataStack-prod` | `catalunya-prod` | Live data processing |
 
-- **Stack Name**: `CatalunyaDataStack-dev`
-- **Resource Prefix**: `catalunya-dev`
-- **Purpose**: Testing and development
-- **Scaling**: Minimal resources, shorter retention
+## 🚀 Deployment
 
-### Production (`prod`)
-
-- **Stack Name**: `CatalunyaDataStack-prod`
-- **Resource Prefix**: `catalunya-prod`
-- **Purpose**: Live data processing
-- **Scaling**: Enhanced resources, longer retention
-
-## 🔄 Deployment Commands
-
-```bash
-# Bootstrap CDK (one-time setup)
-npx cdk bootstrap
-
-# Deploy development environment
-npx cdk deploy CatalunyaDataStack-dev
-
-# Deploy production environment
-npx cdk deploy CatalunyaDataStack-prod
-
-# Deploy all stacks
-npx cdk deploy --all
-
-# Destroy development environment (careful!)
-npx cdk destroy CatalunyaDataStack-dev
-```
+Via GitHub Actions
 
 ## 🧪 Testing
 
-The project includes comprehensive unit tests:
-
 ```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test -- --watch
-
-# Run tests with coverage
-npm run test -- --coverage
+npm test                              # Run all tests
+npm run test -- --watch              # Watch mode
+npm run test -- --coverage           # With coverage
 ```
 
-### Test Coverage
+**Test Coverage**
+- Stack synthesis validation
+- Environment configuration
+- Output validation
+- Error handling
 
-- ✅ Stack synthesis validation
-- ✅ Environment-specific configuration
-- ✅ Output validation
-- ✅ Error handling for invalid environments
 
-## 📊 Stack Outputs
+## 🔐 Security
 
-Each stack exports the following values for use by other stacks:
-
-| Output                       | Description                              | Export Name Format                      |
-|------------------------------|------------------------------------------|-----------------------------------------|
-| `Environment`                | Environment name (dev/prod)              | `{projectName}-Environment`            |
-| `BucketName`                 | Main S3 bucket name                      | `{projectName}-BucketName`             |
-| `AthenaResultsBucketName`    | Athena query results bucket              | `{projectName}-AthenaResultsBucket`    |
-| `AthenaWorkgroup`            | Athena workgroup name                   | `{projectName}-AthenaWorkgroup`        |
-| `AthenaDatabase`             | Athena database name                    | `{projectName}-AthenaDatabase`         |
-| `LambdaPrefix`               | Lambda function prefix                  | `{projectName}-LambdaPrefix`           |
-| `Region`                     | Deployment region                       | `{projectName}-Region`                 |
-| `ExtractorRoleArn`           | Lambda extractor execution role ARN     | `{projectName}-ExtractorRoleArn`        |
-| `TransformerRoleArn`         | Lambda transformer execution role ARN   | `{projectName}-TransformerRoleArn`      |
-| `MartRoleArn`                | Mart execution role ARN                 | `{projectName}-MartRoleArn`            |
-| `DataEngineerRoleArn`        | Data engineer human role ARN            | `{projectName}-DataEngineerRoleArn`     |
-| `CatalogExecutorRoleArn`     | Catalog executor role ARN               | `{projectName}-CatalogExecutorRoleArn`  |
-| `AirflowCrossAccountRoleArn` | Airflow cross-account role ARN          | `{projectName}-AirflowCrossAccountRoleArn` |
-| `AirflowAssumerUserName`     | Airflow assumer IAM user name           | `{projectName}-AirflowAssumerUserName`  |
-| `AirflowTargetRoleArn`       | Airflow target role ARN                 | `{projectName}-AirflowTargetRoleArn`    |
-| `AirflowExternalId`          | External ID for AssumeRole              | `{projectName}-AirflowExternalId`       |
-
-## 🔐 Security & Best Practices
-
-### Implemented
-
+**Implemented**
 - ✅ Environment isolation
-- ✅ Least privilege IAM design (planned)
+- ✅ Least privilege IAM design
 - ✅ Resource naming consistency
 - ✅ Configuration externalization
 - ✅ Stack tagging
 
-### Planned (Phase 2.2-2.5)
-
-- 🔄 IAM roles with minimal permissions
-- 🔄 VPC endpoints for security
+**Planned**
 - 🔄 Cost optimization policies
 - 🔄 CloudTrail logging
 
-## 🏗️ Architecture Overview
-
-The infrastructure follows a **layered architecture pattern** with clear separation of concerns:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Web Layer (Optional)                     │
-│  CloudFront + Route53 + S3 (static assets)                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                   Processing Layer                          │
-│  Lambda Functions (Rust) - Extract/Transform/Mart           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                  Analytics Layer                            │
-│  Athena Workgroups + Databases + Query Results             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                  Storage Layer                              │
-│  S3 Buckets (Landing/Staging/Marts) + Catalog Buckets     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                   Security Layer                            │
-│  IAM Roles + Policies + Cross-Account Access               │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Features
-
-- **Multi-Environment**: Complete dev/prod isolation
-- **Medallion Architecture**: Landing → Staging → Marts data flow
-- **Rust Lambda Functions**: High-performance data processing
-- **Cross-Account Access**: Airflow integration with secure role assumption
-- **Automated Lifecycle**: Cost-optimized data retention policies
-- **Web Hosting**: Optional static site deployment
-- **Comprehensive Monitoring**: IAM roles for observability
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **Context not found error**
-   ```
-   Error: No configuration found for environment: dev
-   ```
-   **Solution**: Ensure `cdk.json` has the correct `Catalunya-Data-Pipeline` context structure.
-
-2. **Build failures**
-   ```
-   error TS2610: 'stackName' is defined as an accessor
-   ```
-   **Solution**: Use `projectName` instead of `stackName` to avoid CDK naming conflicts.
-
-3. **AWS credentials issues**
-   ```
-   Error: Need to perform AWS calls but no credentials found
-   ```
-   **Solution**: Configure AWS CLI with `aws configure` or set environment variables.
-
----
