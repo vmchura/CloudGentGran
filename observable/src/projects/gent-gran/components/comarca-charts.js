@@ -36,6 +36,19 @@ const createLinearYAxis = (label, locale_value) => ({
   label: t(locale_value, label)
 });
 
+const createPopulationConfig = (showAbsolute, locale_value) => {
+  const field = showAbsolute ? "population_age_65_and_over" : "elderly_indicator";
+  const color = showAbsolute ? "#ffd754" : "#3b5fc0";
+  const labelKey = showAbsolute ? "POPULATION_65_PLUS" : "POPULATION_65_PLUS_PERCENTAGE";
+  
+  return {
+    field,
+    color,
+    label: t(locale_value, labelKey),
+    tickFormat: d => d === field ? t(locale_value, labelKey) : t(locale_value, labelKey)
+  };
+};
+
 export async function plot_trend_population_groups_by_comarca(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
   const comarcaPopulationPlot = await db.sql`
   SELECT 
@@ -48,28 +61,30 @@ export async function plot_trend_population_groups_by_comarca(width, locale_valu
   ORDER BY year
 `;
 
+  const popConfig = createPopulationConfig(single_comarca_population, locale_value);
+
   return Plot.plot({
     ...createBaseChartConfig(width),
     y: {
       grid: true,
-      label: single_comarca_population ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"),
+      label: popConfig.label,
     },
     color: {
-      domain: single_comarca_population ? ["population_age_65_and_over"] : ["elderly_indicator"],
-      range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
+      domain: [popConfig.field],
+      range: [popConfig.color],
       legend: false,
       columns: 1,
       rows: 2,
       label: null,
-      tickFormat: d => d === "population_age_65_and_over" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
+      tickFormat: popConfig.tickFormat
     },
     x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
       Plot.lineY(comarcaPopulationPlot,
         {
           x: "year",
-          y: (single_comarca_population ? "population_age_65_and_over" : "elderly_indicator"),
-          stroke: single_comarca_population ? "#ffd754" : "#3b5fc0",
+          y: popConfig.field,
+          stroke: popConfig.color,
           strokeWidth: 4
         }),
       Plot.ruleY([0])
