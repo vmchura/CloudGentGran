@@ -83,13 +83,31 @@ await conn.run(`
     SELECT * FROM read_parquet('s3://${BUCKET_CATALOG}/service_type/*');
 
     CREATE TABLE comarca_population AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/comarca_population/*');
+    SELECT 
+      CAST(comarca_id AS STRING) AS comarca_id, 
+      CAST(year AS INTEGER) AS year, 
+      CAST(population AS INTEGER) AS population, 
+      CAST(population_age_65_and_over AS INTEGER) AS population_age_65_and_over,
+      CAST(elderly_indicator AS DOUBLE) AS elderly_indicator 
+    FROM read_parquet('s3://${BUCKET_DATA}/marts/comarca_population/*');
 
     CREATE TABLE municipal_coverage AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/municipal_coverage/*');
+    SELECT 
+      CAST(municipal_id AS STRING) AS municipal_id,
+      CAST(year AS INTEGER) AS year, 
+      CAST(total_capacit AS INTEGER) AS total_capacit, 
+      CAST(population_age_65_and_over AS INTEGER) AS population_age_65_and_over, 
+      CAST(coverage_ratio AS DOUBLE) AS coverage_ratio
+    FROM read_parquet('s3://${BUCKET_DATA}/marts/municipal_coverage/*');
 
     CREATE TABLE comarca_coverage AS
-    SELECT * FROM read_parquet('s3://${BUCKET_DATA}/marts/comarca_coverage/*');
+    SELECT 
+      CAST(comarca_id AS STRING) AS comarca_id, 
+      CAST(year AS INTEGER) AS year, 
+      CAST(total_capacit AS INTEGER) AS total_capacit, 
+      CAST(population_age_65_and_over AS INTEGER) AS population_age_65_and_over, 
+      CAST(coverage_ratio AS DOUBLE) AS coverage_ratio
+    FROM read_parquet('s3://${BUCKET_DATA}/marts/comarca_coverage/*');
 `);
 
 console.error(`Processing: social_services_empty_last_year`);
