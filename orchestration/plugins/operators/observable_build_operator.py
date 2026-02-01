@@ -30,9 +30,10 @@ class ObservableBuildDeployOperator(BaseOperator):
         self.branch = 'main' if environment == 'prod' else 'develop'
         self.aws_conn_id = aws_conn_id
         self.region = region
-        self.s3_bucket_data = f'catalunya-data-{environment}'
-        self.s3_bucket_catalog = f'catalunya-catalog-{environment}'
-        self.s3_bucket_service = f'catalunya-service-{environment}'
+        suffix_bucket = 'prod' if environment == 'prod' else 'dev'
+        self.s3_bucket_data = f'catalunya-data-{suffix_bucket}'
+        self.s3_bucket_catalog = f'catalunya-catalog-{suffix_bucket}'
+        self.s3_bucket_service = f'catalunya-service-{suffix_bucket}'
 
     def execute(self, context):
         self.log.info(f"🚀 Starting Observable build and deploy for {self.environment}")

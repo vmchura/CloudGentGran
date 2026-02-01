@@ -16,10 +16,6 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
 
-    # DBT Configuration
-    DBT_PROJECT_DIR: /opt/airflow/dbt/mart
-    DBT_PROFILES_DIR: /home/airflow/.dbt
-
     # LocalStack Integration
     AWS_ENDPOINT_URL: http://localstack:4566
     AWS_ACCESS_KEY_ID: test
@@ -40,7 +36,6 @@ x-airflow-common:
     - ./orchestration/config:/opt/airflow/config
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./dbt:/opt/airflow/dbt
-    - airflow-dbt-profiles:/home/airflow/.dbt
     - /var/run/docker.sock:/var/run/docker.sock  # For LocalStack container communication
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
@@ -169,6 +164,7 @@ services:
       - ./localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:shared
       - ./localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:shared
       - ./localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:shared
+      - ./localstack/s3-mounts/catalunya-service-dev:/mnt/s3-service:shared
     entrypoint: /bin/sh
     command:
       - -c
@@ -195,8 +191,14 @@ services:
         done
         echo '✅ catalunya-athena-results-dev bucket found!'
         
+        until wget -q --spider http://localstack:4566/catalunya-service-dev 2>/dev/null; do
+          echo 'Waiting for catalunya-service-dev bucket to be created...'
+          sleep 60
+        done
+        echo '✅ catalunya-service-dev bucket found!'
+        
         echo '📁 Creating mount points...'
-        mkdir -p /mnt/s3-data /mnt/s3-results /mnt/s3-catalog
+        mkdir -p /mnt/s3-data /mnt/s3-results /mnt/s3-catalog /mnt/s3-service
         
         echo '🔧 Setting up credentials...'
         echo 'test:test' > /etc/passwd-s3fs
@@ -210,6 +212,9 @@ services:
         
         echo '📁 Mounting catalunya-catalog bucket...'
         s3fs catalunya-catalog-dev /mnt/s3-catalog -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
+        
+        echo '📁 Mounting catalunya-service bucket...'
+        s3fs catalunya-service-dev /mnt/s3-service -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
         
         echo '✅ S3FS mounts started successfully!'
         echo '📂 Main data bucket mounted at: /mnt/s3-data'
@@ -247,31 +252,19 @@ services:
         
         echo "🔧 Creating missing directories..."
         mkdir -p /opt/airflow/{logs,dags,plugins,config}
-        mkdir -p /home/airflow/.dbt
         mkdir -p /opt/airflow/dbt/mart/local_data
         
-        echo "🔧 Setting up DBT profiles for Catalunya Data Pipeline..."
-        cat > /home/airflow/.dbt/profiles.yml << 'EOF'
-        # Catalunya Data Pipeline - DBT Profiles
-        # Local development configuration using DuckDB
+        echo "🔧 Setting up DBT profiles..."
+        # Copy profiles_template.yml to profiles.yml if it doesn't exist
+        cp /opt/airflow/dbt/mart/profiles_template.yml /opt/airflow/dbt/profiles.yml
+        echo "✅ DBT profiles.yml created from template"
         
-        catalunya_data:
-          outputs:
-            local:
-              type: duckdb
-              path: /opt/airflow/dbt/mart/local_data/catalunya_local.duckdb
-              threads: 4
-            localstack:
-              type: duckdb
-              path: /opt/airflow/dbt/mart/local_data/catalunya_localstack.duckdb
-              threads: 4
-          target: localstack
-        EOF
-        echo "✅ DBT profiles.yml created successfully"
+        # Set DBT target environment
+        export DBT_TARGET=${DBT_TARGET:-local}
+        echo "🔧 DBT_TARGET set to: $DBT_TARGET"
         
         echo "🔧 Setting file permissions..."
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/
-        chown -R "${AIRFLOW_UID}:0" /home/airflow/.dbt
         
         echo "🔧 Installing additional packages..."
         pip install awscli-local

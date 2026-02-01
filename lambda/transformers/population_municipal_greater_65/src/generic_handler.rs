@@ -182,8 +182,8 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
         .take(total_height) // skip last one
         .collect();
 
-    let s_codes = Series::new("municipal_code".into(), municipal_codes);
-    let s_ge65 = Series::new("population_ge65".into(), pop_ge65);
+    let s_codes = Series::new("municipal_id".into(), municipal_codes);
+    let s_ge65 = Series::new("population_age_65_and_over".into(), pop_ge65);
     let s_pop = Series::new("population".into(), pop_total);
     let year_series = Series::new("year".into(), vec![year_value; total_height]);
 

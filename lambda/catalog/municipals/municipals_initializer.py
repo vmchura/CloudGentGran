@@ -9,7 +9,7 @@ import json
 import boto3
 import urllib.request
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, List
 import os
 import pandas as pd
@@ -19,15 +19,16 @@ from io import BytesIO
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 def get_s3_client():
     """Get S3 client with optional endpoint URL for LocalStack"""
-    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+    endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
     if endpoint_url:
         logger.info(f"Using S3 endpoint: {endpoint_url}")
-        return boto3.client('s3', endpoint_url=endpoint_url)
+        return boto3.client("s3", endpoint_url=endpoint_url)
     else:
         logger.info("Using default S3 endpoint")
-        return boto3.client('s3')
+        return boto3.client("s3")
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -42,16 +43,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         Dict containing execution results
     """
     try:
-        logger.info(f"Starting API extraction process at {datetime.utcnow()}")
+        logger.info(f"Starting API extraction process at {datetime.now(UTC)}")
 
         # Get configuration from environment variables
-        bucket_name = os.environ['CATALOG_BUCKET_NAME']
-        dataset_identifier = os.environ['DATASET_IDENTIFIER']
-        semantic_identifier = os.environ['SEMANTIC_IDENTIFIER']
-        api_endpoint_institution = f'https://analisi.transparenciacatalunya.cat/resource/{dataset_identifier}.json'
+        bucket_name = os.environ["CATALOG_BUCKET_NAME"]
+        dataset_identifier = os.environ["DATASET_IDENTIFIER"]
+        semantic_identifier = os.environ["SEMANTIC_IDENTIFIER"]
+        api_endpoint_institution = f"https://analisi.transparenciacatalunya.cat/resource/{dataset_identifier}.json"
 
-        process_initiated_at = datetime.utcnow()
-        downloaded_date = process_initiated_at.strftime('%Y%m%d')
+        process_initiated_at = datetime.now(UTC)
+        downloaded_date = process_initiated_at.strftime("%Y%m%d")
         list_json = []
         total_records = 0
 
@@ -69,55 +70,109 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     raw_json_str = raw_json_bytes.decode("utf-8")
                     temporal_result = json.loads(raw_json_str)
                     if len(temporal_result) == 0:
-                        logger.info(f"No more data available. Finished at iteration {i + 1}")
+                        logger.info(
+                            f"No more data available. Finished at iteration {i + 1}"
+                        )
                         break
                     else:
                         list_json.extend(temporal_result)
-                        logger.info(f"Iteration {i + 1}: Processing {len(temporal_result)} records")
+                        logger.info(
+                            f"Iteration {i + 1}: Processing {len(temporal_result)} records"
+                        )
                         total_records += len(temporal_result)
 
             except Exception as e:
                 logger.error(f"Error in iteration {i + 1}: {str(e)}")
-                return create_response(False, f"Critical error in iteration {i + 1}: {str(e)}")
+                return create_response(
+                    False, f"Critical error in iteration {i + 1}: {str(e)}"
+                )
 
         if len(list_json) == 0:
             logger.error("No data extracted from API")
             return create_response(False, "No data extracted from API")
 
         # Upload to S3
-        s3_key = upload_to_s3(bucket_name, list_json, semantic_identifier, downloaded_date)
+        s3_key = upload_to_s3(
+            bucket_name, list_json, semantic_identifier, downloaded_date
+        )
 
         logger.info(f"Successfully extracted {total_records} total records")
 
         # Return enhanced data for Airflow coordination
-        logger.info("Successfully completed extraction - returning metadata for Airflow coordination")
+        logger.info(
+            "Successfully completed extraction - returning metadata for Airflow coordination"
+        )
 
-        return create_response(True, f"Successfully processed {total_records} records", {
-            'bucket': bucket_name,
-            'semantic_identifier': semantic_identifier,
-            'downloaded_date': downloaded_date,
-            'total_records': total_records,
-            's3_key': s3_key,
-            'extraction_completed_at': datetime.utcnow().isoformat(),
-            'next_step': 'trigger_transformer',  # Airflow coordination hint
-            'transformer_payload': {
-                'bucket_name': bucket_name,
-                'semantic_identifier': semantic_identifier,
-                'downloaded_date': downloaded_date,
-                'total_records': total_records,
-                'source_prefix': f"catalog/municipals/",
-                'extraction_timestamp': datetime.utcnow().isoformat()
-            }
-        })
+        return create_response(
+            True,
+            f"Successfully processed {total_records} records",
+            {
+                "bucket": bucket_name,
+                "semantic_identifier": semantic_identifier,
+                "downloaded_date": downloaded_date,
+                "total_records": total_records,
+                "s3_key": s3_key,
+                "extraction_completed_at": datetime.now(UTC).isoformat(),
+                "next_step": "trigger_transformer",  # Airflow coordination hint
+                "transformer_payload": {
+                    "bucket_name": bucket_name,
+                    "semantic_identifier": semantic_identifier,
+                    "downloaded_date": downloaded_date,
+                    "total_records": total_records,
+                    "source_prefix": f"catalog/municipals/",
+                    "extraction_timestamp": datetime.now(UTC).isoformat(),
+                },
+            },
+        )
 
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}")
         return create_response(False, f"Error: {str(e)}")
 
 
-def upload_to_s3(bucket_name: str, json_data: list, table_name: str, downloaded_date: str) -> str:
+def upload_dataframe_to_s3(bucket_name: str, df: pd.DataFrame, table_name: str) -> str:
     """
-    Upload extracted data to S3 landing bucket
+    Upload processed DataFrame to S3 as parquet
+
+    Args:
+        bucket_name: S3 bucket name
+        df: Processed DataFrame ready for upload
+        table_name: Semantic identifier for the dataset
+
+    Returns:
+        S3 key of the uploaded file
+    """
+    s3_client = get_s3_client()
+    current_time = datetime.now(UTC).isoformat()
+    s3_key = f"{table_name}/municipals.parquet"
+
+    # Convert DataFrame to parquet in memory
+    parquet_buffer = BytesIO()
+    df.to_parquet(parquet_buffer, engine="fastparquet", index=False)
+    parquet_buffer.seek(0)
+
+    # Upload to S3
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key=s3_key,
+        Body=parquet_buffer.getvalue(),
+        ContentType="application/octet-stream",
+        Metadata={
+            "table_name": table_name,
+            "record_count": str(len(df)),
+            "created_at": current_time,
+        },
+    )
+
+    logger.info(f"Successfully uploaded to s3://{bucket_name}/{s3_key}")
+    return s3_key
+
+
+def upload_to_s3(
+    bucket_name: str, json_data: list, table_name: str, downloaded_date: str
+) -> str:
+    """
+    Process and upload extracted data to S3 landing bucket
 
     Args:
         bucket_name: S3 bucket name
@@ -129,44 +184,32 @@ def upload_to_s3(bucket_name: str, json_data: list, table_name: str, downloaded_
         S3 key of the uploaded file
     """
     try:
+        # Process the JSON data into a clean DataFrame
+        df = process_municipal_data(json_data)
+
+        # Upload to S3 with all metadata included
+        s3_key = upload_dataframe_to_s3(bucket_name, df, table_name)
+
+        # Add additional metadata to the uploaded object
         s3_client = get_s3_client()
 
-        # Create DataFrame from the flattened JSON data
-        df = pd.DataFrame(json_data)
+        # Get the existing object to preserve its body
+        response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+        body = response["Body"].read()
 
-        # Filter columns if they exist (made optional to handle different data structures)
-        available_columns = ['codi', 'nom', 'codi_comarca', 'nom_comarca']
-        existing_columns = [col for col in available_columns if col in df.columns]
-        if existing_columns:
-            df = df[existing_columns]
-
-        current_time = datetime.utcnow().isoformat()
-        df['created_at'] = current_time
-
-        # Create S3 key with timestamp for uniqueness
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        s3_key = f"{table_name}/{timestamp}.parquet"
-
-        # Convert DataFrame to parquet in memory
-        parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, engine='fastparquet', index=False)
-        parquet_buffer.seek(0)
-
-        # Upload to S3
+        # Update the object with additional metadata
         s3_client.put_object(
             Bucket=bucket_name,
             Key=s3_key,
-            Body=parquet_buffer.getvalue(),
-            ContentType='application/octet-stream',
+            Body=body,
+            ContentType="application/octet-stream",
             Metadata={
-                'table_name': table_name,
-                'record_count': str(len(df)),
-                'created_at': current_time,
-                'original_columns': json.dumps(list(json_data[0].keys()) if json_data else [])
-            }
+                "table_name": table_name,
+                "record_count": str(len(df)),
+                "created_at": datetime.now(UTC).isoformat(),
+            },
         )
 
-        logger.info(f"Successfully uploaded to s3://{bucket_name}/{s3_key}")
         return s3_key
 
     except Exception as e:
@@ -174,7 +217,44 @@ def upload_to_s3(bucket_name: str, json_data: list, table_name: str, downloaded_
         raise
 
 
-def create_response(success: bool, message: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
+def process_municipal_data(json_data: list) -> pd.DataFrame:
+    """
+    Process municipal JSON data into a clean DataFrame with proper column names
+
+    Args:
+        json_data: List of JSON records from the API
+
+    Returns:
+        Processed DataFrame with standardized column names
+    """
+    # Create DataFrame from the JSON data
+    df = pd.DataFrame(json_data)
+
+    # Filter columns if they exist (made optional to handle different data structures)
+    available_columns = ["codi", "nom", "codi_comarca", "nom_comarca"]
+    existing_columns = [col for col in available_columns if col in df.columns]
+    if existing_columns:
+        df = df[existing_columns]
+
+    # Rename columns to match the target schema
+    column_mapping = {
+        "codi": "municipal_id",
+        "nom": "municipal_name",
+        "codi_comarca": "comarca_id",
+        "nom_comarca": "comarca_name",
+    }
+
+    # Only rename columns that exist
+    existing_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
+    if existing_mapping:
+        df = df.rename(columns=existing_mapping)
+
+    return df
+
+
+def create_response(
+    success: bool, message: str, data: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
     """
     Create standardized Lambda response
 
@@ -187,14 +267,14 @@ def create_response(success: bool, message: str, data: Dict[str, Any] = None) ->
         Formatted response dictionary
     """
     response = {
-        'statusCode': 200 if success else 500,
-        'success': success,
-        'message': message,
-        'timestamp': datetime.utcnow().isoformat(),
-        'extractor': 'social-services-api-extractor'
+        "statusCode": 200 if success else 500,
+        "success": success,
+        "message": message,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "extractor": "social-services-api-extractor",
     }
 
     if data:
-        response['data'] = data
+        response["data"] = data
 
     return response

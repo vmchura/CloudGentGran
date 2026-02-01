@@ -8,6 +8,16 @@ catalunya_data:
       schema: marts
       extensions:
         - parquet
+        - httpfs
+      secrets:
+        - type: s3
+          region: eu-west-1
+          key_id: test
+          secret: test
+          use_ssl: false
+          endpoint: "localstack:4566"
+          url_style: path
+      threads: 2
 
     dev:
       type: athena

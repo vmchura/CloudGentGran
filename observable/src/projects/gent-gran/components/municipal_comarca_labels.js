@@ -1,17 +1,31 @@
-export function build_labels(municipal) {
-    const municipal_name_label = Object.fromEntries(
-        municipal.
-            select("codi", "nom").
-            dedupe("codi", "nom").
-            objects().
-            map(d => [d.codi, d.nom])
+export async function build_labels(db) {
+
+  const municipal_tbl = await db.query(`
+    SELECT DISTINCT
+      municipal_id,
+      municipal_name
+    FROM social_services.municipal
+  `);
+
+  const municipal_name_label =
+    Object.fromEntries(
+      municipal_tbl.toArray()
+        .map(d => [d.municipal_id, d.municipal_name])
     );
-    const comarca_name_label = Object.fromEntries(
-        municipal.
-            select("codi_comarca", "nom_comarca").
-            dedupe("codi_comarca", "nom_comarca").
-            objects().
-            map(d => [d.codi_comarca, d.nom_comarca])
+
+  const comarca_tbl = await db.query(`
+    SELECT DISTINCT
+      comarca_id,
+      comarca_name
+    FROM social_services.municipal
+  `);
+
+  const comarca_name_label =
+    Object.fromEntries(
+      comarca_tbl.toArray()
+        .map(d => [d.comarca_id, d.comarca_name])
     );
-    return { municipal_name_label, comarca_name_label };
+
+  return { municipal_name_label, comarca_name_label };
 }
+

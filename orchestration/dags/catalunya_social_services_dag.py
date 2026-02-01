@@ -418,6 +418,24 @@ social_service_mart_model = DbtAthenaOperator(
     dag=dag
 )
 
+municipal_coverage_task = DbtAthenaOperator(
+    task_id='municipal_coverage',
+    aws_conn_id='aws_cross_account_role',
+    dbt_command='run',
+    dbt_target=ENVIRONMENT,
+    select_models='municipal_coverage',
+    dag=dag
+)
+
+comarca_coverage_task = DbtAthenaOperator(
+    task_id='comarca_coverage',
+    aws_conn_id='aws_cross_account_role',
+    dbt_command='run',
+    dbt_target=ENVIRONMENT,
+    select_models='comarca_coverage',
+    dag=dag
+)
+
 # =============================================================================
 # TASK DEPENDENCIES
 # =============================================================================
@@ -431,4 +449,6 @@ social_service_mart_model = DbtAthenaOperator(
  invoke_transformer >>
  parse_transformation_response_task >>
  prepare_mart_payload_task >>
- social_service_mart_model)
+ social_service_mart_model >>
+ municipal_coverage_task >>
+ comarca_coverage_task)

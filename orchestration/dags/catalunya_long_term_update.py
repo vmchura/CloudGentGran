@@ -8,6 +8,7 @@ from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
+from operators.dbt_athena_operator import DbtAthenaOperator
 
 logger = logging.getLogger(__name__)
 
@@ -140,4 +141,13 @@ validate_mart = PythonOperator(
     dag=dag
 )
 
-population_municipal_greater_65_initializer >> prepare_transformer_payload >> population_municipal_greater_65_transformer >> prepare_mart_payload >> population_municipal_greater_65_mart >> validate_mart
+comarca_population_mart = DbtAthenaOperator(
+    task_id='comarca_population',
+    aws_conn_id='aws_cross_account_role',
+    dbt_command='run',
+    dbt_target=ENVIRONMENT,
+    select_models='comarca_population',
+    dag=dag
+)
+
+population_municipal_greater_65_initializer >> prepare_transformer_payload >> population_municipal_greater_65_transformer >> prepare_mart_payload >> population_municipal_greater_65_mart >> validate_mart >> comarca_population_mart

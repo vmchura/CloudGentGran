@@ -48,7 +48,7 @@ check_localstack() {
         echo -e "${YELLOW}⚠️ LocalStack is not running${NC}"
         echo "Start LocalStack with: cd localstack && docker-compose up -d"
         echo "Or continue anyway (some features may not work)"
-        return 1
+        return 0
     fi
 }
 

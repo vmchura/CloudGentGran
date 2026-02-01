@@ -1,115 +1,205 @@
-import * as aq from "npm:arquero";
+export async function calculateIndicators(db) {
+  /* --------------------------------------------------
+   * Years
+   * -------------------------------------------------- */
+  const all_years_tbl = await db.query(`
+    SELECT DISTINCT year
+    FROM social_services.comarca_population
+    ORDER BY year
+  `);
+  const all_years = all_years_tbl.toArray().map(d => d.year);
 
-export function calculateIndicators(population, comarca_population, social_services_empty_last_year, comarca_coverage, municipal_coverage) {
-  const all_years = comarca_population.dedupe('year').array('year');
-  const census_latest_year = Math.max(...all_years);
-  const all_coverage_years = comarca_coverage.dedupe('year').array('year');
-  const coverage_latest_year = Math.max(...all_coverage_years);
+  const { max_year: census_latest_year } =
+    await db.queryRow(`
+      SELECT MAX(year) AS max_year
+      FROM social_services.comarca_population
+    `);
 
-  const population_latest_year = comarca_population
-    .params({ latest_year: census_latest_year })
-    .filter((d, $) => d.year == $.latest_year);
+  const { max_year: coverage_latest_year } =
+    await db.queryRow(`
+      SELECT MAX(year) AS max_year
+      FROM social_services.comarca_coverage
+    `);
 
-  const total_population_latest_year = population_latest_year
-    .rollup({ total: d => aq.op.sum(d.population) })
-    .get('total', 0);
+  /* --------------------------------------------------
+   * Latest year aggregates (Catalunya)
+   * -------------------------------------------------- */
+  const {
+    total_population_latest_year,
+    gent_gran_population_latest_year
+  } = await db.queryRow(`
+    SELECT
+      SUM(population) AS total_population_latest_year,
+      SUM(population_age_65_and_over) AS gent_gran_population_latest_year
+    FROM social_services.comarca_population
+    WHERE year = ${census_latest_year}
+  `);
 
-  const gent_gran_population_latest_year = population_latest_year
-    .rollup({ total: d => aq.op.sum(d.population_ge65) })
-    .get('total', 0);
+  const latest_indicator_average_catalunya =
+    Math.round(
+      gent_gran_population_latest_year * 1000 / total_population_latest_year
+    ) / 10;
 
-  const latest_indicator_average_catalunya = Math.round(gent_gran_population_latest_year * 1000 / total_population_latest_year) / 10.0;
-  const latest_indicator_average_catalunya_integer = Math.round(latest_indicator_average_catalunya);
-  const range_colours_indicator = [...Array(8).keys()].map(i => latest_indicator_average_catalunya_integer - 7 + i * 2);
+  const latest_indicator_average_catalunya_integer =
+    Math.round(latest_indicator_average_catalunya);
 
-  const reference_year = all_years.reduce((closest, year) =>
-    Math.abs(year - 2000) < Math.abs(closest - 2000) ? year : closest
-  );
+  const range_colours_indicator =
+    [...Array(8).keys()].map(i =>
+      latest_indicator_average_catalunya_integer - 7 + i * 2
+    );
 
-  const population_reference_year = comarca_population
-    .params({ reference_year })
-    .filter((d, $) => d.year == $.reference_year);
+  /* --------------------------------------------------
+   * Reference year (closest to 2000)
+   * -------------------------------------------------- */
+  const reference_year =
+    all_years.reduce((closest, year) =>
+      Math.abs(year - 2000) < Math.abs(closest - 2000) ? year : closest
+    );
 
-  const total_population_reference_year = population_reference_year
-    .rollup({ total: d => aq.op.sum(d.population) })
-    .get('total', 0);
+  const {
+    total_population_reference_year,
+    gent_gran_population_reference_year
+  } = await db.queryRow(`
+    SELECT
+      SUM(population) AS total_population_reference_year,
+      SUM(population_age_65_and_over) AS gent_gran_population_reference_year
+    FROM social_services.comarca_population
+    WHERE year = ${reference_year}
+  `);
 
-  const gent_gran_population_reference_year = population_reference_year
-    .rollup({ total: d => aq.op.sum(d.population_ge65) })
-    .get('total', 0);
+  const reference_year_indicator_average_catalunya =
+    Math.round(
+      gent_gran_population_reference_year * 1000 / total_population_reference_year
+    ) / 10;
 
-  const reference_year_indicator_average_catalunya = Math.round(gent_gran_population_reference_year * 1000 / total_population_reference_year) / 10.0;
+  const sign_difference_reference =
+    latest_indicator_average_catalunya_integer >
+    reference_year_indicator_average_catalunya ? "+" : "";
 
-  const sign_difference_reference = (latest_indicator_average_catalunya_integer > reference_year_indicator_average_catalunya) ? "+" : "";
+  /* --------------------------------------------------
+   * Social services (residences)
+   * -------------------------------------------------- */
+  const { number_places_residence } =
+    await db.queryRow(`
+      SELECT SUM(total_capacit) AS number_places_residence
+      FROM social_services.social_services_empty_last_year
+      WHERE service_type_id = 'RES-003'
+    `);
 
-  const number_places_residence = social_services_empty_last_year.filter(row => row.service_type_id == 'RES-003')
-    .rollup({ total: d => aq.op.sum(d.total_capacit) })
-    .get('total', 0);
+  const catalunya_ratio_cobertura =
+    Math.round(
+      1000 * number_places_residence / gent_gran_population_latest_year
+    ) / 10;
 
-  const catalunya_ratio_cobertura = Math.round(1000 * number_places_residence / gent_gran_population_latest_year) / 10.0;
-  const deficit_camas_residencia = Math.round(0.0411 * gent_gran_population_latest_year - number_places_residence);
-  const deficit_superavit = deficit_camas_residencia > 0 ? "Dèficit" : "Superàvit";
+  const deficit_camas_residencia =
+    Math.round(0.0411 * gent_gran_population_latest_year - number_places_residence);
 
-  const ratio_attention_latest_year = Object.fromEntries(
-    comarca_coverage.params({ latest_year: census_latest_year })
-      .filter((d, $) => d.year === $.latest_year)
-      .objects()
-      .map(d => [d.comarca_id, { ...d, coverage_ratio: d.coverage_ratio,
-        deficit_411: Math.round(0.0411*d.population_ge65 - d.total_capacit) }])
-  );
-  const ratio_attention_municipal_latest_year = Object.fromEntries(
-    municipal_coverage.params({ latest_year: census_latest_year })
-      .filter((d, $) => d.year === $.latest_year)
-      .objects()
-      .map(d => [d.municipal_id, { ...d, coverage_ratio: d.coverage_ratio }])
-  );
+  const deficit_superavit =
+    deficit_camas_residencia > 0 ? "Dèficit" : "Superàvit";
 
-  const comarques_latest_population = Object.fromEntries(
-    comarca_population.params({ latest_year: census_latest_year })
-      .filter((d, $) => d.year === $.latest_year)
-      .select("comarca_id", "population_ge65", "population")
-      .objects()
-      .map(d => [
-        d.comarca_id,
-        {
-          ...d,
-          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
-        }
-      ])
-  );
+  /* --------------------------------------------------
+   * Coverage by comarca (latest year)
+   * -------------------------------------------------- */
+  const ratio_attention_latest_year_tbl =
+    await db.query(`
+      SELECT
+        comarca_id,
+        *,
+        ROUND(0.0411 * population_age_65_and_over - total_capacit, 1) AS deficit_411
+      FROM social_services.comarca_coverage
+      WHERE year = ${census_latest_year}
+    `);
 
-  const municipal_latest_population = Object.fromEntries(
-    population.params({ latest_year: census_latest_year })
-      .filter((d, $) => d.year === $.latest_year)
-      .select("municipal_code", "population_ge65", "population")
-      .objects()
-      .map(d => [
-        d.municipal_code,
-        {
-          ...d,
-          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0,
-        }
-      ])
-  );
+  const ratio_attention_latest_year =
+    Object.fromEntries(
+      ratio_attention_latest_year_tbl.toArray()
+        .map(d => [d.comarca_id, d])
+    );
 
-  const comarques_reference_population = Object.fromEntries(
-    comarca_population.params({ reference_year: reference_year })
-      .filter((d, $) => d.year === $.reference_year)
-      .select("comarca_id", "population_ge65", "population")
-      .objects()
-      .map(d => [
-        d.comarca_id,
-        {
-          ...d,
-          elderly_indicator: Math.round((d.population_ge65 * 1000.0) / d.population) / 10.0
-        }
-      ])
-  );
+  /* --------------------------------------------------
+   * Coverage by municipal (latest year)
+   * -------------------------------------------------- */
+  const ratio_attention_municipal_latest_year_tbl =
+    await db.query(`
+      SELECT *
+      FROM social_services.municipal_coverage
+      WHERE year = ${census_latest_year}
+    `);
 
+  const ratio_attention_municipal_latest_year =
+    Object.fromEntries(
+      ratio_attention_municipal_latest_year_tbl.toArray()
+        .map(d => [d.municipal_id, d])
+    );
+
+  /* --------------------------------------------------
+   * Population by comarca (latest & reference)
+   * -------------------------------------------------- */
+  const comarques_latest_population_tbl =
+    await db.query(`
+      SELECT
+        comarca_id,
+        population,
+        population_age_65_and_over,
+        ROUND(population_age_65_and_over * 100.0 / population, 1)
+          AS elderly_indicator
+      FROM social_services.comarca_population
+      WHERE year = ${census_latest_year}
+    `);
+
+  const comarques_latest_population =
+    Object.fromEntries(
+      comarques_latest_population_tbl.toArray()
+        .map(d => [d.comarca_id, d])
+    );
+
+  const comarques_reference_population_tbl =
+    await db.query(`
+      SELECT
+        comarca_id,
+        population,
+        population_age_65_and_over,
+        ROUND(population_age_65_and_over * 100.0 / population, 1)
+          AS elderly_indicator
+      FROM social_services.comarca_population
+      WHERE year = ${reference_year}
+    `);
+
+  const comarques_reference_population =
+    Object.fromEntries(
+      comarques_reference_population_tbl.toArray()
+        .map(d => [d.comarca_id, d])
+    );
+
+  /* --------------------------------------------------
+   * Population by municipal (latest)
+   * -------------------------------------------------- */
+  const municipal_latest_population_tbl =
+    await db.query(`
+      SELECT
+        municipal_id,
+        population,
+        population_age_65_and_over,
+        ROUND(population_age_65_and_over * 100.0 / population, 1)
+          AS elderly_indicator
+      FROM social_services.population
+      WHERE year = ${census_latest_year}
+    `);
+
+  const municipal_latest_population =
+    Object.fromEntries(
+      municipal_latest_population_tbl.toArray()
+        .map(d => [d.municipal_id, d])
+    );
+
+  /* --------------------------------------------------
+   * Return
+   * -------------------------------------------------- */
   return {
     all_years,
     census_latest_year,
     reference_year,
+    coverage_latest_year,
     latest_indicator_average_catalunya,
     latest_indicator_average_catalunya_integer,
     reference_year_indicator_average_catalunya,
@@ -124,10 +214,10 @@ export function calculateIndicators(population, comarca_population, social_servi
     deficit_camas_residencia,
     deficit_superavit,
     ratio_attention_latest_year,
+    ratio_attention_municipal_latest_year,
     comarques_latest_population,
     comarques_reference_population,
-    ratio_attention_municipal_latest_year,
-    municipal_latest_population,
-    coverage_latest_year
+    municipal_latest_population
   };
 }
+

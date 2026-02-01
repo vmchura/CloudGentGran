@@ -17,37 +17,74 @@ export const map_inciative_color = new Map([
   ["PUB-001", "#3b5fc0"]
 ]);
 
-export function plot_trend_population_groups_by_comarca(width, locale_value, comarca_population, nom_comarca, min_year_serveis, max_year_serveis, single_comarca_population) {
+const createTimeSeriesXAxis = (min_year_serveis, max_year_serveis) => ({
+  label: null,
+  grid: true,
+  tickFormat: d => d.toString(),
+  domain: [min_year_serveis, max_year_serveis],
+  interval: 1
+});
+
+const createBaseChartConfig = (width) => ({
+  marginLeft: 50,
+  width: width
+});
+
+const createLinearYAxis = (label, locale_value) => ({
+  type: "linear",
+  grid: true,
+  label: t(locale_value, label)
+});
+
+const createPopulationConfig = (showAbsolute, locale_value) => {
+  const field = showAbsolute ? "population_age_65_and_over" : "elderly_indicator";
+  const color = showAbsolute ? "#ffd754" : "#3b5fc0";
+  const labelKey = showAbsolute ? "POPULATION_65_PLUS" : "POPULATION_65_PLUS_PERCENTAGE";
+  
+  return {
+    field,
+    color,
+    label: t(locale_value, labelKey),
+    tickFormat: d => d === field ? t(locale_value, labelKey) : t(locale_value, labelKey)
+  };
+};
+
+export async function plot_trend_population_groups_by_comarca(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, single_comarca_population) {
+  const comarcaPopulationPlot = await db.sql`
+  SELECT 
+    year,
+    population_age_65_and_over,
+    elderly_indicator
+  FROM social_services.comarca_population
+  WHERE comarca_id = ${comarca_name.comarca_id}
+    AND year >= ${min_year_serveis}
+  ORDER BY year
+`;
+
+  const popConfig = createPopulationConfig(single_comarca_population, locale_value);
+
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
+    ...createBaseChartConfig(width),
     y: {
       grid: true,
-      label: single_comarca_population ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE"),
+      label: popConfig.label,
     },
     color: {
-      domain: single_comarca_population ? ["population_ge65"] : ["elderly_indicator"],
-      range: single_comarca_population ? ["#ffd754"] : ["#3b5fc0"],
+      domain: [popConfig.field],
+      range: [popConfig.color],
       legend: false,
       columns: 1,
       rows: 2,
       label: null,
-      tickFormat: d => d === "population_ge65" ? t(locale_value, "POPULATION_65_PLUS") : t(locale_value, "POPULATION_65_PLUS_PERCENTAGE")
+      tickFormat: popConfig.tickFormat
     },
-    x: {
-      grid: true,
-      tickFormat: d => d.toString(),
-      interval: 1,
-      label: null,
-      domain: [min_year_serveis, max_year_serveis]
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
-      Plot.lineY(comarca_population.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
-        .filter((row, $) => ((row.comarca_id == $.comarca_id) && (row.year >= $.min_year_serveis))),
+      Plot.lineY(comarcaPopulationPlot,
         {
           x: "year",
-          y: (single_comarca_population ? "population_ge65" : "elderly_indicator"),
-          stroke: single_comarca_population ? "#ffd754" : "#3b5fc0",
+          y: popConfig.field,
+          stroke: popConfig.color,
           strokeWidth: 4
         }),
       Plot.ruleY([0])
@@ -55,10 +92,20 @@ export function plot_trend_population_groups_by_comarca(width, locale_value, com
   });
 }
 
-export function plot_comarca_by_serveis(width, locale_value, social_services_empty_last_year, nom_comarca, min_year_serveis, max_year_serveis, all_services) {
+export async function plot_comarca_by_serveis(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis, all_services) {
+  const servicesData = await db.sql`
+    SELECT 
+      year,
+      service_type_id,
+      total_capacit
+    FROM social_services.social_services_empty_last_year
+    WHERE comarca_id = ${comarca_name.comarca_id}
+      AND year >= ${min_year_serveis}
+    ORDER BY year, service_type_id
+  `;
+
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
+    ...createBaseChartConfig(width),
     y: {
       type: "linear",
       grid: true,
@@ -71,16 +118,9 @@ export function plot_comarca_by_serveis(width, locale_value, social_services_emp
       columns: 1,
       label: "Age Groups",
     },
-    x: {
-      label: null,
-      grid: true,
-      tickFormat: d => d.toString(),
-      domain: [min_year_serveis, max_year_serveis],
-      interval: 1
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
-      Plot.lineY(social_services_empty_last_year.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
-        .filter((row, $) => (row.comarca_id === $.comarca_id)),
+      Plot.lineY(servicesData,
         Plot.mapY(
           "cumsum",
           Plot.groupX(
@@ -92,28 +132,27 @@ export function plot_comarca_by_serveis(width, locale_value, social_services_emp
   });
 }
 
-export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage, nom_comarca, min_year_serveis, max_year_serveis) {
+export async function plot_comarca_by_cobertura(width, locale_value, db, comarca_name, min_year_serveis, max_year_serveis) {
+  const coverageData = await db.sql`
+    SELECT 
+      year,
+      coverage_ratio
+    FROM social_services.comarca_coverage
+    WHERE comarca_id = ${comarca_name.comarca_id}
+      AND year >= ${min_year_serveis}
+    ORDER BY year
+  `;
+
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
-    y: {
-      type: "linear",
-      grid: true,
-      label: t(locale_value, "COVERAGE_RATE"),
-    },
+    ...createBaseChartConfig(width),
+    y: createLinearYAxis("COVERAGE_RATE", locale_value),
     color: {
       legend: false,
       columns: 1,
     },
-    x: {
-      label: null,
-      grid: true,
-      tickFormat: d => d.toString(),
-      domain: [min_year_serveis, max_year_serveis]
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
-      Plot.lineY(comarca_coverage.params({ comarca_id: nom_comarca.codi_comarca, min_year_serveis: min_year_serveis })
-        .filter((row, $) => (row.comarca_id === $.comarca_id)),
+      Plot.lineY(coverageData,
         {
           x: "year", y: "coverage_ratio", stroke: "#ff9c38", strokeWidth: 2
         })
@@ -121,15 +160,21 @@ export function plot_comarca_by_cobertura(width, locale_value, comarca_coverage,
   });
 }
 
-export function plot_services_comarca_by_iniciatives(width, locale_value, social_services_empty_last_year, nom_comarca, serveis_selected, min_year_serveis, max_year_serveis) {
+export async function plot_services_comarca_by_iniciatives(width, locale_value, db, comarca_name, serveis_selected, min_year_serveis, max_year_serveis) {
+  const initiativesData = await db.sql`
+    SELECT 
+      year,
+      service_qualification_id,
+      total_capacit
+    FROM social_services.social_services_empty_last_year
+    WHERE comarca_id = ${comarca_name.comarca_id}
+      AND service_type_id = ${serveis_selected}
+    ORDER BY service_qualification_id, year
+  `;
+
   return Plot.plot({
-    marginLeft: 50,
-    width: width,
-    y: {
-      type: "linear",
-      grid: true,
-      label: t(locale_value, "TOTAL_OFFERED_PLACES_ACCUMULATED"),
-    },
+    ...createBaseChartConfig(width),
+    y: createLinearYAxis("TOTAL_OFFERED_PLACES_ACCUMULATED", locale_value),
     color: {
       domain: [
         "PRV-001",
@@ -141,17 +186,9 @@ export function plot_services_comarca_by_iniciatives(width, locale_value, social
       rows: 3,
       label: "Age Groups",
     },
-    x: {
-      label: null,
-      grid: true,
-      tickFormat: d => d.toString(),
-      domain: [min_year_serveis, max_year_serveis],
-      interval: 1
-    },
+    x: createTimeSeriesXAxis(min_year_serveis, max_year_serveis),
     marks: [
-      Plot.areaY(social_services_empty_last_year.params({ comarca_id: nom_comarca.codi_comarca, service_type_id: serveis_selected })
-        .filter((row, $) => (row.comarca_id === $.comarca_id) && (row.service_type_id === $.service_type_id))
-        .orderby('service_qualification_id', 'year'),
+      Plot.areaY(initiativesData,
         Plot.mapY(
           "cumsum",
           Plot.groupX(
@@ -184,11 +221,11 @@ export function plot_legend_trend_population(width, locale_value, single_comarca
   });
 }
 
-export function plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, service_type) {
+export function plot_legend_trend_services(width, locale_value, serveis_residence_ratio, all_available_services, serviceTypeLabel) {
   return serveis_residence_ratio ? Plot.legend({
     width: width,
     color: {
-      domain: all_available_services.map(row => service_type._data['service_type_description'][service_type._data['service_type_id'].indexOf(row)]),
+      domain: all_available_services.map(row => serviceTypeLabel.get(row)),
       range: all_available_services.map(row => colour_by_service.get(row)),
       legend: false,
       columns: 1,
@@ -206,15 +243,21 @@ export function plot_legend_trend_services(width, locale_value, serveis_residenc
   });
 }
 
-export function plot_legend_trend_iniciative(width, locale_value, domain_iniciatives, map_inciative_color, service_qualification) {
+export function plot_legend_trend_iniciative(
+  width,
+  locale_value,
+  domain_iniciatives,
+  map_inciative_color,
+  serviceQualificationLabel
+) {
   return Plot.legend({
-    width: width,
+    width,
     color: {
-      domain: domain_iniciatives.map(row => service_qualification._data['service_qualification_description'][service_qualification._data['service_qualification_id'].indexOf(row)]),
-      range: domain_iniciatives.map(row => map_inciative_color.get(row)),
+      domain: domain_iniciatives.map(id => serviceQualificationLabel.get(id)),
+      range: domain_iniciatives.map(id => map_inciative_color.get(id)),
       columns: 1,
       rows: 3,
-      label: "Age Groups",
+      label: "Age Groups"
     }
   });
 }

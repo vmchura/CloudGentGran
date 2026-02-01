@@ -1,18 +1,84 @@
 version: 2
 
 sources:
+ 
+  - name: catalog
+    description: Catalunya data catalog
+    schema: "{{ 'catalunya_data_dev' if target.name in ['dev', 'local'] else 'catalunya_data_prod' }}"
+    meta:
+      external_location: "s3://{{ var('catalog_bucket') }}/"
+    tables:
+      - name: municipals
+        description: Municipal data catalog
+        external_location: "s3://{{ var('catalog_bucket') }}/municipals/"
+        file_format: parquet
+
   - name: staging
     description: Catalunya data staging layer
     schema: "{{ 'catalunya_data_dev' if target.name in ['dev', 'local'] else 'catalunya_data_prod' }}"
-    # Configure for Athena targets
     meta:
       external_location: "s3://{{ var('data_bucket') }}/staging/"
     tables:
       - name: social_services
         description: Social services data from staging parquet files
-        # Athena external table configuration
         external_location: "s3://{{ var('data_bucket') }}/staging/social_services/"
         file_format: parquet
         partitioned_by:
           - name: downloaded_date
             data_type: string
+  
+  - name: marts
+    description: Catalunya data marts layer
+    schema: "{{ 'catalunya_data_dev' if target.name in ['dev', 'local'] else 'catalunya_data_prod' }}"
+    meta:
+      external_location: "s3://{{ var('data_bucket') }}/marts/"
+    tables:
+      - name: municipal_population
+        description: Popluation by municipal and greater than 65
+        external_location: "s3://{{ var('data_bucket') }}/marts/municipal_population/"
+        file_format: parquet
+
+
+models:
+
+  - name: municipal_coverage
+    description: Coverage ratio of residential social services vs population >65 years by municipality
+    columns:
+      - name: municipal_id
+        description: Unique identifier for municipality
+      - name: year
+        description: Year of data
+      - name: total_capacit
+        description: Cumulative residential service capacity
+      - name: population_ge65
+        description: Population greater than 65 years old
+      - name: coverage_ratio
+        description: Percentage of population covered by services
+
+  - name: comarca_population
+    description: Population aggregates by comarca (region) with elderly indicator
+    columns:
+      - name: comarca_id
+        description: Region identifier (comarca)
+      - name: population_ge65
+        description: Population greater than 65 years old
+      - name: year
+        description: Year of data
+      - name: population
+        description: Total population
+      - name: elderly_indicator
+        description: Percentage of population >65 years old
+
+  - name: comarca_coverage
+    description: Coverage ratio of residential social services vs population >65 years by comarca
+    columns:
+      - name: comarca_id
+        description: Region identifier (comarca)
+      - name: year
+        description: Year of data
+      - name: total_capacit
+        description: Cumulative residential service capacity
+      - name: population_ge65
+        description: Population greater than 65 years old
+      - name: coverage_ratio
+        description: Percentage of population covered by services
