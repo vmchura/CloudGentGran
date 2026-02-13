@@ -8,7 +8,7 @@ The service type initializer creates a catalog of social service types used in t
 
 ## Functionality
 
-- Reads predefined service type data (66 service types)
+- Reads predefined service type data (59 service types)
 - Creates a Parquet file from the data
 - Uploads the file to S3 with metadata
 - Returns execution status and S3 location

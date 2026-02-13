@@ -1,52 +1,108 @@
-# Introduction
+# Population Municipal Greater 65 Mart Lambda
 
-population_municipal_greater_65_mart is a Rust project that implements an AWS Lambda function in Rust.
+This Rust Lambda function moves the processed population data from the staging layer to the marts layer for analytics consumption.
 
-## Prerequisites
+## Overview
 
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Cargo Lambda](https://www.cargo-lambda.info/guide/installation.html)
+The mart lambda performs a simple S3 copy operation to make the transformed population data available in the marts layer for dbt models and analytics.
 
-## Building
+## Functionality
 
-To build the project for production, run `cargo lambda build --release`. Remove the `--release` flag to build for development.
+The mart lambda:
+1. **Receives source prefix** indicating the staging location
+2. **Constructs target key** for the marts layer
+3. **Copies the parquet file** directly from staging to marts via S3 CopyObject
+4. **Returns success/failure status**
 
-Read more about building your lambda function in [the Cargo Lambda documentation](https://www.cargo-lambda.info/commands/build.html).
+### S3 Copy Operation
 
-## Testing
+Uses AWS S3 `CopyObject` API:
+- Source: `s3://{bucket}/{source_prefix}`
+- Target: `s3://{bucket}/{target_key}`
+- No data transformation or processing
+- Efficient: Server-side copy without downloading data
 
-You can run regular Rust unit tests with `cargo test`.
+## Environment Variables
 
-If you want to run integration tests locally, you can use the `cargo lambda watch` and `cargo lambda invoke` commands to do it.
+- `BUCKET_NAME` (required): S3 bucket name for data operations
+- `SEMANTIC_IDENTIFIER` (required): Semantic identifier (typically "municipal_population")
+- `AWS_ENDPOINT_URL` (optional): Custom S3 endpoint for LocalStack
 
-First, run `cargo lambda watch` to start a local server. When you make changes to the code, the server will automatically restart.
-
-Second, you'll need a way to pass the event data to the lambda function.
-
-You can use the existent [event payloads](https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/lambda-events/src/fixtures) in the Rust Runtime repository if your lambda function is using one of the supported event types.
-
-You can use those examples directly with the `--data-example` flag, where the value is the name of the file in the [lambda-events](https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/lambda-events/src/fixtures) repository without the `example_` prefix and the `.json` extension.
-
-```bash
-cargo lambda invoke --data-example apigw-request
-```
-
-For generic events, where you define the event data structure, you can create a JSON file with the data you want to test with. For example:
+## Input
 
 ```json
 {
-    "command": "test"
+  "source_prefix": "staging/population_municipal_greater_65/population_municipal_greater_65.parquet"
 }
 ```
 
-Then, run `cargo lambda invoke --data-file ./data.json` to invoke the function with the data in `data.json`.
+## Output
 
+Success response:
+```json
+{
+  "status": "succeeded",
+  "target_prefix": "marts/municipal_population/municipal_population.parquet"
+}
+```
 
-Read more about running the local server in [the Cargo Lambda documentation for the `watch` command](https://www.cargo-lambda.info/commands/watch.html).
-Read more about invoking the function in [the Cargo Lambda documentation for the `invoke` command](https://www.cargo-lambda.info/commands/invoke.html).
+Failure response:
+```json
+{
+  "status": "failed",
+  "target_prefix": null
+}
+```
 
-## Deploying
+## Processing Steps
 
-To deploy the project, run `cargo lambda deploy`. This will create an IAM role and a Lambda function in your AWS account.
+1. Construct source path: `s3://{bucket_name}/{source_prefix}`
+2. Construct target key: `marts/{semantic_identifier}/{semantic_identifier}.parquet`
+3. Execute S3 CopyObject API call
+4. Return status and target location
 
-Read more about deploying your lambda function in [the Cargo Lambda documentation](https://www.cargo-lambda.info/commands/deploy.html).
+## Error Handling
+
+The Lambda includes specific error handling for:
+- **Missing environment variables**: BUCKET_NAME or SEMANTIC_IDENTIFIER not set
+- **S3 copy failure**: AWS S3 API errors during copy operation
+- **Source not found**: Staging file doesn't exist
+
+## Dependencies
+
+- `aws-sdk-s3`: S3 client for copy operations
+- `anyhow`: Error handling
+
+## Build & Test
+
+```bash
+# Build for production
+cargo lambda build --release --target x86_64-unknown-linux-gnu
+
+# Run unit tests
+cargo test
+
+# Local testing (requires LocalStack)
+cargo lambda watch
+cargo lambda invoke --data-ascii '{"source_prefix":"staging/population_municipal_greater_65/population_municipal_greater_65.parquet"}' --remote -p localstack --endpoint-url http://localhost:4566 population_municipal_greater_65_mart
+```
+
+## File Naming Conventions
+
+- **Source Parquet**: `{semantic_identifier}.parquet` in staging
+- **Target Parquet**: `{semantic_identifier}.parquet` in marts
+- **S3 keys**:
+  - Source: `staging/{semantic_identifier}/{semantic_identifier}.parquet`
+  - Target: `marts/{semantic_identifier}/{semantic_identifier}.parquet`
+
+## Usage in Pipeline
+
+This lambda is invoked by Airflow as the final step in the population data pipeline:
+
+```
+Extractor → Transformer → Mart → dbt models
+```
+
+The output parquet file is used by dbt models in `dbt/mart/models/marts/` to create:
+- `comarca_population.sql`: Aggregated population by comarca
+- `municipal_coverage.sql`: Coverage metrics by municipality
