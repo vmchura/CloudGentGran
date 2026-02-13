@@ -162,7 +162,7 @@ export class CatalogConstruct extends Construct {
     const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
     // Use bundling for real deployments
     console.log('📦 Using Python bundling for deployment');
-    return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`, {
+    return lambda.Code.fromAsset(`../lambda`, {
       bundling: {
         local: {
 
@@ -170,7 +170,9 @@ export class CatalogConstruct extends Construct {
             if (isAct) {
               try {
                 execSync(`pip install pandas fastparquet -t ${outputDir}`);
-                execSync(`cp -au . ${outputDir}`);
+                execSync(`cp -au catalog/${extractor_directory}/* ${outputDir}/`);
+                execSync(`cp -au catalog/${extractor_directory}/.* ${outputDir}/`);
+                execSync(`cp -au common ${outputDir}/`);
                 return true;
               } catch {
                 return false;
@@ -185,7 +187,9 @@ export class CatalogConstruct extends Construct {
         command: [
           'bash', '-c', [
             'pip install pandas fastparquet -t /asset-output',
-            'cp -au . /asset-output'
+            'cp -au catalog/' + extractor_directory + '/* /asset-output/',
+            'cp -au catalog/' + extractor_directory + '/.* /asset-output/ || true',
+            'cp -au common /asset-output/'
           ].join(' && ')
         ],
       },
