@@ -7,6 +7,7 @@ import os
 from service_type_initializer import (
     lambda_handler,
     create_parquet_file,
+    DataProcessingError,
 )
 
 
@@ -30,10 +31,12 @@ class TestServiceTypeInitializer(unittest.TestCase):
         result = lambda_handler(event, None)
 
         self.assertEqual(result["statusCode"], 200)
-        body = json.loads(result["body"])
-        self.assertEqual(body["table_name"], "service_type")
-        self.assertIn("service_type/service_type.parquet", body["s3_key"])
-        self.assertEqual(body["record_count"], 66)  # Number of service types defined
+        self.assertTrue(result["success"])
+        self.assertIn("data", result)
+        data = result["data"]
+        self.assertEqual(data["table_name"], "service_type")
+        self.assertIn("service_type/service_type.parquet", data["s3_key"])
+        self.assertEqual(data["record_count"], 66)  # Number of service types defined
 
     @patch.dict(
         os.environ,
@@ -46,10 +49,11 @@ class TestServiceTypeInitializer(unittest.TestCase):
         event = {}
         result = lambda_handler(event, None)
 
-        self.assertEqual(result["statusCode"], 400)
-        body = json.loads(result["body"])
-        self.assertIn("error", body)
-        self.assertEqual(body["error"], "table_name is required")
+        self.assertEqual(result["statusCode"], 422)
+        self.assertFalse(result["success"])
+        self.assertIn("data", result)
+        self.assertEqual(result["message"], "table_name is required")
+        self.assertEqual(result["data"]["error_type"], "DataProcessingError")
 
     @patch.dict(
         os.environ,
@@ -76,9 +80,11 @@ class TestServiceTypeInitializer(unittest.TestCase):
         result = create_parquet_file(mock_s3, "test-bucket", "test_table", test_data)
 
         self.assertEqual(result["statusCode"], 200)
-        body = json.loads(result["body"])
-        self.assertEqual(body["table_name"], "test_table")
-        self.assertEqual(body["record_count"], 2)
+        self.assertTrue(result["success"])
+        self.assertIn("data", result)
+        data = result["data"]
+        self.assertEqual(data["table_name"], "test_table")
+        self.assertEqual(data["record_count"], 2)
         mock_s3.put_object.assert_called_once()
 
     @patch.dict(
@@ -91,7 +97,7 @@ class TestServiceTypeInitializer(unittest.TestCase):
         """Test creating parquet file with empty data"""
         mock_s3 = MagicMock()
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(DataProcessingError) as context:
             create_parquet_file(mock_s3, "test-bucket", "test_table", [])
 
         self.assertIn("No data provided", str(context.exception))
