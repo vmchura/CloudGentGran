@@ -4,7 +4,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { EnvironmentConfig, ConfigHelper } from './config';
-import { execSync } from 'child_process';
 
 export interface CatalogConstructProps {
   environmentName: string;
@@ -159,30 +158,16 @@ export class CatalogConstruct extends Construct {
    * Gets the appropriate Python Lambda code, skipping bundling for tests
    */
   private getPythonLambdaCode(extractor_directory: string): lambda.Code {
-    const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
-    // Use bundling for real deployments
+    const isTest = (process.env.CDK_LOCAL_BUILD_AND_TEST ?? 'false') === 'true';
+
+    if (isTest) {
+      console.log('🧪 Skipping Python bundling for tests');
+      return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`);
+    }
+
     console.log('📦 Using Python bundling for deployment');
     return lambda.Code.fromAsset(`../lambda`, {
       bundling: {
-        local: {
-
-          tryBundle(outputDir: string) {
-            if (isAct) {
-              try {
-                execSync(`pip install pandas fastparquet -t ${outputDir}`);
-                execSync(`cp -au catalog/${extractor_directory}/* ${outputDir}/`);
-                execSync(`cp -au catalog/${extractor_directory}/.* ${outputDir}/`);
-                execSync(`cp -au common ${outputDir}/`);
-                return true;
-              } catch {
-                return false;
-              }
-            } else {
-              return false;
-            }
-          }
-
-        },
         image: lambda.Runtime.PYTHON_3_13.bundlingImage,
         command: [
           'bash', '-c', [

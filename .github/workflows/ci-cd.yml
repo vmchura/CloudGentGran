@@ -248,6 +248,8 @@ jobs:
         run: |
           echo "🧪 Synthesizing templates for LocalStack..."
           npx cdk synth --all --require-approval never
+        env:
+          CDK_LOCAL_BUILD_AND_TEST: true
 
       - name: CDK Diff (Syntax Check) - AWS
         if: ${{ !env.ACT }}
@@ -335,6 +337,8 @@ jobs:
         run: |
           echo "🐳 Bootstrapping LocalStack..."
           cdklocal bootstrap --require-approval never || echo "LocalStack bootstrap completed"
+        env:
+          CDK_LOCAL_BUILD_AND_TEST: true
 
       - name: CDK Bootstrap (AWS)
         if: ${{ !env.ACT }}
@@ -356,6 +360,8 @@ jobs:
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-dev.json || echo "LocalStack deployment completed (may show warnings)"
+        env:
+          CDK_LOCAL_BUILD_AND_TEST: true
 
       - name: CDK Deploy Development (AWS)
         if: ${{ !env.ACT }}
