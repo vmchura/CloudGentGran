@@ -146,7 +146,8 @@ create_event_files() {
   "repository": {
     "full_name": "user/repo",
     "name": "repo",
-    "owner": { "name": "user" }
+    "owner": { "name": "user" },
+    "default_branch": "develop"
   },
   "pusher": { "name": "localtester" },
   "head_commit": {
@@ -171,7 +172,8 @@ EOF
   "repository": {
     "full_name": "user/repo",
     "name": "repo",
-    "owner": { "name": "user" }
+    "owner": { "name": "user" },
+    "default_branch": "develop"
   },
   "pusher": { "name": "localtester" },
   "head_commit": {
@@ -200,7 +202,8 @@ EOF
   "repository": {
     "full_name": "user/repo",
     "name": "repo",
-    "owner": { "name": "user" }
+    "owner": { "name": "user" },
+    "default_branch": "develop"
   },
   "sender": { "login": "localtester" }
 }
@@ -216,9 +219,12 @@ EOF
 run_detect_changes() {
     log_step "Running detect-changes job..."
     
+    local event_file="${EVENTS_DIR}/push-merge.json"
+    
     act -j detect-changes \
         --artifact-server-path "$ARTIFACTS_DIR" \
         --container-architecture linux/amd64 \
+        -e "$event_file" \
         --rm \
         "${EXTRA_ARGS[@]}"
     
@@ -228,9 +234,12 @@ run_detect_changes() {
 run_build_rust() {
     log_step "Running build-rust-lambda job..."
     
+    local event_file="${EVENTS_DIR}/push-merge.json"
+    
     act -j build-rust-lambda \
         --artifact-server-path "$ARTIFACTS_DIR" \
         --container-architecture linux/amd64 \
+        -e "$event_file" \
         --rm \
         "${EXTRA_ARGS[@]}"
     
@@ -244,9 +253,12 @@ run_build_rust() {
 run_build_and_test() {
     log_step "Running build-and-test job (requires build-rust-lambda first)..."
     
+    local event_file="${EVENTS_DIR}/push-merge.json"
+    
     act -j build-and-test \
         --artifact-server-path "$ARTIFACTS_DIR" \
         --container-architecture linux/amd64 \
+        -e "$event_file" \
         --rm \
         "${EXTRA_ARGS[@]}"
     
@@ -264,9 +276,12 @@ run_specific_job() {
     
     log_step "Running job: $job_name"
     
+    local event_file="${EVENTS_DIR}/push-merge.json"
+    
     act -j "$job_name" \
         --artifact-server-path "$ARTIFACTS_DIR" \
         --container-architecture linux/amd64 \
+        -e "$event_file" \
         --rm \
         "${EXTRA_ARGS[@]}"
     

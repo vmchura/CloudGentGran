@@ -5,13 +5,12 @@
   "repository": {
     "full_name": "user/repo",
     "name": "repo",
-    "owner": { "name": "user" },
-    "default_branch": "develop"
+    "owner": { "name": "user" }
   },
   "pusher": { "name": "localtester" },
   "head_commit": {
     "id": "1111111111111111111111111111111111111111",
-    "message": "Merge pull request #42 from feature/test-feature",
+    "message": "Add new feature",
     "timestamp": "2025-10-05T10:00:00Z",
     "author": { "name": "localtester", "email": "test@example.com" }
   }

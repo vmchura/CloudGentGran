@@ -49,6 +49,7 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ github.event.repository.default_branch || 'develop' }}
           filters: |
             infrastructure:
               - 'infrastructure/**'
