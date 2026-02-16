@@ -23,9 +23,9 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.models import Variable
+from airflow.sdk import DAG
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.sdk import Variable
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.operators.lambda_function import (
     LambdaInvokeFunctionOperator,

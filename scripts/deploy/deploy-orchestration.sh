@@ -104,37 +104,6 @@ run_on_dokku() {
     ssh -i $SSH_KEY $DOKKU_SERVER "$1"
 }
 
-# Function to create admin user (replaces entrypoint.sh functionality)
-create_admin_user() {
-    echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
-
-    # Get admin credentials from environment
-    if [ "$ENVIRONMENT" = "production" ]; then
-        ADMIN_USERNAME="${AIRFLOW_USER_NAME_PROD:-admin}"
-        ADMIN_PASSWORD="${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
-    else
-        ADMIN_USERNAME="${AIRFLOW_USER_NAME_DEV:-admin}"
-        ADMIN_PASSWORD="${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
-    fi
-
-    # Create admin user via dokku run (replaces entrypoint.sh user creation)
-    run_on_dokku "dokku run $APP_NAME bash -c '
-        if ! airflow users list | awk \"{print \\\$1}\" | grep -qx \"$ADMIN_USERNAME\"; then
-            echo \"Creating Airflow admin user: $ADMIN_USERNAME\"
-            airflow users create \
-                --username \"$ADMIN_USERNAME\" \
-                --password \"$ADMIN_PASSWORD\" \
-                --firstname \"Admin\" \
-                --lastname \"User\" \
-                --role Admin \
-                --email \"admin@example.com\"
-        else
-            echo \"Admin user $ADMIN_USERNAME already exists\"
-        fi
-    '"
-
-    echo -e "${GREEN}✅ Admin user setup completed${NC}"
-}
 
 # Step 0: Pre-flight checks
 echo -e "${YELLOW}🔍 Pre-flight checks...${NC}"
@@ -259,18 +228,8 @@ POSTGRESQL_ALCHEMY=$(run_on_dokku "dokku postgres:info $DB_NAME --dsn | sed 's/p
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 
-# Common Airflow configurations
-if [ "$ENVIRONMENT" = "production" ]; then
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_PROD:-admin}"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
-else
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_DEV:-admin}"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
-fi
-
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_EMAIL=admin@example.com"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
@@ -337,9 +296,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo -e "${GREEN}✅ Database migration completed${NC}"
-
-# Step 11: Create admin user
-create_admin_user
 
 # Step 12: Restart the app to ensure all changes take effect
 echo -e "${YELLOW}🔄 Restarting application...${NC}"

@@ -250,13 +250,8 @@ comarca_population (dbt)
 
 ### Local Development
 
-```bash
-cd orchestration
-docker-compose up -d
-```
-
-Access Airflow at: http://localhost:8080
-Default credentials: admin/admin
+Build and run the Docker image locally:
+With the script of local deployment
 
 ### Production
 
