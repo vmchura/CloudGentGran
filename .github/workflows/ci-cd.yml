@@ -38,6 +38,7 @@ jobs:
       rust-lambda: ${{ steps.filter.outputs.rust-lambda }}
       python-lambda: ${{ steps.filter.outputs.python-lambda }}
       any-cdk: ${{ steps.filter.outputs.infrastructure || steps.filter.outputs.rust-lambda || steps.filter.outputs.python-lambda }}
+      should-build: ${{ steps.build-check.outputs.should-build }}
       should-deploy-dev: ${{ steps.deploy-check.outputs.should-deploy-dev }}
       should-deploy-prod: ${{ steps.deploy-check.outputs.should-deploy-prod }}
 
@@ -93,6 +94,18 @@ jobs:
             echo "should-deploy-prod=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check build conditions
+        id: build-check
+        run: |
+          # Build only on PR merge pushes (not on direct commits or PR events)
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "✅ Will build (PR merge detected)"
+          else
+            echo "should-build=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping build (not a PR merge)"
+          fi
+
       - name: Summary
         run: |
           echo "## Change Detection Summary" >> $GITHUB_STEP_SUMMARY
@@ -101,6 +114,7 @@ jobs:
           echo "| Infrastructure | ${{ steps.filter.outputs.infrastructure || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Rust Lambda | ${{ steps.filter.outputs.rust-lambda || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Python Lambda | ${{ steps.filter.outputs.python-lambda || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ steps.build-check.outputs.should-build }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy to Dev | ${{ steps.deploy-check.outputs.should-deploy-dev }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy to Prod | ${{ steps.deploy-check.outputs.should-deploy-prod }} |" >> $GITHUB_STEP_SUMMARY
 
@@ -111,7 +125,7 @@ jobs:
     name: Build Rust Lambdas
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.any-cdk == 'true'
+    if: needs.detect-changes.outputs.should-build == 'true' && needs.detect-changes.outputs.any-cdk == 'true'
 
     steps:
       - name: Checkout code
@@ -179,7 +193,7 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     needs: [ detect-changes, build-rust-lambda ]
-    if: always() && needs.detect-changes.outputs.any-cdk == 'true' && needs.build-rust-lambda.result == 'success'
+    if: always() && needs.detect-changes.outputs.should-build == 'true' && needs.detect-changes.outputs.any-cdk == 'true' && needs.build-rust-lambda.result == 'success'
     
     steps:
       - name: Checkout code
