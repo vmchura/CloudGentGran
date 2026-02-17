@@ -248,6 +248,35 @@ comarca_population (dbt)
 
 ## Deployment
 
+### Git-Sync Architecture
+
+The container fetches dbt models, DAGs, plugins, and config from the Git repository at startup using git-sync:
+
+```
+Container Start
+      ↓
+git-sync fetches from GitHub (sparse checkout)
+      ↓
+setup-links.sh creates symlinks
+      ↓
+/opt/airflow/dbt → /git-sync/repo/dbt
+/opt/airflow/dags → /git-sync/repo/orchestration/dags
+/opt/airflow/plugins → /git-sync/repo/orchestration/plugins
+/opt/airflow/config → /git-sync/repo/orchestration/config
+      ↓
+Airflow starts with fresh content
+```
+
+**Branch Selection:**
+- Production: `main`
+- Development/Local: `develop`
+
+**Manual Re-sync:**
+To update content without redeploying:
+```bash
+dokku run <app-name> /opt/airflow/scripts/sync-repo.sh
+```
+
 ### Local Development
 
 Build and run the Docker image locally:
