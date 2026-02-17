@@ -217,9 +217,18 @@ echo ""
 echo -e "${GREEN}🎉 Deployment completed!${NC}"
 echo -e "🌍 Your Airflow is available at: ${YELLOW}http://$SUBDOMAIN.$DOKKU_DOMAIN:8080${NC}"
 echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}⚠️  POST-DEPLOYMENT STEPS (First deployment only):${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "1. Generate and set Fernet key:"
+echo -e "   ${BLUE}dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY='...')${NC}"
+echo ""
+echo -e "2. Set the AWS connection and variables (from extract_aws_credentials.sh )"
+echo -e "   ${BLUE}dokku run cloudgentgran-orchestration-dev   airflow connections add aws_cross_account_role ... ${NC}"
+echo -e "   ${BLUE}dokku config:set cloudgentgran-orchestration-dev     AWS_ACCESS_KEY_ID='...'     AWS_SECRET_ACCESS_KEY='...'     AWS_DEFAULT_REGION='...'${NC}"
+echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
 echo -e "🔄 To redeploy, run from project root:"
-echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT${NC}"
-
-# After the first deployment is very important to add the fernet key:
-# dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY=fernet_key_value
-# as well the output of the script in roles-deployment.sh, which are aws credentials
+echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT <server> <key> <domain>${NC}"

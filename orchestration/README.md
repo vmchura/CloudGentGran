@@ -261,6 +261,26 @@ Deployed to Dokku on-premise server via:
 ./scripts/deploy/deploy-orchestration.sh <environment> <dokku-server> <ssh-key> <domain>
 ```
 
+### Post-Deployment Steps (First Deployment Only)
+
+After the first deployment, you must configure the following:
+
+1. **Generate and set Fernet key** (required for Airflow to encrypt sensitive data):
+   ```bash
+   dokku config:set <app-name> AIRFLOW__CORE__FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+   ```
+
+2. **Set AWS credentials and connection** (from `extract_aws_credentials.sh` output):
+   ```bash
+    dokku run cloudgentgran-orchestration-dev   airflow connections add aws_cross_account_role ...
+    dokku config:set cloudgentgran-orchestration-dev     AWS_ACCESS_KEY_ID='...'     AWS_SECRET_ACCESS_KEY='...'     AWS_DEFAULT_REGION='...'
+    ```
+
+3. **Restart the app** after setting variables:
+   ```bash
+   dokku ps:restart <app-name>
+   ```
+
 ## Monitoring
 
 - **Airflow Web UI**: View DAG runs, task status, logs
