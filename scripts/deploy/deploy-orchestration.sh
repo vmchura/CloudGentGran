@@ -261,9 +261,10 @@ echo -e "${BLUE}This may take several minutes...${NC}"
 echo -e "${YELLOW}🔄 Pushing orchestration subdirectory to Dokku...${NC}"
 git subtree split --prefix=orchestration $DEPLOYMENT_BRANCH -b tmp-deploy
 GIT_SSH_COMMAND="ssh -i $SSH_KEY" git push $REMOTE_NAME tmp-deploy:main --force
+PUSH_EXIT_CODE=$?
 git branch -D tmp-deploy
 
-if [ $? -ne 0 ]; then
+if [ $PUSH_EXIT_CODE -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
     exit 1
 fi

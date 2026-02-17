@@ -14,6 +14,9 @@ RUN apt-get update \
 
 RUN node --version && npm --version
 
+COPY --from=registry.k8s.io/git-sync/git-sync:v4.6.0 /git-sync /git-sync
+RUN /git-sync --version
+
 USER airflow
 
 COPY requirements.txt /tmp/requirements.txt
@@ -24,7 +27,12 @@ RUN mkdir -p /opt/airflow/dags \
     && mkdir -p /opt/airflow/logs \
     && mkdir -p /opt/airflow/plugins \
     && mkdir -p /opt/airflow/config \
-    && mkdir -p /opt/airflow/dbt
+    && mkdir -p /opt/airflow/dbt \
+    && mkdir -p /opt/airflow/scripts
+
+# Copy git-sync scripts (Phase 1: additive, not used yet)
+COPY --chown=airflow:root scripts/ /opt/airflow/scripts/
+RUN chmod +x /opt/airflow/scripts/*.sh
 
 COPY --chown=airflow:root dags/ /opt/airflow/dags/
 COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
