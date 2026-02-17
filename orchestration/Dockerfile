@@ -30,7 +30,7 @@ RUN mkdir -p /opt/airflow/dags \
     && mkdir -p /opt/airflow/dbt \
     && mkdir -p /opt/airflow/scripts
 
-# Copy git-sync scripts (Phase 1: additive, not used yet)
+# Copy git-sync scripts (dbt synced at runtime via git-sync)
 COPY --chown=airflow:root scripts/ /opt/airflow/scripts/
 RUN chmod +x /opt/airflow/scripts/*.sh
 
@@ -38,11 +38,6 @@ COPY --chown=airflow:root dags/ /opt/airflow/dags/
 COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 COPY --chown=airflow:root config/ /opt/airflow/config/
 
-COPY --chown=airflow:root dbt/ /opt/airflow/dbt/
-
-RUN cp /opt/airflow/dbt/mart/profiles_template.yml /opt/airflow/dbt/profiles.yml
-
-COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 # Ensure plugins are importable
 RUN find /opt/airflow/plugins -name "*.py" -exec chmod 644 {} \;
 
