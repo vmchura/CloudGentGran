@@ -4,7 +4,7 @@ import logging
 from airflow.sdk import BaseOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.sdk import Context
-from airflow.exceptionsimport AirflowException
+from airflow.exceptions import AirflowException
 import ast
 
 logger = logging.getLogger(__name__)
