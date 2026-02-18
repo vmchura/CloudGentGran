@@ -17,4 +17,4 @@ echo "Starting Airflow"
 echo "=========================================="
 
 # Execute the original Airflow command
-exec airflow standalone "$@"
+exec "$@"
