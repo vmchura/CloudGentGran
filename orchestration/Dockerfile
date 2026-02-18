@@ -25,7 +25,9 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 # Create all necessary directories first
 RUN mkdir -p /opt/airflow/logs \
     && mkdir -p /opt/airflow/dbt \
-    && mkdir -p /opt/airflow/dbt/mart \
+    && mkdir -p /opt/airflow/dags \
+    && mkdir -p /opt/airflow/config \
+    && mkdir -p /opt/airflow/plugins \
     && mkdir -p /opt/airflow/scripts \
     && mkdir -p /opt/airflow/git-sync
 
