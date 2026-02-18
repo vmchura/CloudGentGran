@@ -24,6 +24,10 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Create all necessary directories first
 RUN mkdir -p /opt/airflow/logs \
+    && mkdir -p /opt/airflow/dbt \
+    && mkdir -p /opt/airflow/dags \
+    && mkdir -p /opt/airflow/config \
+    && mkdir -p /opt/airflow/plugins \
     && mkdir -p /opt/airflow/scripts \
     && mkdir -p /opt/airflow/git-sync
 
@@ -31,12 +35,13 @@ RUN mkdir -p /opt/airflow/logs \
 COPY --chown=airflow:root scripts/ /opt/airflow/scripts/
 RUN chmod +x /opt/airflow/scripts/*.sh
 
+ENTRYPOINT ["/opt/airflow/scripts/docker-entrypoint.sh"]
+
 ENV DBT_PROJECT_DIR=/opt/airflow/dbt/mart
 ENV DBT_PROFILES_DIR=/opt/airflow/dbt
 ENV DATA_BUCKET=catalunya-data-dev
 ENV CATALOG_BUCKET=catalunya-catalog-dev
 
-# Increased start-period to 120s to account for git-sync on startup
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:8080/api/v2/monitor/health || exit 1
 
