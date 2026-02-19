@@ -129,7 +129,8 @@ services:
   airflow:
     <<: *airflow-common
     container_name: cloudgentgran-airflow
-    command: standalone
+    entrypoint: ["/usr/bin/dumb-init", "--", "/entrypoint"]
+    command: ["airflow", "standalone"]
     ports:
       - "8080:8080"
     healthcheck:
