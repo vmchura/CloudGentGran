@@ -1,7 +1,7 @@
 version: 2
 
 sources:
- 
+  
   - name: catalog
     description: Catalunya data catalog
     schema: "{{ 'catalunya_data_dev' if target.name in ['dev', 'local'] else 'catalunya_data_prod' }}"
@@ -12,6 +12,9 @@ sources:
         description: Municipal data catalog
         external_location: "s3://{{ var('catalog_bucket') }}/municipals/"
         file_format: parquet
+        freshness:
+          warn_after: {count: 7, period: day}
+          error_after: {count: 14, period: day}
 
   - name: staging
     description: Catalunya data staging layer
@@ -26,6 +29,25 @@ sources:
         partitioned_by:
           - name: downloaded_date
             data_type: string
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: downloaded_date
+        columns:
+          - name: registre
+            description: Unique record identifier
+            tests:
+              - not_null
+              - unique
+          - name: tipologia
+            description: Service type description
+            tests:
+              - not_null
+          - name: capacitat
+            description: Service capacity
+            tests:
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
   
   - name: marts
     description: Catalunya data marts layer
@@ -34,51 +56,156 @@ sources:
       external_location: "s3://{{ var('data_bucket') }}/marts/"
     tables:
       - name: municipal_population
-        description: Popluation by municipal and greater than 65
+        description: Population by municipal and greater than 65
         external_location: "s3://{{ var('data_bucket') }}/marts/municipal_population/"
         file_format: parquet
 
 
 models:
 
+  - name: social_services_by_service_municipal
+    description: Aggregated social services data by service type and municipality
+    columns:
+      - name: service_qualification_id
+        description: Service qualification identifier (public/private)
+        tests:
+          - not_null
+      - name: service_type_id
+        description: Service type identifier
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['DAY-001', 'RES-003', 'RES-002', 'TUT-001', 'RES-001']
+      - name: comarca_id
+        description: Region identifier (comarca)
+        tests:
+          - not_null
+      - name: municipal_id
+        description: Unique identifier for municipality
+        tests:
+          - not_null
+      - name: year
+        description: Year of data
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1975
+              max_value: 2026
+      - name: month
+        description: Month of data
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 12
+      - name: total_capacit
+        description: Cumulative service capacity
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+
   - name: municipal_coverage
     description: Coverage ratio of residential social services vs population >65 years by municipality
+    tests:
+      - valid_coverage_ratio
     columns:
       - name: municipal_id
         description: Unique identifier for municipality
+        tests:
+          - not_null
       - name: year
         description: Year of data
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1975
+              max_value: 2026
       - name: total_capacit
         description: Cumulative residential service capacity
-      - name: population_ge65
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+      - name: population_age_65_and_over
         description: Population greater than 65 years old
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
       - name: coverage_ratio
         description: Percentage of population covered by services
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
 
   - name: comarca_population
     description: Population aggregates by comarca (region) with elderly indicator
     columns:
       - name: comarca_id
         description: Region identifier (comarca)
+        tests:
+          - not_null
       - name: population_ge65
         description: Population greater than 65 years old
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
       - name: year
         description: Year of data
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1975
+              max_value: 2026
       - name: population
         description: Total population
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
       - name: elderly_indicator
         description: Percentage of population >65 years old
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
 
   - name: comarca_coverage
     description: Coverage ratio of residential social services vs population >65 years by comarca
+    tests:
+      - valid_comarca_coverage_ratio
     columns:
       - name: comarca_id
         description: Region identifier (comarca)
+        tests:
+          - not_null
       - name: year
         description: Year of data
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1975
+              max_value: 2026
       - name: total_capacit
         description: Cumulative residential service capacity
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
       - name: population_ge65
         description: Population greater than 65 years old
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
       - name: coverage_ratio
         description: Percentage of population covered by services
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
