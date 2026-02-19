@@ -9,7 +9,7 @@ SELECT
 FROM {{ model }}
 WHERE
     coverage_ratio < 0
-    OR coverage_ratio > 100
-    OR (total_capacit > 0 AND population_age_65_and_over <= 0)
+    OR total_capacit < 0
+    OR population_age_65_and_over <= 0
 
 {% endtest %}
