@@ -194,6 +194,12 @@ async fn process_single_file(s3_client: &Client, bucket: &str, key: &str) -> Res
         year_series.into_column(),
     ])?;
 
+    let df = df.lazy()
+        .filter(
+            col("population_age_65_and_over").is_not_null()
+        )
+        .collect()?;
+
     Ok(df)
 }
 
