@@ -139,6 +139,7 @@ models:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
               min_value: 0
+              max_value: 100
 
   - name: comarca_population
     description: Population aggregates by comarca (region) with elderly indicator
@@ -195,7 +196,7 @@ models:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
               min_value: 1
-      - name: population_ge65
+      - name: population_age_65_and_over
         description: Population greater than 65 years old
         tests:
           - not_null
