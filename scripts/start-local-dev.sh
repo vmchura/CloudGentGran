@@ -3,7 +3,7 @@
 # Catalunya Data Pipeline - Local Development Startup Script
 # This script starts the complete local development environment with LocalStack integration
 
-set -e
+set -euo pipefail
 
 # Colors
 GREEN='\033[0;32m'
@@ -12,9 +12,24 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-FULL_BUILD=false
+LOCALSTACK_VOLUME_DIR="${LOCALSTACK_VOLUME_DIR:-./localstack/volume}"
+COMPOSE_FILE="docker-compose.local.yaml"
 
-echo -e "${BLUE}🚀 Starting Catalunya Data Pipeline - Local Development Environment${NC}"
+print_usage() {
+    cat << EOF
+Usage: $0 <command>
+
+Commands:
+    start        Start services (preserves LocalStack data, no CDK deploy)
+    full-deploy  Clean start: delete LocalStack state, deploy CDK
+    stop         Stop containers (preserves volumes and data)
+    destroy      Remove all containers and volumes (irreversible)
+
+S3FS mounts (optional):
+    docker-compose -f docker-compose.local.yaml --profile s3fs up -d
+EOF
+    exit 1
+}
 
 # Check prerequisites
 check_prerequisites() {
@@ -270,166 +285,102 @@ validate_deployment() {
     echo -e "${GREEN}✅ Validation completed${NC}"
 }
 
-# Parse --full-build flag
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --full-build)
-                FULL_BUILD=true
-                shift
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
-    REMAINING_ARGS=("$@")
+# Validate command argument
+validate_command() {
+    if [[ $# -lt 1 ]]; then
+        echo -e "${RED}Error: Missing command${NC}"
+        print_usage
+    fi
+    case "$1" in
+        start|full-deploy|stop|destroy)
+            return 0
+            ;;
+        *)
+            echo -e "${RED}Error: Invalid command '$1'${NC}"
+            print_usage
+            ;;
+    esac
 }
 
 # Main function
 main() {
-    parse_args "$@"
-    set -- "${REMAINING_ARGS[@]}"
+    validate_command "$@"
+    local command="$1"
     
-    case "${1:-start}" in
-        "start")
+    case "$command" in
+        start)
+            echo -e "${BLUE}Starting Catalunya Data Pipeline (preserving existing LocalStack data)...${NC}"
             check_prerequisites
             set_environment
             
-            if [ "$FULL_BUILD" = true ]; then
-                echo -e "${YELLOW}🏗️  Full build mode enabled - will destroy and rebuild everything${NC}"
-                cleanup
-                setup_local_structure
-            else
-                echo -e "${BLUE}🚀 Quick start mode - preserving existing data and configuration${NC}"
-                if [ -d "orchestration/dbt" ]; then
-                    echo -e "${GREEN}✅ Local development structure already exists, skipping setup${NC}"
-                else
-                    echo -e "${YELLOW}📦 Setting up local development structure (first time)...${NC}"
-                    cp -r dbt orchestration/dbt
-                fi
+            if [ ! -d "orchestration/dbt" ]; then
+                echo -e "${YELLOW}Setting up local development structure...${NC}"
+                cp -r dbt orchestration/dbt
             fi
             
-            start_services
+            docker-compose -f "$COMPOSE_FILE" up -d
+            
             monitor_startup
-            
-            if [ "$FULL_BUILD" = true ]; then
-                deploy_infrastructure
-                validate_deployment
-            else
-                echo -e "${BLUE}⏭️  Skipping CDK deployment (use --full-build to redeploy)${NC}"
-            fi
-            
             show_status
-            echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
-            echo -e "${BLUE}📖 Next steps:${NC}"
-            echo -e "  1. Open Airflow UI: http://localhost:8080"
-            echo -e "  2. Login with: admin/admin"
-            echo -e "  3. Enable the 'catalunya_social_services_localstack_pipeline' DAG"
-            echo -e "  4. Trigger a manual run to test the pipeline"
+            echo -e "${GREEN}Services started. LocalStack persistence enabled.${NC}"
             ;;
-        "start-full")
-            FULL_BUILD=true
+            
+        full-deploy)
+            echo -e "${BLUE}Full deploy: clearing LocalStack state and redeploying Catalunya Data Pipeline...${NC}"
             check_prerequisites
             set_environment
-            cleanup
-            setup_local_structure
-            start_services
-            monitor_startup
-            deploy_infrastructure
-            validate_deployment
-            show_status
-            echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
-            echo -e "${BLUE}📖 Next steps:${NC}"
-            echo -e "  1. Open Airflow UI: http://localhost:8080"
-            echo -e "  2. Login with: admin/admin"
-            echo -e "  3. Enable the 'catalunya_social_services_localstack_pipeline' DAG"
-            echo -e "  4. Trigger a manual run to test the pipeline"
-            ;;
-        "stop")
-            echo -e "${YELLOW}🛑 Stopping Catalunya Data Pipeline...${NC}"
-            docker-compose -f docker-compose.local.yaml down --remove-orphans
-            # Clean up local development dbt copy
+            
+            docker-compose -f "$COMPOSE_FILE" down --remove-orphans || true
+            
+            echo -e "${YELLOW}Removing LocalStack persisted state directory...${NC}"
+            sudo rm -rf "${LOCALSTACK_VOLUME_DIR}"
+            mkdir -p "${LOCALSTACK_VOLUME_DIR}"
+            
             if [ -d "orchestration/dbt" ]; then
-                echo -e "${BLUE}🗑️  Cleaning up local development files${NC}"
                 rm -rf orchestration/dbt
             fi
-            echo -e "${GREEN}✅ Services stopped${NC}"
-            ;;
-        "restart")
-            $0 stop
-            sleep 5
-            $0 start
-            ;;
-        "status")
-            show_status
-            ;;
-        "logs")
-            show_logs
-            ;;
-        "validate")
-            validate_deployment
-            ;;
-        "deploy-infra")
-            echo -e "${YELLOW}🏗️  Deploying infrastructure only...${NC}"
-            check_prerequisites
+            cp -r dbt orchestration/dbt
+            
+            docker-compose -f "$COMPOSE_FILE" up -d
+            
+            echo -e "${BLUE}Waiting for LocalStack health...${NC}"
+            timeout 180s bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "available"; do sleep 3; done' || {
+                echo -e "${RED}LocalStack not ready${NC}"
+                exit 1
+            }
+            sleep 30
+            
             deploy_infrastructure
+            validate_deployment
+            show_status
+            echo -e "${GREEN}Full deploy complete.${NC}"
             ;;
-        "clean")
-            echo -e "${YELLOW}🧹 Cleaning up everything...${NC}"
-            docker-compose -f docker-compose.local.yaml down --volumes --remove-orphans
-            docker system prune -af
-            # Clean CDK outputs
-            rm -f infrastructure/cdk-outputs.json
-            echo -e "${GREEN}✅ Complete cleanup finished${NC}"
+            
+        stop)
+            echo -e "${YELLOW}Stopping containers (preserving volumes)...${NC}"
+            docker-compose -f "$COMPOSE_FILE" down --remove-orphans
+            if [ -d "orchestration/dbt" ]; then
+                rm -rf orchestration/dbt
+            fi
+            echo -e "${GREEN}Services stopped. Volumes preserved.${NC}"
             ;;
-        "help"|"-h"|"--help")
-            cat << EOF
-Catalunya Data Pipeline - Local Development
-
-Usage: $0 [command] [--full-build]
-
-Commands:
-    start          Start services (preserves data, volumes, and configuration)
-    start-full     Full rebuild - destroys and recreates everything
-    stop           Stop all services
-    restart        Restart all services
-    status         Show service status and URLs
-    logs           Show recent logs for debugging
-    validate       Validate deployment and connections
-    deploy-infra   Deploy only the CDK infrastructure (requires LocalStack running)
-    clean          Complete cleanup (removes volumes and images)
-    help           Show this help
-
-Options:
-    --full-build   When used with 'start', performs a full rebuild instead of
-                   preserving existing data. Equivalent to 'start-full'.
-
-Examples:
-    $0                        # Quick start (preserves data)
-    $0 start                  # Quick start (preserves data)
-    $0 start --full-build     # Full rebuild (destroys and recreates)
-    $0 start-full             # Full rebuild (alternative syntax)
-    $0 status                 # Check status
-    $0 logs                   # Show logs for debugging
-    $0 stop                   # Stop services
-    $0 deploy-infra           # Deploy CDK infrastructure only
-
-Environment Variables:
-    AIRFLOW_FERNET_KEY    Custom Fernet key for Airflow (auto-generated if not set)
-    AIRFLOW_SECRET_KEY    Custom secret key for Airflow (auto-generated if not set)
-
-Prerequisites:
-    - Docker and Docker Compose
-    - Node.js (v14+) and npm for CDK deployment
-EOF
-            ;;
-        *)
-            echo -e "${RED}Unknown command: $1${NC}"
-            $0 help
-            exit 1
+            
+        destroy)
+            echo -e "${RED}Destroying all containers and volumes...${NC}"
+            docker-compose -f "$COMPOSE_FILE" down -v --remove-orphans
+            
+            echo -e "${YELLOW}Removing LocalStack volume directory...${NC}"
+            sudo rm -rf "${LOCALSTACK_VOLUME_DIR}"
+            
+            if [ -d "orchestration/dbt" ]; then
+                rm -rf orchestration/dbt
+            fi
+            
+            rm -f infrastructure/cdk-outputs.json 2>/dev/null || true
+            
+            echo -e "${GREEN}All infrastructure destroyed. Next start will be fresh.${NC}"
             ;;
     esac
 }
-# aws --endpoint-url=http://localhost:4566 s3 sync localstack/catalunya-data-dev s3://catalunya-data-dev/ --profile localstack
+
 main "$@"

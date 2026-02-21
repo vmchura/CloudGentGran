@@ -149,6 +149,8 @@ services:
   s3fs-mounts:
     image: efrecon/s3fs:1.78
     container_name: cloudgentgran-s3fs
+    profiles:
+      - s3fs
     privileged: true
     cap_add:
       - SYS_ADMIN
@@ -160,6 +162,7 @@ services:
       - S3_REGION=eu-west-1
       - S3_BUCKET=catalunya-data-dev
       - S3_ENDPOINT_URL=http://localstack:4566
+      - S3FS_TIMEOUT=${S3FS_TIMEOUT:-120}
     volumes:
       - ./localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:shared
       - ./localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:shared
@@ -169,57 +172,56 @@ services:
     command:
       - -c
       - |
-        echo '🔧 Starting S3FS mounts for LocalStack S3 buckets...'
+        TIMEOUT=$${S3FS_TIMEOUT}
         
-        echo '⏳ Waiting for LocalStack to be ready...'
+        echo 'Starting S3FS mounts for LocalStack S3 buckets...'
+        
+        echo 'Waiting for LocalStack to be ready...'
         until wget -q --spider http://localstack:4566/_localstack/health 2>/dev/null; do
           echo 'Waiting for LocalStack...'
           sleep 5
         done
-        echo '✅ LocalStack is ready!'
+        echo 'LocalStack is ready!'
         
-        echo '⏳ Waiting for S3 buckets to be created by CDK...'
-        until wget -q --spider http://localstack:4566/catalunya-data-dev 2>/dev/null; do
-          echo 'Waiting for catalunya-data-dev bucket to be created...'
-          sleep 60
-        done
-        echo '✅ catalunya-data-dev bucket found!'
+        wait_for_bucket() {
+          local bucket=$$1
+          local elapsed=0
+          echo "Waiting for bucket: $$bucket (timeout: $${TIMEOUT}s)"
+          until wget -q --spider http://localstack:4566/$$bucket 2>/dev/null; do
+            if [ $$elapsed -ge $$TIMEOUT ]; then
+              echo "Timeout waiting for $$bucket - skipping mount"
+              return 1
+            fi
+            echo "Waiting for $$bucket bucket..."
+            sleep 10
+            elapsed=$$((elapsed + 10))
+          done
+          echo "$$bucket bucket found!"
+          return 0
+        }
         
-        until wget -q --spider http://localstack:4566/catalunya-athena-results-dev 2>/dev/null; do
-          echo 'Waiting for catalunya-athena-results-dev bucket to be created...'
-          sleep 60
-        done
-        echo '✅ catalunya-athena-results-dev bucket found!'
+        mount_bucket() {
+          local bucket=$$1
+          local mountpoint=$$2
+          if wait_for_bucket "$$bucket"; then
+            echo "Mounting $$bucket to $$mountpoint..."
+            s3fs $$bucket $$mountpoint -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
+          fi
+        }
         
-        until wget -q --spider http://localstack:4566/catalunya-service-dev 2>/dev/null; do
-          echo 'Waiting for catalunya-service-dev bucket to be created...'
-          sleep 60
-        done
-        echo '✅ catalunya-service-dev bucket found!'
-        
-        echo '📁 Creating mount points...'
         mkdir -p /mnt/s3-data /mnt/s3-results /mnt/s3-catalog /mnt/s3-service
         
-        echo '🔧 Setting up credentials...'
+        echo 'Setting up credentials...'
         echo 'test:test' > /etc/passwd-s3fs
         chmod 600 /etc/passwd-s3fs
         
-        echo '📁 Mounting catalunya-data-dev bucket...'
-        s3fs catalunya-data-dev /mnt/s3-data -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
+        mount_bucket catalunya-data-dev /mnt/s3-data
+        mount_bucket catalunya-athena-results-dev /mnt/s3-results
+        mount_bucket catalunya-catalog-dev /mnt/s3-catalog
+        mount_bucket catalunya-service-dev /mnt/s3-service
         
-        echo '📁 Mounting catalunya-athena-results-dev bucket...'
-        s3fs catalunya-athena-results-dev /mnt/s3-results -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '📁 Mounting catalunya-catalog bucket...'
-        s3fs catalunya-catalog-dev /mnt/s3-catalog -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '📁 Mounting catalunya-service bucket...'
-        s3fs catalunya-service-dev /mnt/s3-service -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '✅ S3FS mounts started successfully!'
-        echo '📂 Main data bucket mounted at: /mnt/s3-data'
-        echo '📂 Athena results bucket mounted at: /mnt/s3-results'
-        echo '🔄 Keeping container alive...'
+        echo 'S3FS mount process completed'
+        echo 'Keeping container alive...'
         
         wait
     depends_on:
