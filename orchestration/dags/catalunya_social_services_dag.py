@@ -485,6 +485,18 @@ social_service_mart_model = DbtAthenaOperator(
     dag=dag,
 )
 
+social_service_mart_test = DbtAthenaOperator(
+    task_id="test_social_services_by_service_municipal",
+    aws_conn_id="aws_cross_account_role",
+    dbt_command="test",
+    dbt_target=ENVIRONMENT,
+    dbt_vars={
+        "downloaded_date": "{{ task_instance.xcom_pull(task_ids='prepare_mart_payload', key='downloaded_date') }}"
+    },
+    select_models="social_services_by_service_municipal",
+    dag=dag,
+)
+
 municipal_coverage_task = DbtAthenaOperator(
     task_id="municipal_coverage",
     aws_conn_id="aws_cross_account_role",
@@ -494,10 +506,28 @@ municipal_coverage_task = DbtAthenaOperator(
     dag=dag,
 )
 
+municipal_coverage_test = DbtAthenaOperator(
+    task_id="test_municipal_coverage",
+    aws_conn_id="aws_cross_account_role",
+    dbt_command="test",
+    dbt_target=ENVIRONMENT,
+    select_models="municipal_coverage",
+    dag=dag,
+)
+
 comarca_coverage_task = DbtAthenaOperator(
     task_id="comarca_coverage",
     aws_conn_id="aws_cross_account_role",
     dbt_command="run",
+    dbt_target=ENVIRONMENT,
+    select_models="comarca_coverage",
+    dag=dag,
+)
+
+comarca_coverage_test = DbtAthenaOperator(
+    task_id="test_comarca_coverage",
+    aws_conn_id="aws_cross_account_role",
+    dbt_command="test",
     dbt_target=ENVIRONMENT,
     select_models="comarca_coverage",
     dag=dag,
@@ -518,6 +548,9 @@ comarca_coverage_task = DbtAthenaOperator(
     >> parse_transformation_response_task
     >> prepare_mart_payload_task
     >> social_service_mart_model
+    >> social_service_mart_test
     >> municipal_coverage_task
+    >> municipal_coverage_test
     >> comarca_coverage_task
+    >> comarca_coverage_test
 )
