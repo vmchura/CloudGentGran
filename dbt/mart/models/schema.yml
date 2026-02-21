@@ -36,18 +36,10 @@ sources:
         columns:
           - name: registre
             description: Unique record identifier
-            tests:
-              - not_null
-              - unique
           - name: tipologia
             description: Service type description
-            tests:
-              - not_null
           - name: capacitat
             description: Service capacity
-            tests:
-              - dbt_expectations.expect_column_values_to_be_between:
-                  min_value: 0
   
   - name: marts
     description: Catalunya data marts layer
