@@ -12,6 +12,8 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+FULL_BUILD=false
+
 echo -e "${BLUE}🚀 Starting Catalunya Data Pipeline - Local Development Environment${NC}"
 
 # Check prerequisites
@@ -268,17 +270,73 @@ validate_deployment() {
     echo -e "${GREEN}✅ Validation completed${NC}"
 }
 
+# Parse --full-build flag
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --full-build)
+                FULL_BUILD=true
+                shift
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+    REMAINING_ARGS=("$@")
+}
+
 # Main function
 main() {
+    parse_args "$@"
+    set -- "${REMAINING_ARGS[@]}"
+    
     case "${1:-start}" in
         "start")
+            check_prerequisites
+            set_environment
+            
+            if [ "$FULL_BUILD" = true ]; then
+                echo -e "${YELLOW}🏗️  Full build mode enabled - will destroy and rebuild everything${NC}"
+                cleanup
+                setup_local_structure
+            else
+                echo -e "${BLUE}🚀 Quick start mode - preserving existing data and configuration${NC}"
+                if [ -d "orchestration/dbt" ]; then
+                    echo -e "${GREEN}✅ Local development structure already exists, skipping setup${NC}"
+                else
+                    echo -e "${YELLOW}📦 Setting up local development structure (first time)...${NC}"
+                    cp -r dbt orchestration/dbt
+                fi
+            fi
+            
+            start_services
+            monitor_startup
+            
+            if [ "$FULL_BUILD" = true ]; then
+                deploy_infrastructure
+                validate_deployment
+            else
+                echo -e "${BLUE}⏭️  Skipping CDK deployment (use --full-build to redeploy)${NC}"
+            fi
+            
+            show_status
+            echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
+            echo -e "${BLUE}📖 Next steps:${NC}"
+            echo -e "  1. Open Airflow UI: http://localhost:8080"
+            echo -e "  2. Login with: admin/admin"
+            echo -e "  3. Enable the 'catalunya_social_services_localstack_pipeline' DAG"
+            echo -e "  4. Trigger a manual run to test the pipeline"
+            ;;
+        "start-full")
+            FULL_BUILD=true
             check_prerequisites
             set_environment
             cleanup
             setup_local_structure
             start_services
             monitor_startup
-            deploy_infrastructure  # CDK deployment after LocalStack is ready
+            deploy_infrastructure
             validate_deployment
             show_status
             echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
@@ -329,10 +387,11 @@ main() {
             cat << EOF
 Catalunya Data Pipeline - Local Development
 
-Usage: $0 [command]
+Usage: $0 [command] [--full-build]
 
 Commands:
-    start          Start the complete local environment (default)
+    start          Start services (preserves data, volumes, and configuration)
+    start-full     Full rebuild - destroys and recreates everything
     stop           Stop all services
     restart        Restart all services
     status         Show service status and URLs
@@ -342,13 +401,19 @@ Commands:
     clean          Complete cleanup (removes volumes and images)
     help           Show this help
 
+Options:
+    --full-build   When used with 'start', performs a full rebuild instead of
+                   preserving existing data. Equivalent to 'start-full'.
+
 Examples:
-    $0              # Start everything
-    $0 start        # Start everything
-    $0 status       # Check status
-    $0 logs         # Show logs for debugging
-    $0 stop         # Stop services
-    $0 deploy-infra # Deploy CDK infrastructure only
+    $0                        # Quick start (preserves data)
+    $0 start                  # Quick start (preserves data)
+    $0 start --full-build     # Full rebuild (destroys and recreates)
+    $0 start-full             # Full rebuild (alternative syntax)
+    $0 status                 # Check status
+    $0 logs                   # Show logs for debugging
+    $0 stop                   # Stop services
+    $0 deploy-infra           # Deploy CDK infrastructure only
 
 Environment Variables:
     AIRFLOW_FERNET_KEY    Custom Fernet key for Airflow (auto-generated if not set)

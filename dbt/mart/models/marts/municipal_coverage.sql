@@ -97,7 +97,7 @@ with_coverage AS (
         year,
         total_capacit,
         population_age_65_and_over,
-        total_capacit * 100.0 / population_age_65_and_over AS coverage_ratio
+        LEAST(total_capacit * 100.0 / population_age_65_and_over, 100) AS coverage_ratio
     FROM
         complete_data
 )
