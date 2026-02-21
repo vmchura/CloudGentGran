@@ -252,9 +252,10 @@ services:
           export AIRFLOW_UID=$(id -u)
         fi
         
-        echo "🔧 Creating missing directories..."
+        echo "Creating missing directories..."
         mkdir -p /opt/airflow/{logs,dags,plugins,config}
         mkdir -p /opt/airflow/dbt/mart/local_data
+        chmod -R 777 /opt/airflow/dbt/mart/local_data
         
         echo "🔧 Setting up DBT profiles..."
         # Copy profiles_template.yml to profiles.yml if it doesn't exist
