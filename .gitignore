@@ -346,6 +346,7 @@ localstack/catalunya-data-dev/
 infrastructure/cdk-outputs.json
 downloads/
 localstack/s3-mounts/
+localstack/s3-backup/
 rust-lambda-build/
 dbt/mart/local_data/
 orchestration/dbt
