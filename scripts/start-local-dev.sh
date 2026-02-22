@@ -104,26 +104,23 @@ cleanup() {
     # Stop Docker Compose services
     docker-compose -f docker-compose.local.yaml down --remove-orphans || true
 
-    # Clean up any stale S3FS mounts
+    # Clean up any stale S3FS mounts (may require manual cleanup with sudo if FUSE mounts are stuck)
     echo -e "${YELLOW}🔧 Cleaning up stale S3FS mounts...${NC}"
-    sudo umount -f ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-catalog-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-service-dev 2>/dev/null || true
+    for dir in catalunya-data-dev catalunya-athena-results-dev catalunya-catalog-dev catalunya-service-dev; do
+        local mount_path="./localstack/s3-mounts/$dir"
+        # Try regular umount first
+        umount "$mount_path" 2>/dev/null || fusermount -u "$mount_path" 2>/dev/null || true
+        # Remove directory contents if possible
+        if [ -d "$mount_path" ]; then
+            rm -rf "${mount_path:?}"/* 2>/dev/null || true
+        fi
+    done
 
-    # Remove and recreate mount directories
-    sudo rm -rf ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
-    sudo rm -rf ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
-    sudo rm -rf ./localstack/s3-mounts/catalunya-catalog-dev 2>/dev/null || true
-    sudo rm -rf ./localstack/s3-mounts/catalunya-service-dev 2>/dev/null || true
-
+    # Recreate mount directories
     mkdir -p ./localstack/s3-mounts/catalunya-data-dev
     mkdir -p ./localstack/s3-mounts/catalunya-athena-results-dev
     mkdir -p ./localstack/s3-mounts/catalunya-catalog-dev
     mkdir -p ./localstack/s3-mounts/catalunya-service-dev
-
-    # Set proper ownership
-    sudo chown -R $USER:$USER ./localstack/s3-mounts/ 2>/dev/null || true
 
     # Clean up local development dbt copy
     if [ -d "orchestration/dbt" ]; then
@@ -303,11 +300,19 @@ validate_deployment() {
 start_s3fs_mounts() {
     echo -e "${YELLOW}📁 Starting S3FS mounts...${NC}"
 
-    # Create mount directories if they don't exist
-    mkdir -p ./localstack/s3-mounts/catalunya-data-dev
-    mkdir -p ./localstack/s3-mounts/catalunya-athena-results-dev
-    mkdir -p ./localstack/s3-mounts/catalunya-catalog-dev
-    mkdir -p ./localstack/s3-mounts/catalunya-service-dev
+    # Create mount directories with proper permissions
+    echo -e "${BLUE}Creating mount directories...${NC}"
+    for dir in catalunya-data-dev catalunya-athena-results-dev catalunya-catalog-dev catalunya-service-dev; do
+        local mount_path="./localstack/s3-mounts/$dir"
+        if [ -d "$mount_path" ]; then
+            # Try to unmount if it's a stale mount
+            fusermount -u "$mount_path" 2>/dev/null || umount "$mount_path" 2>/dev/null || true
+            # Clear contents
+            rm -rf "${mount_path:?}"/* 2>/dev/null || true
+        else
+            mkdir -p "$mount_path"
+        fi
+    done
 
     # Verify all required buckets exist before starting S3FS
     echo -e "${BLUE}🔍 Verifying S3 buckets exist before mounting...${NC}"
@@ -365,10 +370,10 @@ stop_s3fs_mounts() {
 
     # Unmount any stale mounts on the host
     echo -e "${YELLOW}🔧 Unmounting any stale S3FS mounts...${NC}"
-    sudo umount -f ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-catalog-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-service-dev 2>/dev/null || true
+    for dir in catalunya-data-dev catalunya-athena-results-dev catalunya-catalog-dev catalunya-service-dev; do
+        local mount_path="./localstack/s3-mounts/$dir"
+        umount "$mount_path" 2>/dev/null || fusermount -u "$mount_path" 2>/dev/null || true
+    done
 
     echo -e "${GREEN}✅ S3FS mounts stopped${NC}"
 }
@@ -454,7 +459,7 @@ main() {
             docker-compose -f "$COMPOSE_FILE" down --remove-orphans || true
             
             echo -e "${YELLOW}Removing LocalStack persisted state directory...${NC}"
-            sudo rm -rf "${LOCALSTACK_VOLUME_DIR}"
+            rm -rf "${LOCALSTACK_VOLUME_DIR}" 2>/dev/null || true
             mkdir -p "${LOCALSTACK_VOLUME_DIR}"
             
             if [ -d "orchestration/dbt" ]; then
@@ -505,7 +510,7 @@ main() {
             docker-compose -f "$COMPOSE_FILE" down -v --remove-orphans
             
             echo -e "${YELLOW}Removing LocalStack volume directory...${NC}"
-            sudo rm -rf "${LOCALSTACK_VOLUME_DIR}"
+            rm -rf "${LOCALSTACK_VOLUME_DIR}" 2>/dev/null || true
             
             if [ -d "orchestration/dbt" ]; then
                 rm -rf orchestration/dbt

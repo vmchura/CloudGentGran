@@ -363,9 +363,9 @@ Key environment variables used by LocalStack:
 | `infrastructure/deploy-localstack.sh` | CDK deployment script for LocalStack |
 | `scripts/test-act.sh` | GitHub Actions testing with act |
 | `scripts/start-local-dev.sh` | Full local development environment |
-| `scripts/localstack-s3-backup.sh` | S3 data backup/restore for persistence |
-| `localstack/volume/` | LocalStack container data |
-| `localstack/s3-backup/` | S3 backup storage (community edition) |
+| `scripts/localstack-s3-backup.sh` | S3 data backup/restore script |
+| `localstack/s3-backup/` | S3 backup storage |
+| `localstack/s3-mounts/` | S3FS mount points (view S3 as local files) |
 
 ---
 
@@ -377,28 +377,29 @@ If you have stale mount points or want a clean start:
 # 1. Stop all containers
 docker-compose -f docker-compose.local.yaml down
 
-# 2. Remove stale mount points (requires sudo if FUSE mounts are stale)
-sudo umount ./localstack/s3-mounts/* 2>/dev/null || true
-sudo rm -rf ./localstack/s3-mounts/*
+# 2. Remove stale mount points (if FUSE mounts are stuck)
+umount ./localstack/s3-mounts/* 2>/dev/null || true
+rm -rf ./localstack/s3-mounts/* 2>/dev/null || true
 
 # 3. Remove old volumes (optional, for full reset)
 docker volume rm cloudgentgran-postgres-data cloudgentgran-airflow-dbt-profiles 2>/dev/null || true
 
-# 4. Start fresh
+# 4. Recreate mount directories
+mkdir -p ./localstack/s3-mounts/{catalunya-data-dev,catalunya-athena-results-dev,catalunya-catalog-dev,catalunya-service-dev}
+
+# 5. Start fresh
 docker-compose -f docker-compose.local.yaml up -d
 ```
 
 ---
 
-## Data Persistence
+## Data Persistence (Community Edition)
 
-### Important: Community Edition Limitation
+LocalStack Community Edition does **NOT persist data** between container restarts. S3 data, Lambda functions, and other resources are lost when containers stop.
 
-**LocalStack's built-in persistence (`PERSISTENCE=1`) requires a Pro license.** In the community edition, S3 data and Lambda functions are **NOT persisted** between container restarts.
+### Solution: S3 Backup/Restore Script
 
-### Workaround: S3 Backup/Restore Script
-
-Use the provided script to manually backup and restore S3 data:
+Use the provided script to backup and restore S3 data:
 
 ```bash
 # Backup all S3 buckets to local filesystem
@@ -421,16 +422,18 @@ Use the provided script to manually backup and restore S3 data:
 # 1. Start LocalStack
 docker-compose -f docker-compose.local.yaml up -d
 
-# 2. Restore data from previous session
+# 2. Restore data from previous session (if any)
 ./scripts/localstack-s3-backup.sh restore
 
-# 3. Do your development work...
-# (Run Lambdas, Airflow DAGs, etc.)
+# 3. Deploy infrastructure (first time only)
+cd infrastructure && ./deploy-localstack.sh
 
-# 4. Before stopping, backup your data
+# 4. Do your development work...
+
+# 5. Before stopping, backup your data
 ./scripts/localstack-s3-backup.sh backup
 
-# 5. Stop containers
+# 6. Stop containers
 docker-compose -f docker-compose.local.yaml down
 ```
 
@@ -447,10 +450,3 @@ localstack/s3-backup/
 │   └── ...
 └── ...
 ```
-
-### Alternative: LocalStack Pro
-
-For automatic persistence, consider upgrading to [LocalStack Pro](https://localstack.cloud/pricing/):
-- Automatic state persistence on shutdown
-- Cloud Pods for state management
-- More service coverage
