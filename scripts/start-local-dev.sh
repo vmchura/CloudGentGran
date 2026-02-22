@@ -21,12 +21,13 @@ Usage: $0 <command>
 
 Commands:
     start        Start services (preserves LocalStack data, no CDK deploy)
-    full-deploy  Clean start: delete LocalStack state, deploy CDK
+    full-deploy  Clean start: delete LocalStack state, deploy CDK, mount S3FS
     stop         Stop containers (preserves volumes and data)
     destroy      Remove all containers and volumes (irreversible)
 
-S3FS mounts (optional):
-    docker-compose -f docker-compose.local.yaml --profile s3fs up -d
+Options:
+    --with-s3fs  Also start S3FS mounts (for 'start' command only)
+    --no-s3fs    Skip S3FS mounts (for 'full-deploy' command)
 EOF
     exit 1
 }
@@ -233,6 +234,19 @@ show_status() {
     echo -e "  📊 LocalStack UI:  http://localhost:4566/_localstack/health"
     echo -e "  🗄️  PostgreSQL:    localhost:5432 (airflow/airflow)"
 
+    # Check S3FS status
+    if docker ps --filter "name=cloudgentgran-s3fs" --filter "status=running" | grep -q cloudgentgran-s3fs; then
+        echo -e "\n${BLUE}📁 S3FS Mounts (Active):${NC}"
+        docker exec cloudgentgran-s3fs mountpoint -q /mnt/s3-data 2>/dev/null && \
+            echo -e "  ✅ catalunya-data-dev      → ./localstack/s3-mounts/catalunya-data-dev" || true
+        docker exec cloudgentgran-s3fs mountpoint -q /mnt/s3-results 2>/dev/null && \
+            echo -e "  ✅ catalunya-athena-results → ./localstack/s3-mounts/catalunya-athena-results-dev" || true
+        docker exec cloudgentgran-s3fs mountpoint -q /mnt/s3-catalog 2>/dev/null && \
+            echo -e "  ✅ catalunya-catalog-dev   → ./localstack/s3-mounts/catalunya-catalog-dev" || true
+        docker exec cloudgentgran-s3fs mountpoint -q /mnt/s3-service 2>/dev/null && \
+            echo -e "  ✅ catalunya-service-dev   → ./localstack/s3-mounts/catalunya-service-dev" || true
+    fi
+
     echo -e "\n${BLUE}🐳 Container Status:${NC}"
     docker ps --filter "name=cloudgentgran-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
@@ -285,6 +299,80 @@ validate_deployment() {
     echo -e "${GREEN}✅ Validation completed${NC}"
 }
 
+# Start S3FS mounts after CDK deployment
+start_s3fs_mounts() {
+    echo -e "${YELLOW}📁 Starting S3FS mounts...${NC}"
+
+    # Create mount directories if they don't exist
+    mkdir -p ./localstack/s3-mounts/catalunya-data-dev
+    mkdir -p ./localstack/s3-mounts/catalunya-athena-results-dev
+    mkdir -p ./localstack/s3-mounts/catalunya-catalog-dev
+    mkdir -p ./localstack/s3-mounts/catalunya-service-dev
+
+    # Verify all required buckets exist before starting S3FS
+    echo -e "${BLUE}🔍 Verifying S3 buckets exist before mounting...${NC}"
+    local required_buckets=("catalunya-data-dev" "catalunya-athena-results-dev" "catalunya-catalog-dev" "catalunya-service-dev")
+    local missing_buckets=()
+
+    for bucket in "${required_buckets[@]}"; do
+        if ! curl -s http://localhost:4566/$bucket > /dev/null 2>&1; then
+            missing_buckets+=("$bucket")
+        fi
+    done
+
+    if [ ${#missing_buckets[@]} -gt 0 ]; then
+        echo -e "${RED}❌ Missing buckets: ${missing_buckets[*]}${NC}"
+        echo -e "${YELLOW}⚠️  S3FS requires all buckets to exist. Skipping S3FS mount.${NC}"
+        echo -e "${BLUE}💡 Run with 'full-deploy' to create buckets first, or ensure CDK is deployed.${NC}"
+        return 1
+    fi
+
+    echo -e "${GREEN}✅ All required buckets verified${NC}"
+
+    # Start S3FS container with profile
+    docker-compose -f "$COMPOSE_FILE" --profile s3fs up -d s3fs-mounts
+
+    # Wait for S3FS to be healthy
+    echo -e "${BLUE}⏳ Waiting for S3FS mounts to be ready...${NC}"
+    local max_wait=120
+    local elapsed=0
+    while [ $elapsed -lt $max_wait ]; do
+        if docker exec cloudgentgran-s3fs mountpoint -q /mnt/s3-data 2>/dev/null; then
+            echo -e "${GREEN}✅ S3FS mounts are ready${NC}"
+            break
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+        if [ $elapsed -ge $max_wait ]; then
+            echo -e "${YELLOW}⚠️  S3FS mounts may not be fully ready (timeout)${NC}"
+        fi
+    done
+
+    echo -e "${BLUE}📁 S3FS mount points:${NC}"
+    echo -e "   catalunya-data-dev      → ./localstack/s3-mounts/catalunya-data-dev"
+    echo -e "   catalunya-athena-results → ./localstack/s3-mounts/catalunya-athena-results-dev"
+    echo -e "   catalunya-catalog-dev   → ./localstack/s3-mounts/catalunya-catalog-dev"
+    echo -e "   catalunya-service-dev   → ./localstack/s3-mounts/catalunya-service-dev"
+}
+
+# Stop S3FS mounts
+stop_s3fs_mounts() {
+    echo -e "${YELLOW}📁 Stopping S3FS mounts...${NC}"
+
+    # Stop the S3FS container
+    docker-compose -f "$COMPOSE_FILE" --profile s3fs stop s3fs-mounts 2>/dev/null || true
+    docker-compose -f "$COMPOSE_FILE" --profile s3fs rm -f s3fs-mounts 2>/dev/null || true
+
+    # Unmount any stale mounts on the host
+    echo -e "${YELLOW}🔧 Unmounting any stale S3FS mounts...${NC}"
+    sudo umount -f ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
+    sudo umount -f ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
+    sudo umount -f ./localstack/s3-mounts/catalunya-catalog-dev 2>/dev/null || true
+    sudo umount -f ./localstack/s3-mounts/catalunya-service-dev 2>/dev/null || true
+
+    echo -e "${GREEN}✅ S3FS mounts stopped${NC}"
+}
+
 # Validate command argument
 validate_command() {
     if [[ $# -lt 1 ]]; then
@@ -302,10 +390,34 @@ validate_command() {
     esac
 }
 
+# Parse options
+WITH_S3FS=false
+NO_S3FS=false
+
+parse_options() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --with-s3fs)
+                WITH_S3FS=true
+                shift
+                ;;
+            --no-s3fs)
+                NO_S3FS=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+}
+
 # Main function
 main() {
     validate_command "$@"
     local command="$1"
+    
+    parse_options "$@"
     
     case "$command" in
         start)
@@ -321,6 +433,12 @@ main() {
             docker-compose -f "$COMPOSE_FILE" up -d
             
             monitor_startup
+            
+            # Start S3FS if requested (requires existing buckets)
+            if [ "$WITH_S3FS" = true ]; then
+                start_s3fs_mounts || echo -e "${YELLOW}⚠️  S3FS mounts not started. Use 'full-deploy' to create buckets first.${NC}"
+            fi
+            
             show_status
             echo -e "${GREEN}Services started. LocalStack persistence enabled.${NC}"
             ;;
@@ -329,6 +447,9 @@ main() {
             echo -e "${BLUE}Full deploy: clearing LocalStack state and redeploying Catalunya Data Pipeline...${NC}"
             check_prerequisites
             set_environment
+            
+            # Stop any existing S3FS mounts first
+            stop_s3fs_mounts
             
             docker-compose -f "$COMPOSE_FILE" down --remove-orphans || true
             
@@ -352,12 +473,22 @@ main() {
             
             deploy_infrastructure
             validate_deployment
+            
+            # Start S3FS mounts after successful CDK deployment (unless --no-s3fs)
+            if [ "$NO_S3FS" = false ]; then
+                start_s3fs_mounts || echo -e "${YELLOW}⚠️  S3FS mounts could not be started, but deployment succeeded.${NC}"
+            fi
+            
             show_status
             echo -e "${GREEN}Full deploy complete.${NC}"
             ;;
             
         stop)
             echo -e "${YELLOW}Stopping containers (preserving volumes)...${NC}"
+            
+            # Stop S3FS mounts first
+            stop_s3fs_mounts
+            
             docker-compose -f "$COMPOSE_FILE" down --remove-orphans
             if [ -d "orchestration/dbt" ]; then
                 rm -rf orchestration/dbt
@@ -367,6 +498,10 @@ main() {
             
         destroy)
             echo -e "${RED}Destroying all containers and volumes...${NC}"
+            
+            # Stop S3FS mounts first
+            stop_s3fs_mounts
+            
             docker-compose -f "$COMPOSE_FILE" down -v --remove-orphans
             
             echo -e "${YELLOW}Removing LocalStack volume directory...${NC}"
