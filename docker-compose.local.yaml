@@ -83,18 +83,15 @@ services:
       - DEBUG=1
       - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm
       - DOCKER_HOST=unix:///var/run/docker.sock
-      - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
 
       # Lambda configuration - optimized for better performance
-      - LAMBDA_EXECUTOR=docker-reuse
-      - LAMBDA_REMOTE_DOCKER=false
       - LAMBDA_DOCKER_NETWORK=cloudgentgran-local
-      - LAMBDA_CONTAINER_REGISTRY=local
-      - LAMBDA_RUNTIME_EXECUTOR_TIMEOUT=900  # 15 minutes timeout
+      - LAMBDA_RUNTIME_EXECUTOR_TIMEOUT=900
 
-      # Persistence (optional - keeps data between restarts)
+      # Persistence (keeps data between restarts)
       - PERSISTENCE=1
-      - DATA_DIR=/tmp/localstack/data
+      - SNAPSHOT_SAVE_STRATEGY=ON_SHUTDOWN
+      - SNAPSHOT_LOAD_STRATEGY=ON_STARTUP
 
       # AWS configuration
       - AWS_DEFAULT_REGION=eu-west-1
@@ -163,10 +160,10 @@ services:
       - S3_ENDPOINT_URL=http://localstack:4566
       - S3FS_WAIT_TIMEOUT=${S3FS_WAIT_TIMEOUT:-60}
     volumes:
-      - ./localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:shared
-      - ./localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:shared
-      - ./localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:shared
-      - ./localstack/s3-mounts/catalunya-service-dev:/mnt/s3-service:shared
+      - s3fs-data:/mnt/s3-data:shared
+      - s3fs-results:/mnt/s3-results:shared
+      - s3fs-catalog:/mnt/s3-catalog:shared
+      - s3fs-service:/mnt/s3-service:shared
     entrypoint: /bin/sh
     command:
       - -c
@@ -202,7 +199,7 @@ services:
         
         echo 'All buckets ready. Starting S3FS mounts...'
         
-        S3FS_OPTS="url=http://localstack:4566,use_path_request_style,allow_other,uid=1000,gid=1000,umask=022"
+        S3FS_OPTS="url=http://localstack:4566,use_path_request_style,allow_other,nonempty"
         
         s3fs catalunya-data-dev /mnt/s3-data -o $${S3FS_OPTS} -f &
         s3fs catalunya-athena-results-dev /mnt/s3-results -o $${S3FS_OPTS} -f &
@@ -326,3 +323,11 @@ volumes:
     name: cloudgentgran-postgres-data
   airflow-dbt-profiles:
     name: cloudgentgran-airflow-dbt-profiles
+  s3fs-data:
+    name: cloudgentgran-s3fs-data
+  s3fs-results:
+    name: cloudgentgran-s3fs-results
+  s3fs-catalog:
+    name: cloudgentgran-s3fs-catalog
+  s3fs-service:
+    name: cloudgentgran-s3fs-service
