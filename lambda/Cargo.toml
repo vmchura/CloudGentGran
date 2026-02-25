@@ -3,6 +3,7 @@ members = [
     "transformers/social_services",
     "transformers/population_municipal_greater_65",
     "mart/population_municipal_greater_65_mart",
+    "validators/social_services",
 ]
 resolver = "2"
 

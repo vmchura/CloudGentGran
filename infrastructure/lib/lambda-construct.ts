@@ -35,6 +35,7 @@ interface LambdaFunctionProps {
 export class LambdaConstruct extends Construct {
     public readonly apiExtractorLambda: lambda.Function;
     public readonly populationMunicipalGreater65ApiExtractorLambda: lambda.Function;
+    public readonly socialServicesValidatorLambda: lambda.Function;
     public readonly socialServicesTransformerLambda: lambda.Function;
     public readonly populationMunicipalGreater65Transformer: lambda.Function;
     public readonly populationMunicipalGreater65Mart: lambda.Function;
@@ -65,6 +66,19 @@ export class LambdaConstruct extends Construct {
             account,
             region,
             executionRole: props.extractorExecutionRole
+        });
+
+        // Create Social Services Validator Lambda
+        this.socialServicesValidatorLambda = this.createSocialServicesValidatorLambda({
+            environmentName,
+            projectName,
+            config,
+            bucketName,
+            catalogBucketName,
+            lambdaPrefix,
+            account,
+            region,
+            executionRole: props.transformerExecutionRole
         });
 
         // Create Social Services Transformer Lambda
@@ -228,6 +242,61 @@ export class LambdaConstruct extends Construct {
         });
 
         return apiExtractorLambda;
+    }
+
+    private createSocialServicesValidatorLambda(props: LambdaFunctionProps): lambda.Function {
+        const {
+            environmentName,
+            projectName,
+            config,
+            bucketName,
+            catalogBucketName,
+            lambdaPrefix,
+            account,
+            region
+        } = props;
+
+        let validatorRole: iam.IRole = props.executionRole;
+
+        const validatorLambda = new lambda.Function(this, 'SocialServicesValidatorLambda', {
+            functionName: `${lambdaPrefix}-social-services-validator`,
+            runtime: lambda.Runtime.PROVIDED_AL2023,
+            handler: 'bootstrap',
+            code: lambda.Code.fromAsset('../rust_lambda_deployment/social-services-validator'),
+            timeout: cdk.Duration.seconds(config.lambdaTimeout),
+            memorySize: config.lambdaMemory,
+            role: validatorRole,
+            environment: {
+                BUCKET_NAME: bucketName,
+                SEMANTIC_IDENTIFIER: 'social_services',
+                ENVIRONMENT: environmentName,
+                REGION: region
+            },
+            description: `Social Services JSON Schema Validator Lambda (Rust) for ${environmentName} environment - Orchestrated by Airflow`,
+        });
+
+        const commonTags = ConfigHelper.getCommonTags(environmentName);
+        Object.entries(commonTags).forEach(([key, value]) => {
+            cdk.Tags.of(validatorLambda).add(key, value);
+        });
+
+        cdk.Tags.of(validatorLambda).add('Purpose', 'DataValidation');
+        cdk.Tags.of(validatorLambda).add('Layer', 'Validation');
+        cdk.Tags.of(validatorLambda).add('DataFlow', 'LandingToStaging');
+
+        new cdk.CfnOutput(this, 'SocialServicesValidatorLambdaArn', {
+            value: validatorLambda.functionArn,
+            description: 'ARN of the Social Services Validator Lambda function',
+            exportName: `${projectName}-SocialServicesValidatorLambdaArn`,
+        });
+
+        new cdk.CfnOutput(this, 'SocialServicesValidatorLambdaName', {
+            value: validatorLambda.functionName,
+            description: 'Name of the Social Services Validator Lambda function',
+            exportName: `${projectName}-SocialServicesValidatorLambdaName`,
+        });
+
+        return validatorLambda;
     }
 
     private createApiExtractorLambdaPopulationGreater65(props: LambdaFunctionProps): lambda.Function {

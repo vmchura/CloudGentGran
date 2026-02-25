@@ -34,6 +34,7 @@ ENV_CONFIG = {
     "local": {
         "aws_conn_id": "localstack_default",
         "api_extractor_function": "catalunya-dev-social_services",
+        "validator_function": "catalunya-dev-social-services-validator",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "catalog_bucket": "catalunya-catalog-dev",
         "data_bucket": "catalunya-data-dev",
@@ -46,6 +47,7 @@ ENV_CONFIG = {
     "dev": {
         "aws_conn_id": "aws_cross_account_role",
         "api_extractor_function": "catalunya-dev-social_services",
+        "validator_function": "catalunya-dev-social-services-validator",
         "transformer_function": "catalunya-dev-social-services-transformer",
         "catalog_bucket": "catalunya-catalog-dev",
         "athena_database_name": "catalunya_data_dev",
@@ -58,6 +60,7 @@ ENV_CONFIG = {
     "prod": {
         "aws_conn_id": "aws_lambda_role_conn",
         "api_extractor_function": "catalunya-prod-social_services",
+        "validator_function": "catalunya-prod-social-services-validator",
         "transformer_function": "catalunya-prod-social-services-transformer",
         "catalog_bucket": "catalunya-catalog-prod",
         "athena_database_name": "catalunya_data_prod",
@@ -271,6 +274,120 @@ def validate_extraction_results(**context) -> str:
     return "validation_passed"
 
 
+def prepare_validator_payload(**context) -> Dict[str, Any]:
+    """
+    Prepare the payload for the Rust validator lambda based on extraction results.
+    The Rust validator expects: downloaded_date, bucket_name, semantic_identifier
+    """
+    task_instance = context["task_instance"]
+
+    extraction_data = task_instance.xcom_pull(
+        task_ids="parse_extraction_response", key="extraction_metadata"
+    )
+
+    if not extraction_data:
+        extraction_data = task_instance.xcom_pull(task_ids="parse_extraction_response")
+
+    if not extraction_data:
+        raise AirflowException(
+            "No extraction metadata found - previous task may have failed"
+        )
+
+    downloaded_date = extraction_data.get("downloaded_date")
+    if not downloaded_date:
+        downloaded_date = datetime.strptime(context["ds"], "%Y-%m-%d").strftime(
+            "%Y%m%d"
+        )
+
+    validator_payload = {
+        "environment": ENVIRONMENT,
+        "downloaded_date": downloaded_date,
+        "bucket_name": config["data_bucket"],
+        "semantic_identifier": "social_services",
+    }
+
+    logger.info(
+        f"Prepared validator payload: {json.dumps(validator_payload, indent=2)}"
+    )
+
+    task_instance.xcom_push(key="validator_payload", value=validator_payload)
+
+    return validator_payload
+
+
+def parse_validation_response(**context) -> Dict[str, Any]:
+    """
+    Parse validator Lambda response and validate data contract compliance.
+    """
+    task_instance = context["task_instance"]
+
+    validator_response = task_instance.xcom_pull(task_ids="invoke_validator")
+    logger.info(f"Raw validator response received: {type(validator_response)}")
+
+    if isinstance(validator_response, dict):
+        response_body = validator_response
+    elif isinstance(validator_response, str):
+        try:
+            response_body = json.loads(validator_response)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse validator JSON response: {e}")
+            raise AirflowException(
+                f"Invalid JSON response from validator: {validator_response}"
+            )
+    elif hasattr(validator_response, "get"):
+        payload = validator_response.get("Payload")
+        if payload:
+            try:
+                response_body = (
+                    json.loads(payload) if isinstance(payload, str) else payload
+                )
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse validator payload: {e}")
+                raise AirflowException(
+                    f"Invalid JSON payload from validator: {payload}"
+                )
+        else:
+            response_body = validator_response
+    else:
+        logger.error(f"Unexpected validator response type: {type(validator_response)}")
+        raise AirflowException(
+            f"Unexpected validator response format: {type(validator_response)}"
+        )
+
+    logger.info(
+        f"Parsed validator response: {json.dumps(response_body, indent=2, default=str)}"
+    )
+
+    if not response_body.get("success", False):
+        error_msg = response_body.get("message", "Unknown validation error")
+        validation_data = response_body.get("data", {})
+        validation_errors = validation_data.get("validation_errors", [])
+
+        logger.error(f"Schema validation failed: {error_msg}")
+        logger.error(
+            f"Validation errors: {json.dumps(validation_errors, indent=2, default=str)}"
+        )
+        raise AirflowException(f"Data contract validation failed: {error_msg}")
+
+    validation_data = response_body.get("data", {})
+
+    logger.info(f"✅ Schema validation completed successfully:")
+    logger.info(f"   - Environment: {ENVIRONMENT}")
+    logger.info(f"   - Function: {config['validator_function']}")
+    logger.info(
+        f"   - Files validated: {validation_data.get('files_validated', 'N/A')}"
+    )
+    logger.info(
+        f"   - Records validated: {validation_data.get('records_validated', 'N/A')}"
+    )
+    logger.info(f"   - Records passed: {validation_data.get('records_passed', 'N/A')}")
+    logger.info(f"   - Records failed: {validation_data.get('records_failed', 'N/A')}")
+
+    task_instance.xcom_push(key="validation_metadata", value=validation_data)
+
+    return validation_data
+
+
 def parse_transformation_response(**context) -> Dict[str, Any]:
     """
     Parse transformer Lambda response and prepare final coordination data.
@@ -409,6 +526,7 @@ dag = DAG(
 logger.info(f"🏗️  Creating pipeline tasks for {ENVIRONMENT} environment")
 logger.info(f"   - AWS Connection ID: {config['aws_conn_id']}")
 logger.info(f"   - Extractor function: {config['api_extractor_function']}")
+logger.info(f"   - Validator function: {config['validator_function']}")
 logger.info(f"   - Transformer function: {config['transformer_function']}")
 
 # Task 1: Prepare extractor payload
@@ -442,14 +560,39 @@ validate_extraction_results_task = PythonOperator(
     dag=dag,
 )
 
-# Task 5: Prepare transformer payload
+# Task 5: Prepare validator payload
+prepare_validator_payload_task = PythonOperator(
+    task_id="prepare_validator_payload",
+    python_callable=prepare_validator_payload,
+    dag=dag,
+)
+
+# Task 6: Invoke Validator Lambda
+invoke_validator = LambdaInvokeFunctionOperator(
+    task_id="invoke_validator",
+    function_name=config["validator_function"],
+    aws_conn_id=config["aws_conn_id"],
+    invocation_type="RequestResponse",
+    payload='{{ task_instance.xcom_pull(task_ids="prepare_validator_payload") | tojson }}',
+    execution_timeout=timedelta(minutes=config.get("lambda_timeout_minutes", 15)),
+    dag=dag,
+)
+
+# Task 7: Parse validation response
+parse_validation_response_task = PythonOperator(
+    task_id="parse_validation_response",
+    python_callable=parse_validation_response,
+    dag=dag,
+)
+
+# Task 8: Prepare transformer payload
 prepare_transformer_payload_task = PythonOperator(
     task_id="prepare_transformer_payload",
     python_callable=prepare_transformer_payload,
     dag=dag,
 )
 
-# Task 6: Invoke Transformer Lambda
+# Task 9: Invoke Transformer Lambda
 invoke_transformer = LambdaInvokeFunctionOperator(
     task_id="invoke_transformer",
     function_name=config["transformer_function"],
@@ -460,13 +603,13 @@ invoke_transformer = LambdaInvokeFunctionOperator(
     dag=dag,
 )
 
-# Task 7: Parse transformation response
+# Task 10: Parse transformation response
 parse_transformation_response_task = PythonOperator(
     task_id="parse_transformation_response",
     python_callable=parse_transformation_response,
     dag=dag,
 )
-# Task 8: Trigger DBT workflow
+# Task 11: Trigger DBT workflow
 
 prepare_mart_payload_task = PythonOperator(
     task_id="prepare_mart_payload", python_callable=prepare_mart_payload, dag=dag
@@ -543,6 +686,9 @@ comarca_coverage_test = DbtAthenaOperator(
     >> invoke_api_extractor
     >> parse_extraction_response_task
     >> validate_extraction_results_task
+    >> prepare_validator_payload_task
+    >> invoke_validator
+    >> parse_validation_response_task
     >> prepare_transformer_payload_task
     >> invoke_transformer
     >> parse_transformation_response_task
