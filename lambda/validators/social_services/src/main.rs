@@ -8,7 +8,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
-const SCHEMA_JSON: &str = include_str!("../../../../contracts/social_services.v1.json");
+const SCHEMA_JSON: &str = include_str!("social_services.v1.json");
 
 #[derive(Deserialize, Serialize)]
 struct LambdaInput {
