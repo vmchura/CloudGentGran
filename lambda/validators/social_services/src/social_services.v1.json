@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "social_services.v1.json",
   "title": "Catalunya Social Services Data Contract",
   "description": "JSON Schema for validating social services data from Catalonia public API",
   "type": "object",
@@ -23,9 +22,9 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     },
     "capacitat": {
-      "type": ["integer", "null"],
       "description": "Capacity of the service (number of places)",
-      "minimum": 0
+      "type": "string",
+      "pattern": "^\\d{1,4}$"
     },
     "municipi": {
       "type": "string",
