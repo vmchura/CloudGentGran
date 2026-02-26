@@ -248,6 +248,20 @@ comarca_population (dbt)
 
 ## Deployment
 
+### Authentication
+
+Airflow 3.x uses SimpleAuthManager for authentication. Configuration differs by environment:
+
+**Local Development:**
+- No authentication required (`SIMPLE_AUTH_MANAGER_ALL_ADMINS=true`)
+- Direct access to Airflow UI at http://localhost:8080
+
+**Production:**
+- Set fixed admin credentials to prevent random password generation:
+  ```bash
+  dokku config:set <app-name> AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS='admin:your_secure_password'
+  ```
+
 ### Git-Sync Architecture
 
 The container fetches dbt models, DAGs, plugins, and config from the Git repository at startup using git-sync:
@@ -299,13 +313,18 @@ After the first deployment, you must configure the following:
    dokku config:set <app-name> AIRFLOW__CORE__FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
    ```
 
-2. **Set AWS credentials and connection** (from `extract_aws_credentials.sh` output):
+2. **Set Airflow admin credentials**:
    ```bash
-    dokku run cloudgentgran-orchestration-dev   airflow connections add aws_cross_account_role ...
-    dokku config:set cloudgentgran-orchestration-dev     AWS_ACCESS_KEY_ID='...'     AWS_SECRET_ACCESS_KEY='...'     AWS_DEFAULT_REGION='...'
-    ```
+   dokku config:set <app-name> AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS='admin:your_secure_password'
+   ```
 
-3. **Restart the app** after setting variables:
+3. **Set AWS credentials and connection** (from `extract_aws_credentials.sh` output):
+   ```bash
+   dokku run <app-name> airflow connections add aws_cross_account_role ...
+   dokku config:set <app-name> AWS_ACCESS_KEY_ID='...' AWS_SECRET_ACCESS_KEY='...' AWS_DEFAULT_REGION='...'
+   ```
+
+4. **Restart the app** after setting variables:
    ```bash
    dokku ps:restart <app-name>
    ```

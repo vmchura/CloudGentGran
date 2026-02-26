@@ -149,6 +149,14 @@ run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__HOSTNAME_CA
 
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_VAR_ENVIRONMENT=$AIRFLOW_ENV"
 
+echo -e "${YELLOW}🔐 Setting up Airflow authentication...${NC}"
+if ! run_on_dokku "dokku config:get $APP_NAME AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS" >/dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS not set.${NC}"
+    echo -e "${YELLOW}   Airflow will generate a random admin password on first start.${NC}"
+    echo -e "${YELLOW}   To set a fixed admin password, run:${NC}"
+    echo -e "   ${BLUE}dokku config:set $APP_NAME AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS='admin:your_password'${NC}"
+fi
+
 echo -e "${GREEN}✅ Environment settings configured${NC}"
 
 # Step 6: Add/Update Dokku git remote
@@ -224,9 +232,12 @@ echo ""
 echo -e "1. Generate and set Fernet key:"
 echo -e "   ${BLUE}dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY='...')${NC}"
 echo ""
-echo -e "2. Set the AWS connection and variables (from extract_aws_credentials.sh )"
-echo -e "   ${BLUE}dokku run cloudgentgran-orchestration-dev   airflow connections add aws_cross_account_role ... ${NC}"
-echo -e "   ${BLUE}dokku config:set cloudgentgran-orchestration-dev     AWS_ACCESS_KEY_ID='...'     AWS_SECRET_ACCESS_KEY='...'     AWS_DEFAULT_REGION='...'${NC}"
+echo -e "2. Set Airflow admin credentials (prevents random password generation):"
+echo -e "   ${BLUE}dokku config:set $APP_NAME AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS='admin:your_secure_password'${NC}"
+echo ""
+echo -e "3. Set the AWS connection and variables (from extract_aws_credentials.sh )"
+echo -e "   ${BLUE}dokku run $APP_NAME airflow connections add aws_cross_account_role ... ${NC}"
+echo -e "   ${BLUE}dokku config:set $APP_NAME AWS_ACCESS_KEY_ID='...' AWS_SECRET_ACCESS_KEY='...' AWS_DEFAULT_REGION='...'${NC}"
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
