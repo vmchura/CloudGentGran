@@ -54,6 +54,12 @@ if [ -f "$AIRFLOW_DBT/mart/profiles_template.yml" ]; then
     fi
 fi
 
+if [ -f "$AIRFLOW_DBT/mart/packages.yml" ]; then
+    echo "Running dbt deps..."
+    cd "$AIRFLOW_DBT/mart" && dbt deps
+    echo "✓ dbt deps completed"
+fi
+
 echo "=========================================="
 echo "Symlinks setup completed"
 echo "=========================================="

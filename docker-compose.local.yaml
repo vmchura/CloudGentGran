@@ -171,6 +171,10 @@ services:
         echo "🔧 Installing additional packages..."
         pip install awscli-local
         
+        echo "🔧 Running dbt deps..."
+        cd /opt/airflow/dbt/mart && dbt deps
+        echo "✅ dbt deps completed"
+        
         echo "🔧 Initializing Airflow database..."
         airflow db migrate
         
