@@ -71,13 +71,6 @@ This deploys the CDK stack directly from your host machine.
 │                          │ volume/data/   │                                 │
 │                          └────────────────┘                                 │
 │                                                                             │
-│  ┌─────────────────┐                                                        │
-│  │   S3FS Mounts   │ (Optional, enabled with --profile s3fs)               │
-│  │                 │                                                        │
-│  │ Read S3 buckets │◀──── Reads S3 content                                 │
-│  │ via FUSE mount  │                                                        │
-│  └─────────────────┘                                                        │
-│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -100,14 +93,6 @@ This deploys the CDK stack directly from your host machine.
 │   │ (verify) │                │     S3      │                            │
 │   └──────────┘                └─────────────┘                            │
 │                                                                          │
-│   S3FS Path (Optional, read-only filesystem view):                      │
-│   ┌──────────┐    FUSE        ┌─────────────┐                           │
-│   │  User    │ ◀───────────── │    S3FS     │  ✅ Browse S3 as files    │
-│   │  (ls)    │                │   (read)    │                           │
-│   └──────────┘                └─────────────┘                           │
-│                                                                          │
-│   ⚠️ S3FS is READ-ONLY. To write data, use AWS CLI/SDK (Lambda/Airflow) │
-│                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -117,7 +102,6 @@ This deploys the CDK stack directly from your host machine.
 |--------|------|---------|
 | `./localstack/volume` | Bind Mount | LocalStack persistence (S3 data, Lambdas, IAM, etc.) |
 | `cloudgentgran-postgres-data` | Named Volume | Airflow PostgreSQL data |
-| `cloudgentgran-s3fs-*` | Named Volume | S3FS mount points (ephemeral, recreated on restart) |
 
 ### S3 Buckets
 
@@ -127,39 +111,6 @@ This deploys the CDK stack directly from your host machine.
 | `catalunya-catalog-dev` | Reference data (municipals, service types) |
 | `catalunya-athena-results-dev` | Athena query results |
 | `catalunya-service-dev` | Service-specific data |
-
----
-
-## S3FS Mounts (Optional)
-
-S3FS allows browsing S3 bucket contents as local filesystem. **Read-only** - data must be written via AWS SDK/CLI.
-
-### Enable S3FS
-
-```bash
-# Start with s3fs profile
-docker-compose -f docker-compose.local.yaml --profile s3fs up -d
-
-# Or start everything
-./scripts/start-local-dev.sh start
-```
-
-### Access S3 via S3FS
-
-```bash
-# Inside the s3fs container
-docker exec -it cloudgentgran-s3fs ls /mnt/s3-data/
-docker exec -it cloudgentgran-s3fs ls /mnt/s3-catalog/
-
-# Copy file from S3 to host
-docker cp cloudgentgran-s3fs:/mnt/s3-data/landing/ ./local-data/
-```
-
-### S3FS Limitations
-
-- **Read-only**: Files written to mount point are NOT synced to S3
-- **Performance**: Slower than direct S3 API access
-- **Use case**: Quick verification, debugging, file inspection
 
 ---
 
@@ -209,7 +160,7 @@ Complete local environment with orchestration:
 ./scripts/start-local-dev.sh start
 ```
 
-This includes Airflow, LocalStack, PostgreSQL, and S3FS mounts.
+This includes Airflow, LocalStack, and PostgreSQL.
 
 ---
 
@@ -359,35 +310,27 @@ Key environment variables used by LocalStack:
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.local.yaml` | Docker Compose with LocalStack + Airflow + S3FS |
+| `docker-compose.local.yaml` | Docker Compose with LocalStack + Airflow |
 | `infrastructure/deploy-localstack.sh` | CDK deployment script for LocalStack |
 | `scripts/test-act.sh` | GitHub Actions testing with act |
 | `scripts/start-local-dev.sh` | Full local development environment |
 | `scripts/localstack-s3-backup.sh` | S3 data backup/restore script |
 | `localstack/s3-backup/` | S3 backup storage |
-| `localstack/s3-mounts/` | S3FS mount points (view S3 as local files) |
 
 ---
 
 ## First-Time Setup / Reset
 
-If you have stale mount points or want a clean start:
+For a clean start:
 
 ```bash
 # 1. Stop all containers
 docker-compose -f docker-compose.local.yaml down
 
-# 2. Remove stale mount points (if FUSE mounts are stuck)
-umount ./localstack/s3-mounts/* 2>/dev/null || true
-rm -rf ./localstack/s3-mounts/* 2>/dev/null || true
-
-# 3. Remove old volumes (optional, for full reset)
+# 2. Remove old volumes (optional, for full reset)
 docker volume rm cloudgentgran-postgres-data cloudgentgran-airflow-dbt-profiles 2>/dev/null || true
 
-# 4. Recreate mount directories
-mkdir -p ./localstack/s3-mounts/{catalunya-data-dev,catalunya-athena-results-dev,catalunya-catalog-dev,catalunya-service-dev}
-
-# 5. Start fresh
+# 3. Start fresh
 docker-compose -f docker-compose.local.yaml up -d
 ```
 
