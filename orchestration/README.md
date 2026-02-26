@@ -250,17 +250,21 @@ comarca_population (dbt)
 
 ### Authentication
 
-Airflow 3.x uses SimpleAuthManager for authentication. Configuration differs by environment:
+Airflow 3.x uses SimpleAuthManager for authentication:
 
 **Local Development:**
 - No authentication required (`SIMPLE_AUTH_MANAGER_ALL_ADMINS=true`)
 - Direct access to Airflow UI at http://localhost:8080
 
 **Production:**
-- Set fixed admin credentials to prevent random password generation:
+- SimpleAuthManager auto-generates passwords on first start
+- Passwords are stored in `$AIRFLOW_HOME/simple_auth_manager_passwords.json.generated`
+- To retrieve the generated password:
   ```bash
-  dokku config:set <app-name> AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS='admin:your_secure_password'
+  dokku enter <app-name>
+  cat /opt/airflow/simple_auth_manager_passwords.json.generated
   ```
+- Note: SimpleAuthManager is intended for development. For production, ensure access is controlled through other means (network security, reverse proxy auth, etc.)
 
 ### Git-Sync Architecture
 
@@ -313,9 +317,10 @@ After the first deployment, you must configure the following:
    dokku config:set <app-name> AIRFLOW__CORE__FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
    ```
 
-2. **Set Airflow admin credentials**:
+2. **Retrieve auto-generated admin password**:
    ```bash
-   dokku config:set <app-name> AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS='admin:your_secure_password'
+   dokku enter <app-name>
+   cat /opt/airflow/simple_auth_manager_passwords.json.generated
    ```
 
 3. **Set AWS credentials and connection** (from `extract_aws_credentials.sh` output):
