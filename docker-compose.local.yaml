@@ -15,6 +15,9 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
 
+    # Auth - No authentication for local development
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: 'true'
+
     # LocalStack Integration
     AWS_ENDPOINT_URL: http://localstack:4566
     AWS_ACCESS_KEY_ID: test
@@ -178,15 +181,6 @@ services:
         echo "🔧 Initializing Airflow database..."
         airflow db migrate
         
-        echo "🔧 Creating admin user..."
-        airflow users create \
-          --username admin \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@catalunya.cat \
-          --password admin || echo "Admin user already exists"
-        
         echo "🔧 Setting up Airflow variables..."
         airflow variables set environment "local"
         airflow variables set use_localstack "true"
@@ -210,15 +204,12 @@ services:
         timeout 30s airflow connections test localstack_default || echo "Connection test timed out - this is normal during startup"
         
         echo "🎉 Catalunya Data Pipeline initialization completed!"
-        echo "📊 Airflow UI: http://localhost:8080 (admin/admin)"
+        echo "📊 Airflow UI: http://localhost:8080 (no auth required)"
         echo "🔧 LocalStack UI: http://localhost:4566/_localstack/health"
         echo "🚀 Ready to run Catalunya Social Services DAGs with LocalStack!"
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
     user: "0:0"
     restart: "no"  # Init service should not restart
     depends_on:
