@@ -22,7 +22,21 @@ cargo lambda invoke --remote -p localstack --endpoint-url http://localhost:4566 
 
  aws --endpoint-url=http://localhost:4566 s3 cp s3://catalunya-data-dev/mart/population_municipal_greater_65/population_municipal_greater_65.parquet ./population_municipal_greater_65.parquet --profile localstack
 ```
+## Validator
 
+```bash
+cd lambda/validators/social_services/
+
+cargo lambda build --release --target x86_64-unknown-linux-gnu
+
+aws --profile localstack     --endpoint-url=http://localhost:4566     lambda list-functions     --query 'Functions[].FunctionName'     --output table
+
+cargo lambda deploy -p localstack --endpoint-url http://localhost:4566 --env-var BUCKET_NAME=catalunya-data-dev --env-var SEMANTIC_IDENTIFIER=social_services --env-var CATALOG_BUCKET_NAME=catalunya-catalog-dev --env-var ENVIRONMENT=local --binary-name social-services-validator catalunya-dev-social-services-validator
+
+
+ cargo lambda invoke --remote -p localstack --endpoint-url http://localhost:4566 --data-ascii "{\"environment\": \"local\", \"downloaded_date\": \"20260225\" , \"bucket_name\": \"catalunya-data-dev\" , \"semantic_identifier\": \"social_services\"  }" catalunya-dev-social-services-validator
+ 
+```
 
 
 

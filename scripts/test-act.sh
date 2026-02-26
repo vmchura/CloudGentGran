@@ -234,6 +234,9 @@ run_detect_changes() {
 run_build_rust() {
     log_step "Running build-rust-lambda job..."
     
+    # Clean old rust-lambdas artifacts to ensure we get fresh ones
+    find "$ARTIFACTS_DIR" -name "rust-lambdas-*.zip" -type f -delete 2>/dev/null || true
+    
     local event_file="${EVENTS_DIR}/push-merge.json"
     
     act -j build-rust-lambda \
@@ -245,9 +248,44 @@ run_build_rust() {
     
     log_info "Rust build complete"
     
+    extract_rust_artifacts
+    
     echo ""
     show_artifacts
     show_deploy_instructions
+}
+
+extract_rust_artifacts() {
+    log_step "Extracting Rust Lambda artifacts to deployment folder..."
+    
+    cd "$PROJECT_ROOT"
+    
+    local artifact_path=$(find "$ARTIFACTS_DIR" -name "rust-lambdas-*.zip" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    
+    if [ -z "$artifact_path" ]; then
+        log_warn "No rust-lambdas artifact found in $ARTIFACTS_DIR"
+        log_info "Looking for existing rust_lambda_deployment.zip in lambda/..."
+        
+        if [ -f "lambda/rust_lambda_deployment.zip" ]; then
+            artifact_path="lambda/rust_lambda_deployment.zip"
+        else
+            log_error "No artifact found to extract"
+            return 1
+        fi
+    fi
+    
+    log_info "Found most recent artifact: $artifact_path"
+    
+    cd "$PROJECT_ROOT/rust_lambda_deployment"
+    
+    unzip -o "$artifact_path"
+    unzip -o "rust_lambda_deployment.zip"
+    rm -f "rust_lambda_deployment.zip"
+    cp -r rust_lambda_deployment/* .
+    rm -r rust_lambda_deployment
+    
+    log_info "Artifacts extracted to: $PROJECT_ROOT/rust_lambda_deployment/"
+    ls -la "$PROJECT_ROOT/rust_lambda_deployment/"
 }
 
 run_build_and_test() {
@@ -365,10 +403,12 @@ build_rust_local() {
     log_step "Creating deployment packages..."
     rm -rf rust_lambda_deployment rust_lambda_deployment.zip
     mkdir -p rust_lambda_deployment/social-services-transformer
+    mkdir -p rust_lambda_deployment/social-services-validator
     mkdir -p rust_lambda_deployment/population_municipal_greater_65
     mkdir -p rust_lambda_deployment/population_municipal_greater_65_mart
     
     cp target/lambda/social-services-transformer/bootstrap rust_lambda_deployment/social-services-transformer/
+    cp target/lambda/social-services-validator/bootstrap rust_lambda_deployment/social-services-validator/
     cp target/lambda/population_municipal_greater_65/bootstrap rust_lambda_deployment/population_municipal_greater_65/
     cp target/lambda/population_municipal_greater_65_mart/bootstrap rust_lambda_deployment/population_municipal_greater_65_mart/
     
@@ -377,6 +417,15 @@ build_rust_local() {
     log_info "Local build complete!"
     echo ""
     ls -la rust_lambda_deployment/
+    echo ""
+    
+    # Copy to project root deployment folder
+    log_step "Copying to project root deployment folder..."
+    cd "$PROJECT_ROOT"
+    rm -rf rust_lambda_deployment
+    unzip -o lambda/rust_lambda_deployment.zip
+    ls -la rust_lambda_deployment/
+    
     echo ""
     show_deploy_instructions
 }

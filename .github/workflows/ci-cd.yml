@@ -61,6 +61,9 @@ jobs:
               - 'lambda/mart/**/*.rs'
               - 'lambda/mart/**/Cargo.toml'
               - 'lambda/mart/**/Cargo.lock'
+              - 'lambda/validators/**/*.rs'
+              - 'lambda/validators/**/Cargo.toml'
+              - 'lambda/validators/**/Cargo.lock'
               - 'lambda/Cargo.toml'
               - 'lambda/Cargo.lock'
             python-lambda:
@@ -172,9 +175,11 @@ jobs:
         run: |
           mkdir -p rust_lambda_deployment
           mkdir -p rust_lambda_deployment/social-services-transformer
+          mkdir -p rust_lambda_deployment/social-services-validator
           mkdir -p rust_lambda_deployment/population_municipal_greater_65
           mkdir -p rust_lambda_deployment/population_municipal_greater_65_mart
           cp target/lambda/social-services-transformer/bootstrap rust_lambda_deployment/social-services-transformer/bootstrap
+          cp target/lambda/social-services-validator/bootstrap rust_lambda_deployment/social-services-validator/bootstrap
           cp target/lambda/population_municipal_greater_65/bootstrap rust_lambda_deployment/population_municipal_greater_65/bootstrap
           cp target/lambda/population_municipal_greater_65_mart/bootstrap rust_lambda_deployment/population_municipal_greater_65_mart/bootstrap
           zip -r rust_lambda_deployment.zip rust_lambda_deployment
