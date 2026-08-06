@@ -43,6 +43,18 @@ export class ConfigHelper {
     };
   }
 
+  /**
+   * Whether buckets should empty themselves on destroy via the CDK
+   * S3AutoDeleteObjects custom resource. Default: true outside prod.
+   * Disable with `-c autoDeleteObjects=false` for local emulator deploys
+   * (MiniStack's Lambda warm pool lacks @aws-sdk/client-s3 and its docker
+   * executor cannot deliver the CDK cfn-response HTTPS callback).
+   */
+  public static shouldAutoDeleteObjects(scope: Construct, environmentName: string): boolean {
+    return environmentName !== 'prod'
+      && ![false, 'false'].includes(scope.node.tryGetContext('autoDeleteObjects'));
+  }
+
   public static validateEnvironment(environmentName: string): void {
     const validEnvironments = ['dev', 'prod'];
     if (!validEnvironments.includes(environmentName)) {
