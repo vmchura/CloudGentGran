@@ -124,6 +124,11 @@ population_municipal_greater_65_initializer = LambdaInvokeFunctionOperator(
     function_name=config["population_municipal_greater_65_function"],
     aws_conn_id=config["aws_conn_id"],
     invocation_type="RequestResponse",
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 
@@ -139,6 +144,11 @@ population_municipal_greater_65_transformer = LambdaInvokeFunctionOperator(
     aws_conn_id=config["aws_conn_id"],
     invocation_type="RequestResponse",
     payload="{{ task_instance.xcom_pull(task_ids='prepare_transformer_payload') | tojson }}",
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 
