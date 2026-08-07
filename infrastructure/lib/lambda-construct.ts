@@ -161,7 +161,10 @@ export class LambdaConstruct extends Construct {
                 command: [
                     'bash', '-c', [
                         'pip install -r requirements.txt -t /asset-output',
-                        'cp -au . /asset-output'
+                        'cp -au . /asset-output',
+                        // MiniStack extracts the zip into a dir named `code/`; a top-level
+                        // __init__.py turns it into a package that shadows stdlib `code`
+                        'rm -f /asset-output/__init__.py'
                     ].join(' && ')
                 ],
             },
