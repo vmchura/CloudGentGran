@@ -181,6 +181,16 @@ export class CatalogConstruct extends Construct {
     });
   }
   /**
+   * Extra env for local MiniStack deploys: points the AWS SDK at the emulator.
+   * Set with `-c awsEndpointUrl=http://172.30.0.10:4566`; absent in real AWS deploys.
+   * MiniStack injects AWS_ENDPOINT_URL=http://host.docker.internal:4566 into RIE
+   * containers without wiring the hosts entry, so an explicit IP-literal value wins.
+   */
+  private getLocalEndpointEnv(): Record<string, string> {
+    const endpoint = this.node.tryGetContext('awsEndpointUrl') as string | undefined;
+    return endpoint ? { AWS_ENDPOINT_URL: endpoint } : {};
+  }
+  /**
    * Creates a simplified Lambda function for creating raw parquet files
    */
   private createServiceTypeCatalogLambda(props: CatalogLambdaProps): lambda.Function {
@@ -214,6 +224,7 @@ export class CatalogConstruct extends Construct {
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
+        ...this.getLocalEndpointEnv(),
         CATALOG_BUCKET_NAME: this.catalogBucketName,
         ENVIRONMENT: environmentName,
         REGION: region
@@ -278,6 +289,7 @@ export class CatalogConstruct extends Construct {
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
+        ...this.getLocalEndpointEnv(),
         CATALOG_BUCKET_NAME: this.catalogBucketName,
         ENVIRONMENT: environmentName,
         REGION: region
@@ -344,6 +356,7 @@ export class CatalogConstruct extends Construct {
       memorySize: 512, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
+        ...this.getLocalEndpointEnv(),
         CATALOG_BUCKET_NAME: this.catalogBucketName,
         SEMANTIC_IDENTIFIER: 'municipals',
         DATASET_IDENTIFIER: '9aju-tpwc',

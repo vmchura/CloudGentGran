@@ -87,12 +87,17 @@ services:
       - LOG_LEVEL=DEBUG
       - MINISTACK_REGION=eu-west-1
 
-      # Lambda: default executor is `local` (in-process subprocess). The `docker`
-      # executor reuses a warm container pool. Required for CDK custom resources
-      # (cfn-response forces HTTPS+drops port; the fix shim only exists in the
-      # docker executor). provided.* runtimes (Rust lambdas) always use Docker
-      # RIE regardless.
+      # Lambda: run invocations in Docker (warm container pool). The default
+      # `local` executor runs Python in-process (no network isolation) but
+      # executes provided.* (Rust) bootstraps as bare subprocesses, where the
+      # Rust SDK cannot dial back to MiniStack. CDK custom resources also need
+      # Docker (cfn-response forces HTTPS+drops port; the fix shim only exists
+      # in the docker executor).
+      - LAMBDA_EXECUTOR=docker
       - DOCKER_NETWORK=cloudgentgran-local
+      # MiniStack injects AWS_ENDPOINT_URL=http://host.docker.internal:4566 into
+      # RIE containers; wire the hosts entry so that fallback resolves too
+      - LAMBDA_DOCKER_FLAGS=--add-host=host.docker.internal:host-gateway
 
       # State persistence across restarts
       - PERSIST_STATE=1
@@ -118,7 +123,8 @@ services:
           memory: 1G
           cpus: '1.0'
     networks:
-      - cloudgentgran-local
+      cloudgentgran-local:
+        ipv4_address: 172.30.0.10
 
   # ===========================================
   # Apache Airflow - Main Service
@@ -224,6 +230,12 @@ networks:
   cloudgentgran-local:
     driver: bridge
     name: cloudgentgran-local
+    # Fixed subnet so ministack can keep a static IP — Rust (hyper) lambdas in
+    # RIE containers can't resolve docker's embedded DNS (getaddrinfo EBUSY),
+    # so they need an IP-literal AWS_ENDPOINT_URL
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
 
 # ===========================================
 # Volumes

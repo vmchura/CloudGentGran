@@ -166,10 +166,23 @@ export class LambdaConstruct extends Construct {
                         // __init__.py turns it into a package that shadows stdlib `code`
                         'rm -f /asset-output/__init__.py'
                     ].join(' && ')
-                ],
-            },
-        });
+                 ],
+             },
+         });
+     }
+
+    /**
+     * Extra env for local MiniStack deploys: points the AWS SDK at the emulator.
+     * Set with `-c awsEndpointUrl=http://ministack:4566`; absent in real AWS deploys.
+     * Needed by Rust lambdas (Docker RIE executor) — unlike MiniStack's `local`
+     * executor, RIE containers get no endpoint injected.
+     */
+    private getLocalEndpointEnv(): Record<string, string> {
+        const endpoint = this.node.tryGetContext('awsEndpointUrl') as string | undefined;
+        return endpoint ? { AWS_ENDPOINT_URL: endpoint } : {};
     }
+
+
 
     /**
      * Creates Lambda infrastructure including the API extractor function with proper IAM roles.
@@ -208,6 +221,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'social_services',
                 DATASET_IDENTIFIER: 'ivft-vegh',
@@ -270,6 +284,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: validatorRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'social_services',
                 ENVIRONMENT: environmentName,
@@ -325,6 +340,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'population_municipal_greater_65',
             },
@@ -391,6 +407,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: transformerRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
                 SEMANTIC_IDENTIFIER: 'social_services',
@@ -453,6 +470,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: transformerRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
                 SEMANTIC_IDENTIFIER: 'municipal_population',
@@ -510,6 +528,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: martRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
                 SEMANTIC_IDENTIFIER: 'municipal_population',
@@ -568,6 +587,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'comarques_boundaries',
             },

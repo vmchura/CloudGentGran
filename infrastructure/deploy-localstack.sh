@@ -95,6 +95,7 @@ if npx cdklocal deploy CatalunyaDataStack-dev \
     -c createAirflowUser=false \
     -c autoDeleteObjects=false \
     -c createAnalyticsResources=false \
+    -c awsEndpointUrl=http://172.30.0.10:4566 \
     --require-approval never \
     --outputs-file cdk-outputs.json \
     --progress events \
