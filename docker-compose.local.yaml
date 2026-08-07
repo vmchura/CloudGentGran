@@ -99,6 +99,10 @@ services:
       # RIE containers; wire the hosts entry so that fallback resolves too
       - LAMBDA_DOCKER_FLAGS=--add-host=host.docker.internal:host-gateway
 
+      # Athena: real SQL via bundled DuckDB engine (full image). Pin so a slim
+      # image swap never silently degrades to mock
+      - ATHENA_ENGINE=duckdb
+
       # State persistence across restarts
       - PERSIST_STATE=1
       - STATE_DIR=/var/lib/ministack

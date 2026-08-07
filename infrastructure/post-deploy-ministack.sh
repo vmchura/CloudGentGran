@@ -71,20 +71,28 @@ fi
 # ========================================
 PARQUET_FORMAT='"InputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat", "OutputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat", "SerdeInfo": {"SerializationLibrary": "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"}'
 
+# MiniStack's Athena (DuckDB engine) infers file format from the Glue table's
+# `classification` parameter, not from InputFormat/SerdeInfo — without it the
+# engine globs *.csv under the table location and the query fails
+CLASSIFICATION='"Parameters": {"classification": "parquet", "EXTERNAL": "TRUE"},'
+
 create_table() {
   local name="$1"
   local table_input="$2"
   echo -e "${YELLOW}Creating Glue table: ${name}${NC}"
   if aws_cli glue create-table --database-name "$DATABASE_NAME" --table-input "$table_input" 2>&1; then
       echo -e "${GREEN}✅ Table ${name} created${NC}"
+  elif aws_cli glue update-table --database-name "$DATABASE_NAME" --table-input "$table_input" 2>&1; then
+      echo -e "${GREEN}✅ Table ${name} updated (already existed)${NC}"
   else
-      echo -e "${YELLOW}⚠️  Table ${name} creation failed (may already exist)${NC}"
+      echo -e "${YELLOW}⚠️  Table ${name} create/update failed${NC}"
   fi
 }
 
 create_table "social_services" "{
   \"Name\": \"social_services\",
   \"TableType\": \"EXTERNAL_TABLE\",
+  ${CLASSIFICATION}
   \"StorageDescriptor\": {
     \"Columns\": [
       {\"Name\": \"social_service_register_id\", \"Type\": \"string\"},
@@ -104,6 +112,7 @@ create_table "social_services" "{
 create_table "municipal_population" "{
   \"Name\": \"municipal_population\",
   \"TableType\": \"EXTERNAL_TABLE\",
+  ${CLASSIFICATION}
   \"StorageDescriptor\": {
     \"Columns\": [
       {\"Name\": \"municipal_id\", \"Type\": \"string\"},
@@ -116,9 +125,27 @@ create_table "municipal_population" "{
   }
 }"
 
+create_table "comarca_population" "{
+  \"Name\": \"comarca_population\",
+  \"TableType\": \"EXTERNAL_TABLE\",
+  ${CLASSIFICATION}
+  \"StorageDescriptor\": {
+    \"Columns\": [
+      {\"Name\": \"comarca_id\", \"Type\": \"string\"},
+      {\"Name\": \"population_age_65_and_over\", \"Type\": \"double\"},
+      {\"Name\": \"year\", \"Type\": \"bigint\"},
+      {\"Name\": \"population\", \"Type\": \"double\"},
+      {\"Name\": \"elderly_indicator\", \"Type\": \"double\"}
+    ],
+    \"Location\": \"s3://${DATA_BUCKET}/marts/comarca_population/\",
+    ${PARQUET_FORMAT}
+  }
+}"
+
 create_table "municipals" "{
   \"Name\": \"municipals\",
   \"TableType\": \"EXTERNAL_TABLE\",
+  ${CLASSIFICATION}
   \"StorageDescriptor\": {
     \"Columns\": [
       {\"Name\": \"municipal_id\", \"Type\": \"string\"},
@@ -134,6 +161,7 @@ create_table "municipals" "{
 create_table "service_type" "{
   \"Name\": \"service_type\",
   \"TableType\": \"EXTERNAL_TABLE\",
+  ${CLASSIFICATION}
   \"StorageDescriptor\": {
     \"Columns\": [
       {\"Name\": \"service_type_id\", \"Type\": \"string\"},
@@ -148,6 +176,7 @@ create_table "service_type" "{
 create_table "service_qualification" "{
   \"Name\": \"service_qualification\",
   \"TableType\": \"EXTERNAL_TABLE\",
+  ${CLASSIFICATION}
   \"StorageDescriptor\": {
     \"Columns\": [
       {\"Name\": \"service_qualification_id\", \"Type\": \"string\"},

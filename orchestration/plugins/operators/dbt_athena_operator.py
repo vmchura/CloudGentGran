@@ -134,7 +134,7 @@ class DbtAthenaOperator(BaseOperator):
 
         s3 = boto3.client(
             "s3",
-            endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
+            endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://ministack:4566"),
         )
 
         paginator = s3.get_paginator("list_objects_v2")
