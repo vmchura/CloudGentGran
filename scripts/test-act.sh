@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Test GitHub Actions workflows locally with act and LocalStack
+# Test GitHub Actions workflows locally with act and MiniStack
 # Usage: ./scripts/test-act.sh [options]
 set -e
 
@@ -16,7 +16,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ARTIFACTS_DIR="${PROJECT_ROOT}/.act-artifacts"
-LOCALSTACK_ENDPOINT="http://localhost:4566"
+MINISTACK_ENDPOINT="http://localhost:4566"
 EVENTS_DIR="${PROJECT_ROOT}/.github/tests"
 
 # Available jobs in the workflow
@@ -30,7 +30,7 @@ AVAILABLE_JOBS=(
 )
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  GitHub Actions Local Testing with act + LocalStack${NC}"
+echo -e "${BLUE}  GitHub Actions Local Testing with act + MiniStack${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 
 # ==========================================
@@ -68,15 +68,15 @@ check_docker() {
     fi
 }
 
-check_localstack() {
-    if curl -s "${LOCALSTACK_ENDPOINT}/_localstack/health" > /dev/null 2>&1; then
-        log_info "LocalStack is running at $LOCALSTACK_ENDPOINT"
+check_ministack() {
+    if curl -sf "${MINISTACK_ENDPOINT}/_ministack/health" > /dev/null 2>&1; then
+        log_info "MiniStack is running at $MINISTACK_ENDPOINT"
         return 0
     else
-        log_warn "LocalStack is not running at $LOCALSTACK_ENDPOINT"
+        log_warn "MiniStack is not running at $MINISTACK_ENDPOINT"
         echo ""
-        echo "Start LocalStack with:"
-        echo "  cd localstack && docker-compose up -d"
+        echo "Start MiniStack with:"
+        echo "  docker compose -f docker-compose.local.yaml up -d ministack"
         echo ""
         echo "Or use --build-only to skip AWS-dependent tests"
         return 1
@@ -114,19 +114,19 @@ prepare_artifacts_dir() {
 create_secrets_file() {
     local secrets_file="${PROJECT_ROOT}/.secrets"
     if [ ! -f "$secrets_file" ]; then
-        log_step "Creating .secrets file for LocalStack..."
+        log_step "Creating .secrets file for MiniStack..."
         cat > "$secrets_file" << EOF
 AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_DEFAULT_REGION=eu-west-1
-AWS_ENDPOINT_URL=${LOCALSTACK_ENDPOINT}
-AWS_ENDPOINT_URL_S3=${LOCALSTACK_ENDPOINT}
+AWS_ENDPOINT_URL=${MINISTACK_ENDPOINT}
+AWS_ENDPOINT_URL_S3=${MINISTACK_ENDPOINT}
 CDK_DEFAULT_ACCOUNT=000000000000
 CDK_DEFAULT_REGION=eu-west-1
 AWS_ACCOUNT_ID=000000000000
 WEB_CERTIFICATE_ID=test-cert-id
 EOF
-        log_info "Created .secrets file with LocalStack credentials"
+        log_info "Created .secrets file with MiniStack credentials"
     else
         log_info ".secrets file already exists"
     fi
@@ -327,7 +327,7 @@ run_specific_job() {
 }
 
 run_full_workflow() {
-    log_step "Running full workflow with LocalStack..."
+    log_step "Running full workflow with MiniStack..."
     
     local event_file="${EVENTS_DIR}/push-merge.json"
     
@@ -345,7 +345,7 @@ run_full_workflow() {
         --rm \
         "${EXTRA_ARGS[@]}" || {
         log_warn "Some steps may have failed"
-        echo "This is normal - AWS-specific features might not work in LocalStack"
+        echo "This is normal - AWS-specific features might not work in MiniStack"
     }
     
     log_info "Full workflow complete"
@@ -443,13 +443,13 @@ show_artifacts() {
 show_deploy_instructions() {
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  Deploying to LocalStack${NC}"
+    echo -e "${CYAN}  Deploying to MiniStack${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo "To deploy the built artifacts to LocalStack:"
+    echo "To deploy the built artifacts to MiniStack:"
     echo ""
-    echo "  1. Ensure LocalStack is running:"
-    echo "     cd localstack && docker-compose up -d"
+    echo "  1. Ensure MiniStack is running:"
+    echo "     docker compose -f docker-compose.local.yaml up -d ministack"
     echo ""
     echo "  2. Unzip artifacts to expected location:"
     echo "     cd ${PROJECT_ROOT}"
@@ -510,21 +510,21 @@ list_jobs() {
 
 show_help() {
     cat << 'EOF'
-Test GitHub Actions workflows locally using act and LocalStack.
+Test GitHub Actions workflows locally using act and MiniStack.
 
 USAGE:
     ./scripts/test-act.sh [OPTIONS]
 
 OPTIONS:
     --build-only         Run only the build-rust-lambda job (default)
-                         Safe to run without LocalStack/AWS credentials
+                         Safe to run without MiniStack/AWS credentials
 
     --detect-changes     Run only the detect-changes job
                          Shows which files would trigger the pipeline
 
     --build-and-test     Run build-and-test job (requires artifacts from build-rust-lambda)
 
-    --full               Run full workflow with LocalStack
+    --full               Run full workflow with MiniStack
                          Simulates a PR merge to develop branch
 
     --full-pr            Run full workflow for Pull Request
@@ -560,7 +560,7 @@ EXAMPLES:
     # Test a specific job
     ./scripts/test-act.sh --job build-rust-lambda --verbose
 
-    # Full workflow test with LocalStack
+    # Full workflow test with MiniStack
     ./scripts/test-act.sh --full
 
     # Clean up artifacts
@@ -579,11 +579,11 @@ WORKFLOW TRIGGER LOGIC:
 REQUIREMENTS:
     - Docker (running)
     - act (https://github.com/nektos/act)
-    - For --full: LocalStack running at http://localhost:4566
+    - For --full: MiniStack running at http://localhost:4566
     - For --local-build: Rust, cargo-lambda, Zig
 
 FILES CREATED:
-    .secrets                    - LocalStack AWS credentials
+    .secrets                    - MiniStack AWS credentials
     .github/tests/push-merge.json - Simulates PR merge event
     .github/tests/push-direct.json - Simulates direct push event
     .github/tests/pull-request.json - Simulates PR event
@@ -592,7 +592,7 @@ FILES CREATED:
 TROUBLESHOOTING:
     - If act fails with "permission denied": Run chmod +x scripts/test-act.sh
     - If Docker errors: Ensure Docker Desktop is running
-    - If LocalStack errors: Start LocalStack first (cd localstack && docker-compose up -d)
+    - If MiniStack errors: docker compose -f docker-compose.local.yaml up -d ministack
     - If Rust build fails: Check Rust version (rustup update)
 
 EOF
@@ -690,11 +690,11 @@ main() {
     if ! check_act; then exit 1; fi
     if ! check_docker; then exit 1; fi
 
-    # Check LocalStack for full workflow
+    # Check MiniStack for full workflow
     if [[ "$MODE" == "full" || "$MODE" == "full-pr" ]]; then
-        if ! check_localstack; then
+        if ! check_ministack; then
             echo ""
-            read -p "Continue without LocalStack? (y/N) " -n 1 -r
+            read -p "Continue without MiniStack? (y/N) " -n 1 -r
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 exit 1

@@ -92,6 +92,10 @@ echo -e "${YELLOW}🚀 Deploying stack to LocalStack with cdklocal...${NC}"
 echo -e "${BLUE}📄 Deployment progress:${NC}"
 if npx cdklocal deploy CatalunyaDataStack-dev \
     --app "node bin/infrastructure.js" \
+    -c createAirflowUser=false \
+    -c autoDeleteObjects=false \
+    -c createAnalyticsResources=false \
+    -c awsEndpointUrl=http://172.30.0.10:4566 \
     --require-approval never \
     --outputs-file cdk-outputs.json \
     --progress events \
@@ -103,6 +107,13 @@ else
 fi
 
 echo -e "${GREEN}✅ Deployment complete!${NC}"
+
+# Create Athena/Glue resources via API (not supported by MiniStack CFN)
+if bash "$(dirname "$0")/post-deploy-ministack.sh"; then
+    echo -e "${GREEN}✅ Post-deploy API resources created${NC}"
+else
+    echo -e "${YELLOW}⚠️  Post-deploy resource creation had errors (check above)${NC}"
+fi
 
 # Show deployment outputs
 if [ -f cdk-outputs.json ]; then

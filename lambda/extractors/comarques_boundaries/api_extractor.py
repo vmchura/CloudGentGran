@@ -1,4 +1,5 @@
 import json
+import re
 import boto3
 import logging
 from datetime import datetime
@@ -86,7 +87,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Validate environment variables
         bucket_name, semantic_identifier = validate_environment()
 
-        catalunya_zip_url = "https://datacloud.icgc.cat/datacloud/divisions-administratives/shp/divisions-administratives-v2r1-20250730.zip"
+        # ICGC rotates the dated zip filename; resolve the latest from the
+        # directory listing instead of hardcoding a URL that goes stale
+        base_url = "https://datacloud.icgc.cat/datacloud/divisions-administratives/shp/"
+        fallback_url = base_url + "divisions-administratives-v2r2-20260120.zip"
+
+        catalunya_zip_url = fallback_url
+        try:
+            listing_html = urlopen(base_url, timeout=30).read().decode("utf-8", "replace")
+            candidates = re.findall(
+                r"divisions-administratives-v\d+r\d+-\d{8}\.zip", listing_html
+            )
+            if candidates:
+                catalunya_zip_url = base_url + sorted(set(candidates))[-1]
+        except Exception as e:
+            logger.warning(f"Could not resolve latest zip from listing, using fallback: {e}")
+        logger.info(f"Downloading {catalunya_zip_url}")
 
         # Download zip file
         try:

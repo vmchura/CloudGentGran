@@ -5,7 +5,7 @@
         materialized = 'external',
 	format = 'parquet',
 	location = "s3://{{ env_var('DATA_BUCKET') }}/marts/{{this.name}}",
-	options = { "per_thread_output" : true }
+	options = { "per_thread_output" : true, "overwrite_or_ignore" : true }
     ) }}
 
   {% else %}

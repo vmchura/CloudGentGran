@@ -543,6 +543,11 @@ invoke_api_extractor = LambdaInvokeFunctionOperator(
     aws_conn_id=config["aws_conn_id"],
     invocation_type="RequestResponse",  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="prepare_extractor_payload") | tojson }}',
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 
@@ -575,6 +580,11 @@ invoke_validator = LambdaInvokeFunctionOperator(
     invocation_type="RequestResponse",
     payload='{{ task_instance.xcom_pull(task_ids="prepare_validator_payload") | tojson }}',
     execution_timeout=timedelta(minutes=config.get("lambda_timeout_minutes", 15)),
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 
@@ -600,6 +610,11 @@ invoke_transformer = LambdaInvokeFunctionOperator(
     invocation_type="RequestResponse",
     payload='{{ task_instance.xcom_pull(task_ids="prepare_transformer_payload") | tojson }}',
     execution_timeout=timedelta(minutes=config.get("lambda_timeout_minutes", 15)),
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 

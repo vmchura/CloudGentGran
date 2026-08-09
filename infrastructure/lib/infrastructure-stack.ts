@@ -32,9 +32,9 @@ export class CatalunyaDataStack extends cdk.Stack {
   public readonly iamInfrastructure: IamConstruct;
   public readonly s3Infrastructure: S3Construct;
   public readonly lambdaInfrastructure: LambdaConstruct;
-  public readonly analyticsInfrastructure: AnalyticsConstruct;
+  public readonly analyticsInfrastructure?: AnalyticsConstruct;
   public readonly catalogInfrastructure: CatalogConstruct;
-  public readonly glueInfrastructure: GlueConstruct;
+  public readonly glueInfrastructure?: GlueConstruct;
   public readonly webInfrastructure: WebConstruct;
   public readonly webInfrastructureLocalStack: WebConstructLocalStack;
 
@@ -79,7 +79,9 @@ export class CatalunyaDataStack extends cdk.Stack {
       athenaDatabaseName: this.athenaDatabaseName,
       athenaWorkgroupName: this.athenaWorkgroupName,
       catalogBucketName: this.catalogBucketName,
-      serviceBucketName: this.serviceBucketName
+      serviceBucketName: this.serviceBucketName,
+      // CLI context values arrive as strings: accept both false and 'false'
+      createAirflowUser: ![false, 'false'].includes(this.node.tryGetContext('createAirflowUser'))
     });
 
     // ========================================
@@ -114,16 +116,24 @@ export class CatalunyaDataStack extends cdk.Stack {
     // ========================================
     // Analytics Infrastructure (Query Layer)
     // ========================================
-    this.analyticsInfrastructure = new AnalyticsConstruct(this, 'AnalyticsInfrastructure', {
-      environmentName: this.environmentName,
-      projectName: this.projectName,
-      config: this.config,
-      account: this.account,
-      athenaDatabaseName: this.athenaDatabaseName,
-      athenaWorkgroupName: this.athenaWorkgroupName,
-      athenaResultsBucketName: this.athenaResultsBucketName,
-      athenaResultsBucket: this.s3Infrastructure.athenaResultsBucket,
-    });
+    // MiniStack CloudFormation does not support AWS::Athena::WorkGroup,
+    // AWS::Glue::Database or AWS::Glue::Table. For local emulator deploys
+    // pass -c createAnalyticsResources=false and create the equivalents via
+    // the Athena/Glue APIs (see infrastructure/post-deploy-ministack.sh).
+    const createAnalytics = ![false, 'false'].includes(this.node.tryGetContext('createAnalyticsResources'));
+
+    if (createAnalytics) {
+      this.analyticsInfrastructure = new AnalyticsConstruct(this, 'AnalyticsInfrastructure', {
+        environmentName: this.environmentName,
+        projectName: this.projectName,
+        config: this.config,
+        account: this.account,
+        athenaDatabaseName: this.athenaDatabaseName,
+        athenaWorkgroupName: this.athenaWorkgroupName,
+        athenaResultsBucketName: this.athenaResultsBucketName,
+        athenaResultsBucket: this.s3Infrastructure.athenaResultsBucket,
+      });
+    }
 
     // ========================================
     // Catalog Infrastructure (Dimension Tables Layer)
@@ -144,15 +154,17 @@ export class CatalunyaDataStack extends cdk.Stack {
     // ========================================
     // Glue Infrastructure (Table Schema Layer)
     // ========================================
-    this.glueInfrastructure = new GlueConstruct(this, 'GlueInfrastructure', {
-      environmentName: this.environmentName,
-      projectName: this.projectName,
-      config: this.config,
-      dataBucketName: this.bucketName,
-      catalogBucketName: this.catalogBucketName,
-      athenaDatabaseName: this.athenaDatabaseName,
-      glueExecutorRole: this.iamInfrastructure.catalogExecutorRole,
-    });
+    if (createAnalytics) {
+      this.glueInfrastructure = new GlueConstruct(this, 'GlueInfrastructure', {
+        environmentName: this.environmentName,
+        projectName: this.projectName,
+        config: this.config,
+        dataBucketName: this.bucketName,
+        catalogBucketName: this.catalogBucketName,
+        athenaDatabaseName: this.athenaDatabaseName,
+        glueExecutorRole: this.iamInfrastructure.catalogExecutorRole,
+      });
+    }
 
     // ========================================
     // Cross-Construct Dependencies
@@ -166,16 +178,22 @@ export class CatalunyaDataStack extends cdk.Stack {
     this.lambdaInfrastructure.node.addDependency(this.s3Infrastructure);
 
     // Analytics depends on IAM and S3
-    this.analyticsInfrastructure.node.addDependency(this.iamInfrastructure);
-    this.analyticsInfrastructure.node.addDependency(this.s3Infrastructure);
+    if (this.analyticsInfrastructure) {
+      this.analyticsInfrastructure.node.addDependency(this.iamInfrastructure);
+      this.analyticsInfrastructure.node.addDependency(this.s3Infrastructure);
+    }
 
     // Catalog depends on all previous layers
     this.catalogInfrastructure.node.addDependency(this.iamInfrastructure);
     this.catalogInfrastructure.node.addDependency(this.s3Infrastructure);
-    this.catalogInfrastructure.node.addDependency(this.analyticsInfrastructure);
+    if (this.analyticsInfrastructure) {
+      this.catalogInfrastructure.node.addDependency(this.analyticsInfrastructure);
+    }
 
     // Glue depends on analytics (database must exist first)
-    this.glueInfrastructure.node.addDependency(this.analyticsInfrastructure);
+    if (this.glueInfrastructure && this.analyticsInfrastructure) {
+      this.glueInfrastructure.node.addDependency(this.analyticsInfrastructure);
+    }
 
     // ========================================
     // Web Infrastructure (Optional - based on config)
@@ -301,23 +319,25 @@ export class CatalunyaDataStack extends cdk.Stack {
     });
 
     // Airflow Authentication Outputs (Minimal Assumer User)
-    new cdk.CfnOutput(this, 'AirflowAssumerUserName', {
-      value: this.iamInfrastructure.airflowUser.userName,
-      description: 'Airflow assumer IAM user name (minimal permissions - only AssumeRole)',
-      exportName: `${this.projectName}-AirflowAssumerUserName`,
-    });
+    if (this.iamInfrastructure.airflowUser && this.iamInfrastructure.airflowAccessKey) {
+      new cdk.CfnOutput(this, 'AirflowAssumerUserName', {
+        value: this.iamInfrastructure.airflowUser.userName,
+        description: 'Airflow assumer IAM user name (minimal permissions - only AssumeRole)',
+        exportName: `${this.projectName}-AirflowAssumerUserName`,
+      });
 
-    new cdk.CfnOutput(this, 'AirflowAssumerAccessKeyId', {
-      value: this.iamInfrastructure.airflowAccessKey.accessKeyId,
-      description: 'Airflow assumer access key ID (SENSITIVE - only for AssumeRole)',
-      exportName: `${this.projectName}-AirflowAssumerAccessKeyId`,
-    });
+      new cdk.CfnOutput(this, 'AirflowAssumerAccessKeyId', {
+        value: this.iamInfrastructure.airflowAccessKey.accessKeyId,
+        description: 'Airflow assumer access key ID (SENSITIVE - only for AssumeRole)',
+        exportName: `${this.projectName}-AirflowAssumerAccessKeyId`,
+      });
 
-    new cdk.CfnOutput(this, 'AirflowAssumerSecretAccessKey', {
-      value: this.iamInfrastructure.airflowAccessKey.secretAccessKey.unsafeUnwrap(),
-      description: 'Airflow assumer secret access key (VERY SENSITIVE - only for AssumeRole)',
-      exportName: `${this.projectName}-AirflowAssumerSecretAccessKey`,
-    });
+      new cdk.CfnOutput(this, 'AirflowAssumerSecretAccessKey', {
+        value: this.iamInfrastructure.airflowAccessKey.secretAccessKey.unsafeUnwrap(),
+        description: 'Airflow assumer secret access key (VERY SENSITIVE - only for AssumeRole)',
+        exportName: `${this.projectName}-AirflowAssumerSecretAccessKey`,
+      });
+    }
 
     new cdk.CfnOutput(this, 'AirflowTargetRoleArn', {
       value: this.iamInfrastructure.airflowCrossAccountRole.roleArn,

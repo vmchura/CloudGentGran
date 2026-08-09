@@ -657,6 +657,11 @@ invoke_service_type_initializer = LambdaInvokeFunctionOperator(
     aws_conn_id=config["aws_conn_id"],
     invocation_type="RequestResponse",  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_service_type_payload") }}',
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 
@@ -692,6 +697,11 @@ invoke_service_qualification_initializer = LambdaInvokeFunctionOperator(
     aws_conn_id=config["aws_conn_id"],
     invocation_type="RequestResponse",  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_service_qualification_payload") }}',
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 
@@ -727,6 +737,11 @@ invoke_municipals_initializer = LambdaInvokeFunctionOperator(
     aws_conn_id=config["aws_conn_id"],
     invocation_type="RequestResponse",  # Synchronous invocation
     payload='{{ task_instance.xcom_pull(task_ids="create_municipals_payload") }}',
+    botocore_config={
+        "connect_timeout": 900,
+        "read_timeout": 900,
+        "tcp_keepalive": True,
+    },
     dag=dag,
 )
 

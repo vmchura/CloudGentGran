@@ -42,7 +42,7 @@ export class WebConstruct extends Construct {
       removalPolicy: environmentName === 'prod'
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environmentName !== 'prod',
+      autoDeleteObjects: ConfigHelper.shouldAutoDeleteObjects(this, environmentName),
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       cors: [

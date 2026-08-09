@@ -15,6 +15,12 @@ export interface IamConstructProps {
   athenaWorkgroupName: string;
   catalogBucketName: string;
   serviceBucketName: string;
+  /**
+   * Whether to create the Airflow IAM user and access key.
+   * Default true. Set false for local emulator deploys (MiniStack
+   * CloudFormation does not support AWS::IAM::User / AWS::IAM::AccessKey).
+   */
+  createAirflowUser?: boolean;
 }
 
 export class IamConstruct extends Construct {
@@ -30,8 +36,8 @@ export class IamConstruct extends Construct {
   public readonly dataServiceRole: iam.Role;
 
   // Orchestration roles
-  public readonly airflowUser: iam.User;
-  public readonly airflowAccessKey: iam.AccessKey;
+  public readonly airflowUser?: iam.User;
+  public readonly airflowAccessKey?: iam.AccessKey;
 
   // Human roles
   public readonly dataEngineerRole: iam.Role;
@@ -766,36 +772,46 @@ export class IamConstruct extends Construct {
     // Airflow IAM User (Minimal Assumer User)
     // ========================================
 
-    this.airflowUser = new iam.User(this, 'AirflowUser', {
-      userName: `dokku-airflow-assumer-${environmentName}`,
-      path: '/service-accounts/',
-    });
+    let airflowAssumerPrincipal: iam.IPrincipal;
 
-    // Create access key for the user
-    this.airflowAccessKey = new iam.AccessKey(this, 'AirflowAccessKey', {
-      user: this.airflowUser,
-    });
+    if (props.createAirflowUser ?? true) {
+      this.airflowUser = new iam.User(this, 'AirflowUser', {
+        userName: `dokku-airflow-assumer-${environmentName}`,
+        path: '/service-accounts/',
+      });
 
-    // Add ONLY AssumeRole permission (minimal permissions principle)
-    this.airflowUser.addToPolicy(new iam.PolicyStatement({
-      sid: 'AssumeCrossAccountRole',
-      effect: iam.Effect.ALLOW,
-      actions: ['sts:AssumeRole'],
-      resources: [`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`],
-      conditions: {
-        StringEquals: {
-          'sts:ExternalId': `catalunya-${environmentName}-airflow-exec`,
+      // Create access key for the user
+      this.airflowAccessKey = new iam.AccessKey(this, 'AirflowAccessKey', {
+        user: this.airflowUser,
+      });
+
+      // Add ONLY AssumeRole permission (minimal permissions principle)
+      this.airflowUser.addToPolicy(new iam.PolicyStatement({
+        sid: 'AssumeCrossAccountRole',
+        effect: iam.Effect.ALLOW,
+        actions: ['sts:AssumeRole'],
+        resources: [`arn:aws:iam::${account}:role/catalunya-airflow-cross-account-role-${environmentName}`],
+        conditions: {
+          StringEquals: {
+            'sts:ExternalId': `catalunya-${environmentName}-airflow-exec`,
+          },
         },
-      },
-    }));
+      }));
 
-    // Apply common tags to user
-    Object.entries(commonTags).forEach(([key, value]) => {
-      cdk.Tags.of(this.airflowUser).add(key, value);
-    });
+      // Apply common tags to user
+      Object.entries(commonTags).forEach(([key, value]) => {
+        cdk.Tags.of(this.airflowUser!).add(key, value);
+      });
 
-    cdk.Tags.of(this.airflowUser).add('ServiceType', 'Orchestration');
-    cdk.Tags.of(this.airflowUser).add('RoleType', 'Assumer');
+      cdk.Tags.of(this.airflowUser).add('ServiceType', 'Orchestration');
+      cdk.Tags.of(this.airflowUser).add('RoleType', 'Assumer');
+
+      airflowAssumerPrincipal = new iam.ArnPrincipal(this.airflowUser.userArn);
+    } else {
+      // Local emulator deploys: the Airflow container authenticates with static
+      // test credentials, the assume-role flow is not exercised.
+      airflowAssumerPrincipal = new iam.AccountRootPrincipal();
+    }
 
     // ========================================
     // Airflow Cross-Account Role
@@ -804,7 +820,7 @@ export class IamConstruct extends Construct {
     this.airflowCrossAccountRole = new iam.Role(this, 'AirflowCrossAccountRole', {
       roleName: `catalunya-airflow-cross-account-role-${environmentName}`,
       description: `Airflow cross-account role for Catalunya Data Pipeline (${environmentName})`,
-      assumedBy: new iam.ArnPrincipal(this.airflowUser.userArn),
+      assumedBy: airflowAssumerPrincipal,
       externalIds: [`catalunya-${environmentName}-airflow-exec`],
       maxSessionDuration: cdk.Duration.minutes(61),
       managedPolicies: [
