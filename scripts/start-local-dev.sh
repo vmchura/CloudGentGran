@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Catalunya Data Pipeline - Local Development Startup Script
-# This script starts the complete local development environment with LocalStack integration
+# This script starts the complete local development environment with MiniStack integration
 
-set -e
+set -euo pipefail
 
 # Colors
 GREEN='\033[0;32m'
@@ -12,7 +12,25 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${BLUE}🚀 Starting Catalunya Data Pipeline - Local Development Environment${NC}"
+MINISTACK_STATE_VOLUME="${MINISTACK_STATE_VOLUME:-cloudgentgran-ministack-state}"
+COMPOSE_FILE="docker-compose.local.yaml"
+
+print_usage() {
+    cat << EOF
+Usage: $0 <command>
+
+Commands:
+    start        Start services (preserves MiniStack state, no CDK deploy)
+    full-deploy  Clean start: delete MiniStack state, deploy CDK
+    stop         Stop containers (preserves volumes and data)
+    destroy      Remove all containers and volumes (irreversible)
+
+S3 Data Persistence:
+    Use scripts/localstack-s3-backup.sh for backup/restore of S3 bucket data
+    MiniStack state reset without restart: curl -X POST http://localhost:4566/_ministack/reset
+EOF
+    exit 1
+}
 
 # Check prerequisites
 check_prerequisites() {
@@ -48,9 +66,28 @@ check_prerequisites() {
 set_environment() {
     echo -e "${YELLOW}🔧 Setting up environment variables...${NC}"
 
+    # Load persisted keys from .env (compose also reads this file)
+    if [ -f ".env" ]; then
+        set -a; source ".env"; set +a
+    fi
+
     export AIRFLOW_UID=$(id -u)
-    export AIRFLOW_FERNET_KEY=${AIRFLOW_FERNET_KEY:-$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || echo "YourFernetKeyHere123456789012345678901234567890123456789012=")}
-    export AIRFLOW_SECRET_KEY=${AIRFLOW_SECRET_KEY:-$(openssl rand -base64 32 2>/dev/null || echo "YourSecretKeyHere1234567890123456789012")}
+
+    # Keys MUST come from .env (loaded above) — a new Fernet key per run would
+    # make previously stored Airflow connections unreadable
+    if [ -z "${AIRFLOW_FERNET_KEY:-}" ]; then
+        echo -e "${RED}❌ AIRFLOW_FERNET_KEY is not set${NC}"
+        echo -e "${YELLOW}Add it to .env. Generate one with:${NC}"
+        echo -e "${BLUE}  python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"${NC}"
+        exit 1
+    fi
+    if [ -z "${AIRFLOW_SECRET_KEY:-}" ]; then
+        echo -e "${RED}❌ AIRFLOW_SECRET_KEY is not set${NC}"
+        echo -e "${YELLOW}Add it to .env. Generate one with:${NC}"
+        echo -e "${BLUE}  openssl rand -base64 32${NC}"
+        exit 1
+    fi
+    export AIRFLOW_FERNET_KEY AIRFLOW_SECRET_KEY
 
     echo -e "${GREEN}✅ Environment variables set${NC}"
     echo -e "   - AIRFLOW_UID: ${AIRFLOW_UID}"
@@ -84,28 +121,7 @@ cleanup() {
     echo -e "${YELLOW}🧹 Cleaning up existing containers...${NC}"
 
     # Stop Docker Compose services
-    docker-compose -f docker-compose.local.yaml down --remove-orphans || true
-
-    # Clean up any stale S3FS mounts
-    echo -e "${YELLOW}🔧 Cleaning up stale S3FS mounts...${NC}"
-    sudo umount -f ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-catalog-dev 2>/dev/null || true
-    sudo umount -f ./localstack/s3-mounts/catalunya-service-dev 2>/dev/null || true
-
-    # Remove and recreate mount directories
-    sudo rm -rf ./localstack/s3-mounts/catalunya-data-dev 2>/dev/null || true
-    sudo rm -rf ./localstack/s3-mounts/catalunya-athena-results-dev 2>/dev/null || true
-    sudo rm -rf ./localstack/s3-mounts/catalunya-catalog-dev 2>/dev/null || true
-    sudo rm -rf ./localstack/s3-mounts/catalunya-service-dev 2>/dev/null || true
-
-    mkdir -p ./localstack/s3-mounts/catalunya-data-dev
-    mkdir -p ./localstack/s3-mounts/catalunya-athena-results-dev
-    mkdir -p ./localstack/s3-mounts/catalunya-catalog-dev
-    mkdir -p ./localstack/s3-mounts/catalunya-service-dev
-
-    # Set proper ownership
-    sudo chown -R $USER:$USER ./localstack/s3-mounts/ 2>/dev/null || true
+    docker compose -f "$COMPOSE_FILE" down --remove-orphans || true
 
     # Clean up local development dbt copy
     if [ -d "orchestration/dbt" ]; then
@@ -126,17 +142,17 @@ deploy_infrastructure() {
     # Store current directory
     local original_dir=$(pwd)
 
-    # Ensure LocalStack is ready
-    echo -e "${BLUE}⏳ Waiting for LocalStack to be fully ready...${NC}"
-    timeout 180s bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "available"; do sleep 3; done' || {
-        echo -e "${RED}❌ LocalStack not ready for CDK deployment${NC}"
+    # Ensure MiniStack is ready (HTTP 200 on health endpoint)
+    echo -e "${BLUE}⏳ Waiting for MiniStack to be fully ready...${NC}"
+    timeout 60s bash -c 'until curl -sf http://localhost:4566/_ministack/health > /dev/null; do sleep 2; done' || {
+        echo -e "${RED}❌ MiniStack not ready for CDK deployment${NC}"
         show_logs
         exit 1
     }
 
-    # Additional wait to ensure LocalStack services are fully initialized
-    echo -e "${BLUE}⏳ Ensuring LocalStack services are fully initialized...${NC}"
-    sleep 90
+    # Brief settle time for container-backed services
+    echo -e "${BLUE}⏳ Ensuring MiniStack services are fully initialized...${NC}"
+    sleep 5
 
     # Change to infrastructure directory
     cd infrastructure
@@ -179,7 +195,7 @@ start_services() {
     echo -e "${YELLOW}🐳 Starting Docker services...${NC}"
 
     # Start services in the correct order
-    docker-compose -f docker-compose.local.yaml up -d --build
+    docker compose -f "$COMPOSE_FILE" up -d --build
 
     echo -e "${GREEN}✅ Services started${NC}"
 }
@@ -188,16 +204,16 @@ start_services() {
 monitor_startup() {
     echo -e "${YELLOW}👁️  Monitoring service startup...${NC}"
 
-    echo -e "${BLUE}Waiting for LocalStack to be ready...${NC}"
-    timeout 180s bash -c 'until curl -s http://localhost:4566/_localstack/health > /dev/null; do sleep 5; done' || {
-        echo -e "${RED}❌ LocalStack failed to start${NC}"
+    echo -e "${BLUE}Waiting for MiniStack to be ready...${NC}"
+    timeout 60s bash -c 'until curl -sf http://localhost:4566/_ministack/health > /dev/null; do sleep 2; done' || {
+        echo -e "${RED}❌ MiniStack failed to start${NC}"
         show_logs
         exit 1
     }
-    echo -e "${GREEN}✅ LocalStack is ready${NC}"
+    echo -e "${GREEN}✅ MiniStack is ready${NC}"
 
     echo -e "${BLUE}Waiting for Airflow to be ready...${NC}"
-    timeout 300s bash -c 'until curl -s http://localhost:8080/health > /dev/null; do sleep 10; done' || {
+    timeout 300s bash -c 'until curl -sf http://localhost:8080/api/v2/monitor/health > /dev/null; do sleep 10; done' || {
         echo -e "${RED}❌ Airflow failed to start${NC}"
         show_logs
         exit 1
@@ -208,12 +224,12 @@ monitor_startup() {
 # Show service status
 show_status() {
     echo -e "${BLUE}📊 Service Status:${NC}"
-    docker-compose -f docker-compose.local.yaml ps
+    docker compose -f "$COMPOSE_FILE" ps
 
     echo -e "\n${BLUE}🔗 Service URLs:${NC}"
     echo -e "  📊 Airflow UI:     http://localhost:8080 (admin/admin)"
-    echo -e "  🔧 LocalStack:     http://localhost:4566"
-    echo -e "  📊 LocalStack UI:  http://localhost:4566/_localstack/health"
+    echo -e "  🔧 MiniStack:      http://localhost:4566"
+    echo -e "  📊 MiniStack UI:   http://localhost:4566/_ministack/health"
     echo -e "  🗄️  PostgreSQL:    localhost:5432 (airflow/airflow)"
 
     echo -e "\n${BLUE}🐳 Container Status:${NC}"
@@ -223,8 +239,8 @@ show_status() {
 # Show logs for debugging
 show_logs() {
     echo -e "${RED}🔍 Showing recent logs for debugging:${NC}"
-    echo -e "\n${YELLOW}LocalStack logs:${NC}"
-    docker logs --tail 20 cloudgentgran-localstack 2>&1 || true
+    echo -e "\n${YELLOW}MiniStack logs:${NC}"
+    docker logs --tail 20 cloudgentgran-ministack 2>&1 || true
     echo -e "\n${YELLOW}Airflow logs:${NC}"
     docker logs --tail 20 cloudgentgran-airflow 2>&1 || true
 }
@@ -233,15 +249,18 @@ show_logs() {
 validate_deployment() {
     echo -e "${YELLOW}🧪 Validating deployment...${NC}"
 
-    # Check LocalStack health
-    if ! curl -s http://localhost:4566/_localstack/health | grep -q '"running"'; then
-        echo -e "${RED}❌ LocalStack health check failed${NC}"
+    # Check MiniStack health (HTTP 200 is sufficient; MiniStack boots in <2s)
+    if ! curl -sf http://localhost:4566/_ministack/health > /dev/null; then
+        echo -e "${RED}❌ MiniStack health check failed${NC}"
         return 1
     fi
 
-    # Check deployed resources
+    # Check deployed resources (aws CLI is bundled in the MiniStack image, but
+    # docker exec does not inherit credentials/region — pass them explicitly.
+    # Region must match the deploy: MiniStack isolates state per region)
+    local aws_exec="docker exec -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=eu-west-1 cloudgentgran-ministack aws --endpoint-url=http://localhost:4566"
     echo -e "${BLUE}Checking deployed Lambda functions...${NC}"
-    local lambda_count=$(docker exec cloudgentgran-localstack awslocal lambda list-functions --query 'length(Functions)' --output text 2>/dev/null || echo "0")
+    local lambda_count=$($aws_exec lambda list-functions --query 'length(Functions)' --output text 2>/dev/null || echo "0")
     if [ "$lambda_count" -ge 2 ]; then
         echo -e "${GREEN}✅ Lambda functions deployed: $lambda_count${NC}"
     else
@@ -250,121 +269,120 @@ validate_deployment() {
 
     # Check S3 buckets
     echo -e "${BLUE}Checking S3 buckets...${NC}"
-    local bucket_count=$(docker exec cloudgentgran-localstack awslocal s3 ls 2>/dev/null | wc -l)
+    local bucket_count=$($aws_exec s3 ls 2>/dev/null | wc -l)
     if [ "$bucket_count" -ge 1 ]; then
         echo -e "${GREEN}✅ S3 buckets created: $bucket_count${NC}"
     else
         echo -e "${YELLOW}⚠️  No S3 buckets found${NC}"
     fi
 
-    # Check Airflow connection
-    echo -e "${BLUE}Checking Airflow LocalStack connection...${NC}"
+    # Check Airflow connection (conn-id kept as localstack_default for DAG compatibility)
+    echo -e "${BLUE}Checking Airflow AWS connection...${NC}"
     if timeout 30s docker exec cloudgentgran-airflow airflow connections test localstack_default >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ Airflow LocalStack connection working${NC}"
+        echo -e "${GREEN}✅ Airflow MiniStack connection working${NC}"
     else
-        echo -e "${YELLOW}⚠️  Airflow LocalStack connection test failed (may be normal during startup)${NC}"
+        echo -e "${YELLOW}⚠️  Airflow MiniStack connection test failed (may be normal during startup)${NC}"
     fi
 
     echo -e "${GREEN}✅ Validation completed${NC}"
 }
 
-# Main function
-main() {
-    case "${1:-start}" in
-        "start")
-            check_prerequisites
-            set_environment
-            cleanup
-            setup_local_structure
-            start_services
-            monitor_startup
-            deploy_infrastructure  # CDK deployment after LocalStack is ready
-            validate_deployment
-            show_status
-            echo -e "\n${GREEN}🎉 Catalunya Data Pipeline is ready!${NC}"
-            echo -e "${BLUE}📖 Next steps:${NC}"
-            echo -e "  1. Open Airflow UI: http://localhost:8080"
-            echo -e "  2. Login with: admin/admin"
-            echo -e "  3. Enable the 'catalunya_social_services_localstack_pipeline' DAG"
-            echo -e "  4. Trigger a manual run to test the pipeline"
-            ;;
-        "stop")
-            echo -e "${YELLOW}🛑 Stopping Catalunya Data Pipeline...${NC}"
-            docker-compose -f docker-compose.local.yaml down --remove-orphans
-            # Clean up local development dbt copy
-            if [ -d "orchestration/dbt" ]; then
-                echo -e "${BLUE}🗑️  Cleaning up local development files${NC}"
-                rm -rf orchestration/dbt
-            fi
-            echo -e "${GREEN}✅ Services stopped${NC}"
-            ;;
-        "restart")
-            $0 stop
-            sleep 5
-            $0 start
-            ;;
-        "status")
-            show_status
-            ;;
-        "logs")
-            show_logs
-            ;;
-        "validate")
-            validate_deployment
-            ;;
-        "deploy-infra")
-            echo -e "${YELLOW}🏗️  Deploying infrastructure only...${NC}"
-            check_prerequisites
-            deploy_infrastructure
-            ;;
-        "clean")
-            echo -e "${YELLOW}🧹 Cleaning up everything...${NC}"
-            docker-compose -f docker-compose.local.yaml down --volumes --remove-orphans
-            docker system prune -af
-            # Clean CDK outputs
-            rm -f infrastructure/cdk-outputs.json
-            echo -e "${GREEN}✅ Complete cleanup finished${NC}"
-            ;;
-        "help"|"-h"|"--help")
-            cat << EOF
-Catalunya Data Pipeline - Local Development
-
-Usage: $0 [command]
-
-Commands:
-    start          Start the complete local environment (default)
-    stop           Stop all services
-    restart        Restart all services
-    status         Show service status and URLs
-    logs           Show recent logs for debugging
-    validate       Validate deployment and connections
-    deploy-infra   Deploy only the CDK infrastructure (requires LocalStack running)
-    clean          Complete cleanup (removes volumes and images)
-    help           Show this help
-
-Examples:
-    $0              # Start everything
-    $0 start        # Start everything
-    $0 status       # Check status
-    $0 logs         # Show logs for debugging
-    $0 stop         # Stop services
-    $0 deploy-infra # Deploy CDK infrastructure only
-
-Environment Variables:
-    AIRFLOW_FERNET_KEY    Custom Fernet key for Airflow (auto-generated if not set)
-    AIRFLOW_SECRET_KEY    Custom secret key for Airflow (auto-generated if not set)
-
-Prerequisites:
-    - Docker and Docker Compose
-    - Node.js (v14+) and npm for CDK deployment
-EOF
+# Validate command argument
+validate_command() {
+    if [[ $# -lt 1 ]]; then
+        echo -e "${RED}Error: Missing command${NC}"
+        print_usage
+    fi
+    case "$1" in
+        start|full-deploy|stop|destroy)
+            return 0
             ;;
         *)
-            echo -e "${RED}Unknown command: $1${NC}"
-            $0 help
-            exit 1
+            echo -e "${RED}Error: Invalid command '$1'${NC}"
+            print_usage
             ;;
     esac
 }
-# aws --endpoint-url=http://localhost:4566 s3 sync localstack/catalunya-data-dev s3://catalunya-data-dev/ --profile localstack
+
+# Main function
+main() {
+    validate_command "$@"
+    local command="$1"
+    
+    case "$command" in
+        start)
+            echo -e "${BLUE}Starting Catalunya Data Pipeline (preserving existing MiniStack state)...${NC}"
+            check_prerequisites
+            set_environment
+            
+            if [ ! -d "orchestration/dbt" ]; then
+                echo -e "${YELLOW}Setting up local development structure...${NC}"
+                cp -r dbt orchestration/dbt
+            fi
+            
+            docker compose -f "$COMPOSE_FILE" up -d
+            
+            monitor_startup
+            
+            show_status
+            echo -e "${GREEN}Services started. MiniStack persistence enabled (volume: ${MINISTACK_STATE_VOLUME}).${NC}"
+            ;;
+            
+        full-deploy)
+            echo -e "${BLUE}Full deploy: clearing MiniStack state and redeploying Catalunya Data Pipeline...${NC}"
+            check_prerequisites
+            set_environment
+            
+            docker compose -f "$COMPOSE_FILE" down --remove-orphans || true
+            
+            echo -e "${YELLOW}Removing MiniStack persisted state volume...${NC}"
+            docker volume rm -f "${MINISTACK_STATE_VOLUME}" 2>/dev/null || true
+            
+            if [ -d "orchestration/dbt" ]; then
+                rm -rf orchestration/dbt
+            fi
+            cp -r dbt orchestration/dbt
+            
+            docker compose -f "$COMPOSE_FILE" up -d
+            
+            echo -e "${BLUE}Waiting for MiniStack health...${NC}"
+            timeout 60s bash -c 'until curl -sf http://localhost:4566/_ministack/health > /dev/null; do sleep 2; done' || {
+                echo -e "${RED}MiniStack not ready${NC}"
+                exit 1
+            }
+            sleep 5
+            
+            deploy_infrastructure
+            validate_deployment
+            
+            show_status
+            echo -e "${GREEN}Full deploy complete.${NC}"
+            ;;
+            
+        stop)
+            echo -e "${YELLOW}Stopping containers (preserving volumes)...${NC}"
+            
+            docker compose -f "$COMPOSE_FILE" down --remove-orphans
+            if [ -d "orchestration/dbt" ]; then
+                rm -rf orchestration/dbt
+            fi
+            echo -e "${GREEN}Services stopped. Volumes preserved.${NC}"
+            ;;
+            
+        destroy)
+            echo -e "${RED}Destroying all containers and volumes...${NC}"
+            
+            docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
+            
+            if [ -d "orchestration/dbt" ]; then
+                rm -rf orchestration/dbt
+            fi
+            
+            rm -f infrastructure/cdk-outputs.json 2>/dev/null || true
+            
+            echo -e "${GREEN}All infrastructure destroyed (including ${MINISTACK_STATE_VOLUME}). Next start will be fresh.${NC}"
+            ;;
+    esac
+}
+
 main "$@"

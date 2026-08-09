@@ -11,6 +11,7 @@ from municipals_initializer import (
     process_municipal_data,
     create_response,
     get_s3_client,
+    DataProcessingError,
 )
 
 
@@ -81,11 +82,10 @@ class TestMunicipalsInitializer(unittest.TestCase):
 
     def test_process_municipal_data_empty_list(self):
         """Test processing when data list is empty"""
-        result = process_municipal_data([])
+        with self.assertRaises(DataProcessingError) as context:
+            process_municipal_data([])
 
-        # Should return empty DataFrame
-        self.assertEqual(len(result), 0)
-        self.assertIsInstance(result, pd.DataFrame)
+        self.assertIn("No data to process", str(context.exception))
 
     @patch.dict(
         os.environ,
@@ -260,7 +260,7 @@ class TestMunicipalsInitializer(unittest.TestCase):
 
         result = lambda_handler({}, None)
 
-        self.assertEqual(result["statusCode"], 500)
+        self.assertEqual(result["statusCode"], 422)
         self.assertFalse(result["success"])
         self.assertIn("No data extracted", result["message"])
 

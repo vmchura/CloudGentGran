@@ -1,5 +1,5 @@
 # Catalunya Data Pipeline - Local Development Environment
-# Combines Airflow orchestration with LocalStack AWS services emulation
+# Combines Airflow orchestration with MiniStack AWS services emulation
 # Usage: docker-compose -f docker-compose.local.yaml up -d
 
 x-airflow-common:
@@ -8,16 +8,19 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-YourFernetKeyHere}
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-YourSecretKeyHere}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+    AIRFLOW__CORE__TEST_CONNECTION: 'Enabled'
 
-    # LocalStack Integration
-    AWS_ENDPOINT_URL: http://localstack:4566
+    # Auth - No authentication for local development
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: 'true'
+
+    # MiniStack Integration (AWS emulator)
+    AWS_ENDPOINT_URL: http://ministack:4566
     AWS_ACCESS_KEY_ID: test
     AWS_SECRET_ACCESS_KEY: test
     AWS_DEFAULT_REGION: eu-west-1
@@ -26,8 +29,9 @@ x-airflow-common:
     AIRFLOW_VAR_ENVIRONMENT: local
     AIRFLOW_VAR_USE_LOCALSTACK: "true"
 
-    # Airflow Connections - LocalStack
-    AIRFLOW_CONN_LOCALSTACK_DEFAULT: 'aws://test:test@localstack:4566/?region_name=eu-west-1&endpoint_url=http%3A%2F%2Flocalstack%3A4566'
+    # Airflow connection created by airflow-init (stored in metastore DB, supports
+    # proper JSON extras like config_kwargs). Env-var connections would mask it.
+    # conn-id kept as localstack_default for DAG compatibility
 
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
   volumes:
@@ -36,7 +40,7 @@ x-airflow-common:
     - ./orchestration/config:/opt/airflow/config
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./dbt:/opt/airflow/dbt
-    - /var/run/docker.sock:/var/run/docker.sock  # For LocalStack container communication
+    - /var/run/docker.sock:/var/run/docker.sock  # For MiniStack container communication
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - cloudgentgran-local
@@ -44,7 +48,7 @@ x-airflow-common:
     &airflow-common-depends-on
     postgres:
       condition: service_healthy
-    localstack:
+    ministack:
       condition: service_healthy
 
 services:
@@ -65,64 +69,66 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-    restart: always
     ports:
       - "5432:5432"
     networks:
       - cloudgentgran-local
 
   # ===========================================
-  # LocalStack - AWS Services Emulator
+  # MiniStack - AWS Services Emulator
   # ===========================================
-  localstack:
-    container_name: cloudgentgran-localstack
-    image: localstack/localstack:latest
+  ministack:
+    container_name: cloudgentgran-ministack
+    image: ministackorg/ministack:full
     ports:
-      - "4566:4566"            # LocalStack Gateway
+      - "4566:4566"            # MiniStack Gateway
     environment:
-      # Core LocalStack configuration
-      - DEBUG=1
-      - SERVICES=s3,lambda,cloudformation,iam,logs,sts,events,ssm
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - HOST_TMP_FOLDER=${TMPDIR:-/tmp}/localstack
+      # Core MiniStack configuration
+      - LOG_LEVEL=DEBUG
+      - MINISTACK_REGION=eu-west-1
 
-      # Lambda configuration - optimized for better performance
-      - LAMBDA_EXECUTOR=docker-reuse
-      - LAMBDA_REMOTE_DOCKER=false
-      - LAMBDA_DOCKER_NETWORK=cloudgentgran-local
-      - LAMBDA_CONTAINER_REGISTRY=local
-      - LAMBDA_RUNTIME_EXECUTOR_TIMEOUT=900  # 15 minutes timeout
+      # Lambda: run invocations in Docker (warm container pool). The default
+      # `local` executor runs Python in-process (no network isolation) but
+      # executes provided.* (Rust) bootstraps as bare subprocesses, where the
+      # Rust SDK cannot dial back to MiniStack. CDK custom resources also need
+      # Docker (cfn-response forces HTTPS+drops port; the fix shim only exists
+      # in the docker executor).
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_NETWORK=cloudgentgran-local
+      # MiniStack injects AWS_ENDPOINT_URL=http://host.docker.internal:4566 into
+      # RIE containers; wire the hosts entry so that fallback resolves too
+      - LAMBDA_DOCKER_FLAGS=--add-host=host.docker.internal:host-gateway
 
-      # Persistence (optional - keeps data between restarts)
-      - PERSISTENCE=1
-      - DATA_DIR=/tmp/localstack/data
+      # Athena: real SQL via bundled DuckDB engine (full image). Pin so a slim
+      # image swap never silently degrades to mock
+      - ATHENA_ENGINE=duckdb
 
-      # AWS configuration
-      - AWS_DEFAULT_REGION=eu-west-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
+      # State persistence across restarts
+      - PERSIST_STATE=1
+      - STATE_DIR=/var/lib/ministack
+
+      # S3 — S3_PERSIST writes object bytes (not just metadata) to S3_DATA_DIR.
+      # Must live under the persisted STATE_DIR mount or object bodies are lost
+      # on container recreation while metadata survives (broken half-state).
+      - S3_PERSIST=1
+      - S3_DATA_DIR=/var/lib/ministack/s3
     volumes:
-      - "${LOCALSTACK_VOLUME_DIR:-./localstack/volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+      - "ministack-state:/var/lib/ministack"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 60s
-      timeout: 20s
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://localhost:4566/_ministack/health')\""]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 60s
-    restart: always
-    # Resource allocation for better Lambda performance
-    shm_size: '1G'
+      start_period: 10s
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: '1.5'
-        reservations:
           memory: 1G
-          cpus: '0.5'
+          cpus: '1.0'
     networks:
-      - cloudgentgran-local
+      cloudgentgran-local:
+        ipv4_address: 172.30.0.10
 
   # ===========================================
   # Apache Airflow - Main Service
@@ -130,7 +136,8 @@ services:
   airflow:
     <<: *airflow-common
     container_name: cloudgentgran-airflow
-    command: standalone
+    entrypoint: ["/usr/bin/dumb-init", "--", "/entrypoint"]
+    command: ["airflow", "standalone"]
     ports:
       - "8080:8080"
     healthcheck:
@@ -139,101 +146,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
-    restart: always
     depends_on:
       <<: *airflow-common-depends-on
-
-  # ===========================================
-  # S3FS - Mount S3 buckets as file systems
-  # ===========================================
-  s3fs-mounts:
-    image: efrecon/s3fs:1.78
-    container_name: cloudgentgran-s3fs
-    privileged: true
-    cap_add:
-      - SYS_ADMIN
-    devices:
-      - /dev/fuse
-    environment:
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - S3_REGION=eu-west-1
-      - S3_BUCKET=catalunya-data-dev
-      - S3_ENDPOINT_URL=http://localstack:4566
-    volumes:
-      - ./localstack/s3-mounts/catalunya-data-dev:/mnt/s3-data:shared
-      - ./localstack/s3-mounts/catalunya-athena-results-dev:/mnt/s3-results:shared
-      - ./localstack/s3-mounts/catalunya-catalog-dev:/mnt/s3-catalog:shared
-      - ./localstack/s3-mounts/catalunya-service-dev:/mnt/s3-service:shared
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        echo '🔧 Starting S3FS mounts for LocalStack S3 buckets...'
-        
-        echo '⏳ Waiting for LocalStack to be ready...'
-        until wget -q --spider http://localstack:4566/_localstack/health 2>/dev/null; do
-          echo 'Waiting for LocalStack...'
-          sleep 5
-        done
-        echo '✅ LocalStack is ready!'
-        
-        echo '⏳ Waiting for S3 buckets to be created by CDK...'
-        until wget -q --spider http://localstack:4566/catalunya-data-dev 2>/dev/null; do
-          echo 'Waiting for catalunya-data-dev bucket to be created...'
-          sleep 60
-        done
-        echo '✅ catalunya-data-dev bucket found!'
-        
-        until wget -q --spider http://localstack:4566/catalunya-athena-results-dev 2>/dev/null; do
-          echo 'Waiting for catalunya-athena-results-dev bucket to be created...'
-          sleep 60
-        done
-        echo '✅ catalunya-athena-results-dev bucket found!'
-        
-        until wget -q --spider http://localstack:4566/catalunya-service-dev 2>/dev/null; do
-          echo 'Waiting for catalunya-service-dev bucket to be created...'
-          sleep 60
-        done
-        echo '✅ catalunya-service-dev bucket found!'
-        
-        echo '📁 Creating mount points...'
-        mkdir -p /mnt/s3-data /mnt/s3-results /mnt/s3-catalog /mnt/s3-service
-        
-        echo '🔧 Setting up credentials...'
-        echo 'test:test' > /etc/passwd-s3fs
-        chmod 600 /etc/passwd-s3fs
-        
-        echo '📁 Mounting catalunya-data-dev bucket...'
-        s3fs catalunya-data-dev /mnt/s3-data -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '📁 Mounting catalunya-athena-results-dev bucket...'
-        s3fs catalunya-athena-results-dev /mnt/s3-results -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '📁 Mounting catalunya-catalog bucket...'
-        s3fs catalunya-catalog-dev /mnt/s3-catalog -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '📁 Mounting catalunya-service bucket...'
-        s3fs catalunya-service-dev /mnt/s3-service -o url=http://localstack:4566 -o use_path_request_style -o allow_other -o uid=1000 -o gid=1000 -o umask=022 -o passwd_file=/etc/passwd-s3fs -f &
-        
-        echo '✅ S3FS mounts started successfully!'
-        echo '📂 Main data bucket mounted at: /mnt/s3-data'
-        echo '📂 Athena results bucket mounted at: /mnt/s3-results'
-        echo '🔄 Keeping container alive...'
-        
-        wait
-    depends_on:
-      localstack:
-        condition: service_healthy
-    networks:
-      - cloudgentgran-local
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mountpoint", "-q", "/mnt/s3-data"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
 
   # ===========================================
   # Airflow Initialization Service
@@ -250,9 +164,12 @@ services:
           export AIRFLOW_UID=$(id -u)
         fi
         
-        echo "🔧 Creating missing directories..."
+        echo "Creating missing directories..."
         mkdir -p /opt/airflow/{logs,dags,plugins,config}
         mkdir -p /opt/airflow/dbt/mart/local_data
+        chmod -R 777 /opt/airflow/dbt/mart/local_data
+        mkdir -p /opt/airflow/dbt/mart/target
+        chmod -R 777 /opt/airflow/dbt/mart/target
         
         echo "🔧 Setting up DBT profiles..."
         # Copy profiles_template.yml to profiles.yml if it doesn't exist
@@ -260,61 +177,53 @@ services:
         echo "✅ DBT profiles.yml created from template"
         
         # Set DBT target environment
-        export DBT_TARGET=${DBT_TARGET:-local}
-        echo "🔧 DBT_TARGET set to: $DBT_TARGET"
+        export DBT_TARGET=$${DBT_TARGET:-local}
+        echo "🔧 DBT_TARGET set to: $${DBT_TARGET}"
         
         echo "🔧 Setting file permissions..."
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/
         
-        echo "🔧 Installing additional packages..."
-        pip install awscli-local
+        echo "🔧 Running dbt deps..."
+        cd /opt/airflow/dbt/mart && dbt deps
+        echo "✅ dbt deps completed"
         
         echo "🔧 Initializing Airflow database..."
         airflow db migrate
-        
-        echo "🔧 Creating admin user..."
-        airflow users create \
-          --username admin \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@catalunya.cat \
-          --password admin || echo "Admin user already exists"
         
         echo "🔧 Setting up Airflow variables..."
         airflow variables set environment "local"
         airflow variables set use_localstack "true"
         airflow variables set bucket_name "catalunya-data-dev"
-        airflow variables set localstack_endpoint "http://localstack:4566"
+        airflow variables set localstack_endpoint "http://ministack:4566"
         
-        echo "🔧 Creating LocalStack AWS connection..."
+        echo "🔧 Creating MiniStack AWS connection (conn-id kept as localstack_default for DAG compatibility)..."
         airflow connections delete localstack_default || echo "Connection doesn't exist yet"
         airflow connections add \
           --conn-id localstack_default \
           --conn-type aws \
           --conn-extra '{
             "region_name": "eu-west-1",
-            "endpoint_url": "http://localstack:4566",
+            "endpoint_url": "http://ministack:4566",
             "aws_access_key_id": "test",
             "aws_secret_access_key": "test",
-            "verify": false
+            "verify": false,
+            "config_kwargs": {"read_timeout": 900, "connect_timeout": 60}
           }'
         
-        echo "🧪 Testing LocalStack connection..."
+        echo "🧪 Testing MiniStack connection..."
         timeout 30s airflow connections test localstack_default || echo "Connection test timed out - this is normal during startup"
         
         echo "🎉 Catalunya Data Pipeline initialization completed!"
-        echo "📊 Airflow UI: http://localhost:8080 (admin/admin)"
-        echo "🔧 LocalStack UI: http://localhost:4566/_localstack/health"
-        echo "🚀 Ready to run Catalunya Social Services DAGs with LocalStack!"
+        echo "📊 Airflow UI: http://localhost:8080 (no auth required)"
+        echo "🔧 MiniStack UI: http://localhost:4566/_ministack/health"
+        echo "🚀 Ready to run Catalunya Social Services DAGs with MiniStack!"
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
+      # Airflow is pip-installed under the airflow user's site-packages;
+      # without this HOME the root-run init gets ModuleNotFoundError
+      HOME: /home/airflow
     user: "0:0"
-    restart: "no"  # Init service should not restart
     depends_on:
       <<: *airflow-common-depends-on
 
@@ -325,6 +234,12 @@ networks:
   cloudgentgran-local:
     driver: bridge
     name: cloudgentgran-local
+    # Fixed subnet so ministack can keep a static IP — Rust (hyper) lambdas in
+    # RIE containers can't resolve docker's embedded DNS (getaddrinfo EBUSY),
+    # so they need an IP-literal AWS_ENDPOINT_URL
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
 
 # ===========================================
 # Volumes
@@ -332,5 +247,7 @@ networks:
 volumes:
   postgres-db-volume:
     name: cloudgentgran-postgres-data
+  ministack-state:
+    name: cloudgentgran-ministack-state
   airflow-dbt-profiles:
     name: cloudgentgran-airflow-dbt-profiles

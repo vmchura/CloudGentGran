@@ -15,7 +15,7 @@ catalunya_data:
           key_id: test
           secret: test
           use_ssl: false
-          endpoint: "localstack:4566"
+          endpoint: "ministack:4566"
           url_style: path
       threads: 2
 
@@ -28,7 +28,7 @@ catalunya_data:
       s3_data_dir: s3://catalunya-data-dev/marts/
       file_format: parquet
       s3_data_naming: table
-      database: awsdatacatalog
+      database: AwsDataCatalog
 
     prod:
       type: athena
@@ -39,4 +39,4 @@ catalunya_data:
       s3_data_dir: s3://catalunya-data-prod/marts/
       file_format: parquet
       s3_data_naming: table
-      database: awsdatacatalog
+      database: AwsDataCatalog

@@ -1,0 +1,15 @@
+{
+  "action": "opened",
+  "pull_request": {
+    "number": 42,
+    "head": { "ref": "feature/test-feature" },
+    "base": { "ref": "develop" },
+    "merged": false
+  },
+  "repository": {
+    "full_name": "user/repo",
+    "name": "repo",
+    "owner": { "name": "user" }
+  },
+  "sender": { "login": "localtester" }
+}

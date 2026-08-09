@@ -9,7 +9,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
-PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
@@ -20,11 +19,8 @@ SSH_KEY=${3}
 DOKKU_DOMAIN=${4}
 
 # Global variables
-DEPLOYMENT_BRANCH="orchestration-main"
-ORIGINAL_BRANCH=""
 DEPLOYMENT_TAG=""
 DEPLOY_START_TIME=$(date +%s)
-CLEANUP_NEEDED=false
 
 # Environment-specific configurations
 if [ "$ENVIRONMENT" = "production" ]; then
@@ -49,39 +45,11 @@ echo -e "App Name: ${YELLOW}$APP_NAME${NC}"
 echo -e "Database: ${YELLOW}$DB_NAME${NC}"
 echo -e "Server: ${YELLOW}$DOKKU_SERVER${NC}"
 echo -e "Domain: ${YELLOW}$SUBDOMAIN.$DOKKU_DOMAIN${NC}"
-echo -e "Deployment Branch: ${PURPLE}$DEPLOYMENT_BRANCH${NC}"
 echo -e "Deploy Time: ${CYAN}$(date)${NC}"
 echo ""
 # Cleanup function - called on script exit
 cleanup_deployment() {
     local exit_code=$?
-
-    if [ "$CLEANUP_NEEDED" = true ]; then
-        echo -e "${YELLOW}🧹 Cleaning up deployment artifacts...${NC}"
-
-        # Return to original branch if we changed it
-        if [ -n "$ORIGINAL_BRANCH" ]; then
-            echo -e "${BLUE}🔄 Returning to original branch: $ORIGINAL_BRANCH${NC}"
-            git checkout "$ORIGINAL_BRANCH" 2>/dev/null || {
-                echo -e "${RED}⚠️  Warning: Could not return to original branch${NC}"
-            }
-        fi
-
-        # Delete deployment branch if it exists
-        if git show-ref --verify --quiet "refs/heads/$DEPLOYMENT_BRANCH"; then
-            echo -e "${BLUE}🗑️  Deleting deployment branch: $DEPLOYMENT_BRANCH${NC}"
-            git branch -D "$DEPLOYMENT_BRANCH" 2>/dev/null || {
-                echo -e "${RED}⚠️  Warning: Could not delete deployment branch${NC}"
-            }
-        fi
-
-        # Clean up any temporary dbt copy in orchestration
-        if [ -d "orchestration/dbt" ]; then
-            echo -e "${BLUE}🗑️  Removing temporary dbt copy from orchestration${NC}"
-            rm -rf orchestration/dbt
-        fi
-    fi
-
     local end_time=$(date +%s)
     local duration=$((end_time - DEPLOY_START_TIME))
 
@@ -104,37 +72,6 @@ run_on_dokku() {
     ssh -i $SSH_KEY $DOKKU_SERVER "$1"
 }
 
-# Function to create admin user (replaces entrypoint.sh functionality)
-create_admin_user() {
-    echo -e "${YELLOW}👤 Creating/updating admin user...${NC}"
-
-    # Get admin credentials from environment
-    if [ "$ENVIRONMENT" = "production" ]; then
-        ADMIN_USERNAME="${AIRFLOW_USER_NAME_PROD:-admin}"
-        ADMIN_PASSWORD="${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
-    else
-        ADMIN_USERNAME="${AIRFLOW_USER_NAME_DEV:-admin}"
-        ADMIN_PASSWORD="${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
-    fi
-
-    # Create admin user via dokku run (replaces entrypoint.sh user creation)
-    run_on_dokku "dokku run $APP_NAME bash -c '
-        if ! airflow users list | awk \"{print \\\$1}\" | grep -qx \"$ADMIN_USERNAME\"; then
-            echo \"Creating Airflow admin user: $ADMIN_USERNAME\"
-            airflow users create \
-                --username \"$ADMIN_USERNAME\" \
-                --password \"$ADMIN_PASSWORD\" \
-                --firstname \"Admin\" \
-                --lastname \"User\" \
-                --role Admin \
-                --email \"admin@example.com\"
-        else
-            echo \"Admin user $ADMIN_USERNAME already exists\"
-        fi
-    '"
-
-    echo -e "${GREEN}✅ Admin user setup completed${NC}"
-}
 
 # Step 0: Pre-flight checks
 echo -e "${YELLOW}🔍 Pre-flight checks...${NC}"
@@ -152,68 +89,10 @@ if [ ! -f "orchestration/Dockerfile" ]; then
 fi
 
 
-# Store original branch
-ORIGINAL_BRANCH=$(git branch --show-current)
-echo -e "${BLUE}📍 Current branch: $ORIGINAL_BRANCH${NC}"
-
 echo -e "${GREEN}✅ Pre-flight checks passed${NC}"
 
-echo -e "${YELLOW}🌿 Creating deployment branch strategy...${NC}"
-
-# Delete existing deployment branch if it exists
-if git show-ref --verify --quiet "refs/heads/$DEPLOYMENT_BRANCH"; then
-    echo -e "${BLUE}🗑️  Deleting existing deployment branch${NC}"
-    git branch -D "$DEPLOYMENT_BRANCH"
-fi
-
-# Create deployment branch from current HEAD
-echo -e "${BLUE}🆕 Creating deployment branch: $DEPLOYMENT_BRANCH${NC}"
-git checkout -b "$DEPLOYMENT_BRANCH"
-CLEANUP_NEEDED=true
-
-# Copy dbt directory into orchestration
-echo -e "${YELLOW}📦 Integrating dbt models into deployment...${NC}"
-
-# Remove any existing dbt copy in orchestration
-if [ -d "orchestration/dbt" ]; then
-    echo -e "${BLUE}🗑️  Removing old dbt integration${NC}"
-    rm -rf orchestration/dbt
-fi
-
-# Copy dbt directory into orchestration
-echo -e "${BLUE}📁 Copying dbt/ -> orchestration/dbt/${NC}"
-cp -r dbt orchestration/
-
-# Verify dbt copy
-if [ ! -d "orchestration/dbt" ]; then
-    echo -e "${RED}❌ Failed to copy dbt directory${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✅ dbt integration completed ($(du -sh orchestration/dbt | cut -f1))${NC}"
-
-# Commit deployment artifacts
-echo -e "${YELLOW}💾 Committing deployment artifacts...${NC}"
-DEPLOYMENT_TAG="deployment-$(date +%Y%m%d-%H%M%S)-$ENVIRONMENT"
-
-git add -f orchestration/dbt/
-
-if git commit -m "🚀 Deployment artifacts for $ENVIRONMENT
-
-- Integrated dbt models from dbt/ directory
-- Environment: $ENVIRONMENT
-- Timestamp: $(date)
-- Original branch: $ORIGINAL_BRANCH
-- Tag: $DEPLOYMENT_TAG
-
-This is an automated deployment commit.
-"; then
-    echo -e "${GREEN}✅ Deployment artifacts committed${NC}"
-else
-    echo -e "${YELLOW}ℹ️  No changes to commit (deployment artifacts already up to date)${NC}"
-fi
-
 # Tag the deployment for rollback capability
+DEPLOYMENT_TAG="deployment-$(date +%Y%m%d-%H%M%S)-$ENVIRONMENT"
 git tag "$DEPLOYMENT_TAG"
 echo -e "${CYAN}🏷️  Tagged deployment: $DEPLOYMENT_TAG${NC}"
 
@@ -259,18 +138,8 @@ POSTGRESQL_ALCHEMY=$(run_on_dokku "dokku postgres:info $DB_NAME --dsn | sed 's/p
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__SQL_ALCHEMY_CONN=$POSTGRESQL_ALCHEMY"
 
-# Common Airflow configurations
-if [ "$ENVIRONMENT" = "production" ]; then
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_PROD:-admin}"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_PROD:?Set password prod}"
-else
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_USERNAME=${AIRFLOW_USER_NAME_DEV:-admin}"
-    run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_USER_PASSWORD_DEV:?Set password dev}"
-fi
-
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW_ADMIN_EMAIL=admin@example.com"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__EXECUTOR=LocalExecutor"
-run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__CORE__LOAD_EXAMPLES=false"
 run_on_dokku "dokku config:set --no-restart $APP_NAME AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true"
@@ -300,11 +169,12 @@ echo -e "${BLUE}This may take several minutes...${NC}"
 
 # Use git subtree to push only the orchestration directory
 echo -e "${YELLOW}🔄 Pushing orchestration subdirectory to Dokku...${NC}"
-git subtree split --prefix=orchestration $DEPLOYMENT_BRANCH -b tmp-deploy
+git subtree split --prefix=orchestration HEAD -b tmp-deploy
 GIT_SSH_COMMAND="ssh -i $SSH_KEY" git push $REMOTE_NAME tmp-deploy:main --force
+PUSH_EXIT_CODE=$?
 git branch -D tmp-deploy
 
-if [ $? -ne 0 ]; then
+if [ $PUSH_EXIT_CODE -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
     exit 1
 fi
@@ -338,9 +208,6 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}✅ Database migration completed${NC}"
 
-# Step 11: Create admin user
-create_admin_user
-
 # Step 12: Restart the app to ensure all changes take effect
 echo -e "${YELLOW}🔄 Restarting application...${NC}"
 run_on_dokku "dokku ps:restart $APP_NAME"
@@ -350,9 +217,21 @@ echo ""
 echo -e "${GREEN}🎉 Deployment completed!${NC}"
 echo -e "🌍 Your Airflow is available at: ${YELLOW}http://$SUBDOMAIN.$DOKKU_DOMAIN:8080${NC}"
 echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}⚠️  POST-DEPLOYMENT STEPS (First deployment only):${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "1. Generate and set Fernet key:"
+echo -e "   ${BLUE}dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY='...')${NC}"
+echo ""
+echo -e "2. Set admin password:"
+echo -e "   ${BLUE}dokku config:set $APP_NAME AIRFLOW_ADMIN_PASSWORD='your_secure_password'${NC}"
+echo ""
+echo -e "3. Set the AWS connection and variables (from extract_aws_credentials.sh )"
+echo -e "   ${BLUE}dokku run $APP_NAME airflow connections add aws_cross_account_role ... ${NC}"
+echo -e "   ${BLUE}dokku config:set $APP_NAME AWS_ACCESS_KEY_ID='...' AWS_SECRET_ACCESS_KEY='...' AWS_DEFAULT_REGION='...'${NC}"
+echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
 echo -e "🔄 To redeploy, run from project root:"
-echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT${NC}"
-
-# After the first deployment is very important to add the fernet key:
-# dokku config:set $APP_NAME AIRFLOW__CORE__FERNET_KEY=fernet_key_value
-# as well the output of the script in roles-deployment.sh, which are aws credentials
+echo -e "   ${YELLOW}./scripts/deploy/deploy-orchestration.sh $ENVIRONMENT <server> <key> <domain>${NC}"

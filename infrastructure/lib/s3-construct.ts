@@ -90,7 +90,7 @@ export class S3Construct extends Construct {
       removalPolicy: environmentName === 'prod'
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environmentName !== 'prod',
+      autoDeleteObjects: ConfigHelper.shouldAutoDeleteObjects(this, environmentName),
     });
 
     // Create dedicated Athena results bucket
@@ -117,7 +117,7 @@ export class S3Construct extends Construct {
       removalPolicy: environmentName === 'prod'
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environmentName !== 'prod',
+      autoDeleteObjects: ConfigHelper.shouldAutoDeleteObjects(this, environmentName),
     });
 
     // Apply common tags

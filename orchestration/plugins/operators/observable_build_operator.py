@@ -5,35 +5,35 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from airflow.models import BaseOperator
+from airflow.sdk import BaseOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 
 
 class ObservableBuildDeployOperator(BaseOperator):
-    template_fields = ('repository_url', 'environment', 'aws_conn_id')
+    template_fields = ("repository_url", "environment", "aws_conn_id")
 
-    ui_color = '#ff9900'
-    ui_fgcolor = '#ffffff'
+    ui_color = "#ff9900"
+    ui_fgcolor = "#ffffff"
 
     def __init__(
-            self,
-            *,
-            repository_url: str,
-            environment: str,
-            aws_conn_id: str,
-            region: str = 'eu-west-1',
-            **kwargs
+        self,
+        *,
+        repository_url: str,
+        environment: str,
+        aws_conn_id: str,
+        region: str = "eu-west-1",
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.repository_url = repository_url
         self.environment = environment
-        self.branch = 'main' if environment == 'prod' else 'develop'
+        self.branch = "main" if environment == "prod" else "develop"
         self.aws_conn_id = aws_conn_id
         self.region = region
-        suffix_bucket = 'prod' if environment == 'prod' else 'dev'
-        self.s3_bucket_data = f'catalunya-data-{suffix_bucket}'
-        self.s3_bucket_catalog = f'catalunya-catalog-{suffix_bucket}'
-        self.s3_bucket_service = f'catalunya-service-{suffix_bucket}'
+        suffix_bucket = "prod" if environment == "prod" else "dev"
+        self.s3_bucket_data = f"catalunya-data-{suffix_bucket}"
+        self.s3_bucket_catalog = f"catalunya-catalog-{suffix_bucket}"
+        self.s3_bucket_service = f"catalunya-service-{suffix_bucket}"
 
     def execute(self, context):
         self.log.info(f"🚀 Starting Observable build and deploy for {self.environment}")
@@ -41,40 +41,44 @@ class ObservableBuildDeployOperator(BaseOperator):
         self.log.info(f"   Branch: {self.branch}")
         self.log.info(f"   Target: s3://{self.s3_bucket_service}")
 
-        tmp_dir = tempfile.mkdtemp(prefix='observable-build-')
+        tmp_dir = tempfile.mkdtemp(prefix="observable-build-")
 
         try:
-            zip_path = os.path.join(tmp_dir, 'repo.zip')
+            zip_path = os.path.join(tmp_dir, "repo.zip")
             download_url = f"{self.repository_url}/archive/refs/heads/{self.branch}.zip"
 
             self.log.info(f"📥 Downloading repository from {download_url}")
             subprocess.run(
-                ['curl', '-L', download_url, '-o', zip_path],
+                ["curl", "-L", download_url, "-o", zip_path],
                 check=True,
-                capture_output=True
+                capture_output=True,
             )
 
             self.log.info("📦 Extracting repository...")
             subprocess.run(
-                ['unzip', '-q', zip_path, '-d', tmp_dir],
+                ["unzip", "-q", zip_path, "-d", tmp_dir],
                 check=True,
-                capture_output=True
+                capture_output=True,
             )
 
-            observable_dir = os.path.join(tmp_dir, f'CloudGentGran-{self.branch}', 'observable')
+            observable_dir = os.path.join(
+                tmp_dir, f"CloudGentGran-{self.branch}", "observable"
+            )
 
             if not os.path.exists(observable_dir):
-                raise FileNotFoundError(f"Observable directory not found at {observable_dir}")
+                raise FileNotFoundError(
+                    f"Observable directory not found at {observable_dir}"
+                )
 
             self.log.info(f"📂 Found observable directory at {observable_dir}")
 
             self.log.info("📦 Running npm ci...")
             npm_ci_result = subprocess.run(
-                ['npm', 'ci'],
+                ["npm", "ci"],
                 cwd=observable_dir,
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
             if npm_ci_result.stdout:
                 self.log.info(f"npm ci stdout:\n{npm_ci_result.stdout}")
@@ -83,44 +87,42 @@ class ObservableBuildDeployOperator(BaseOperator):
 
             self.log.info("🔨 Running npm run build...")
 
-            hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='s3')
+            hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type="s3")
             session = hook.get_session()
-            sts_client = session.client('sts')
+            sts_client = session.client("sts")
 
-            account_id = sts_client.get_caller_identity()['Account']
+            account_id = sts_client.get_caller_identity()["Account"]
 
-            ENVIRONMENT = os.getenv('AIRFLOW_VAR_ENVIRONMENT')
+            ENVIRONMENT = os.getenv("AIRFLOW_VAR_ENVIRONMENT")
             dataservice_role_arn = f"arn:aws:iam::{account_id}:role/catalunya-data-service-role-{ENVIRONMENT}"
 
             self.log.info(f"Assuming dataservice role: {dataservice_role_arn}")
             assumed_role = sts_client.assume_role(
-                RoleArn=dataservice_role_arn,
-                RoleSessionName='observable_build'
+                RoleArn=dataservice_role_arn, RoleSessionName="observable_build"
             )
-            credentials = assumed_role['Credentials']
+            credentials = assumed_role["Credentials"]
 
             env = os.environ.copy()
-            node_bin_path = os.path.join(observable_dir, 'node_modules', '.bin')
-            env['PATH'] = f"{node_bin_path}:{env.get('PATH', '')}"
-            env['S3_BUCKET_DATA'] = self.s3_bucket_data
-            env['S3_BUCKET_CATALOG'] = self.s3_bucket_catalog
+            node_bin_path = os.path.join(observable_dir, "node_modules", ".bin")
+            env["PATH"] = f"{node_bin_path}:{env.get('PATH', '')}"
+            env["S3_BUCKET_DATA"] = self.s3_bucket_data
+            env["S3_BUCKET_CATALOG"] = self.s3_bucket_catalog
 
             # Add AWS credentials instead of AWS_PROFILE
-            env['AWS_ACCESS_KEY_ID'] = credentials['AccessKeyId']
-            env['AWS_SECRET_ACCESS_KEY'] = credentials['SecretAccessKey']
-            env['AWS_SESSION_TOKEN'] = credentials['SessionToken']
-            env['AWS_REGION'] = self.region
-            env['AWS_DEFAULT_REGION'] = self.region
-            env['AWS_ENDPOINT_URL'] = os.getenv('AWS_ENDPOINT_URL', '')
-
+            env["AWS_ACCESS_KEY_ID"] = credentials["AccessKeyId"]
+            env["AWS_SECRET_ACCESS_KEY"] = credentials["SecretAccessKey"]
+            env["AWS_SESSION_TOKEN"] = credentials["SessionToken"]
+            env["AWS_REGION"] = self.region
+            env["AWS_DEFAULT_REGION"] = self.region
+            env["AWS_ENDPOINT_URL"] = os.getenv("AWS_ENDPOINT_URL", "")
 
             result = subprocess.run(
-                ['npm', 'run', 'build'],
+                ["npm", "run", "build"],
                 cwd=observable_dir,
                 check=True,
                 capture_output=True,
                 text=True,
-                env=env
+                env=env,
             )
 
             # Log build output
@@ -131,7 +133,7 @@ class ObservableBuildDeployOperator(BaseOperator):
 
             self.log.info(f"Build output:\n{result.stdout}")
 
-            build_dir = os.path.join(observable_dir, 'dist')
+            build_dir = os.path.join(observable_dir, "dist")
             if not os.path.exists(build_dir):
                 raise FileNotFoundError(f"Build output not found at {build_dir}")
 
@@ -141,10 +143,10 @@ class ObservableBuildDeployOperator(BaseOperator):
             self.log.info(f"✅ Successfully uploaded {len(uploaded_files)} files")
 
             return {
-                'status': 'success',
-                'files_uploaded': len(uploaded_files),
-                'branch': self.branch,
-                'environment': self.environment
+                "status": "success",
+                "files_uploaded": len(uploaded_files),
+                "branch": self.branch,
+                "environment": self.environment,
             }
 
         except subprocess.CalledProcessError as e:
@@ -164,32 +166,34 @@ class ObservableBuildDeployOperator(BaseOperator):
         import mimetypes
 
         s3_client = boto3.client(
-            's3',
-            aws_access_key_id=credentials['AccessKeyId'],
-            aws_secret_access_key=credentials['SecretAccessKey'],
-            aws_session_token=credentials['SessionToken'],
-            region_name=self.region
+            "s3",
+            aws_access_key_id=credentials["AccessKeyId"],
+            aws_secret_access_key=credentials["SecretAccessKey"],
+            aws_session_token=credentials["SessionToken"],
+            region_name=self.region,
         )
 
         uploaded_files = []
         dir_path = Path(directory)
 
-        for file_path in dir_path.rglob('*'):
+        for file_path in dir_path.rglob("*"):
             if file_path.is_file():
                 relative_path = file_path.relative_to(dir_path)
                 s3_key = relative_path.as_posix()
 
                 content_type, _ = mimetypes.guess_type(str(file_path))
                 if content_type is None:
-                    content_type = 'application/octet-stream'
+                    content_type = "application/octet-stream"
 
-                self.log.info(f"   Uploading {relative_path} → {s3_key} ({content_type})")
+                self.log.info(
+                    f"   Uploading {relative_path} → {s3_key} ({content_type})"
+                )
 
                 s3_client.upload_file(
                     str(file_path),
                     self.s3_bucket_service,
                     s3_key,
-                    ExtraArgs={'ContentType': content_type}
+                    ExtraArgs={"ContentType": content_type},
                 )
                 uploaded_files.append(s3_key)
 

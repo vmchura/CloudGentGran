@@ -3,7 +3,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { EnvironmentConfig, ConfigHelper } from './config';
-import { execSync } from 'child_process';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export interface LambdaConstructProps {
@@ -36,6 +35,7 @@ interface LambdaFunctionProps {
 export class LambdaConstruct extends Construct {
     public readonly apiExtractorLambda: lambda.Function;
     public readonly populationMunicipalGreater65ApiExtractorLambda: lambda.Function;
+    public readonly socialServicesValidatorLambda: lambda.Function;
     public readonly socialServicesTransformerLambda: lambda.Function;
     public readonly populationMunicipalGreater65Transformer: lambda.Function;
     public readonly populationMunicipalGreater65Mart: lambda.Function;
@@ -66,6 +66,19 @@ export class LambdaConstruct extends Construct {
             account,
             region,
             executionRole: props.extractorExecutionRole
+        });
+
+        // Create Social Services Validator Lambda
+        this.socialServicesValidatorLambda = this.createSocialServicesValidatorLambda({
+            environmentName,
+            projectName,
+            config,
+            bucketName,
+            catalogBucketName,
+            lambdaPrefix,
+            account,
+            region,
+            executionRole: props.transformerExecutionRole
         });
 
         // Create Social Services Transformer Lambda
@@ -134,36 +147,42 @@ export class LambdaConstruct extends Construct {
      * Gets the appropriate Python Lambda code, skipping bundling for tests
      */
     private getPythonLambdaCode(extractor_directory: string): lambda.Code {
-        const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
+        const isTest = (process.env.CDK_LOCAL_BUILD_AND_TEST ?? 'false') === 'true';
 
-        // Use bundling for real deployments
+        if (isTest) {
+            console.log('🧪 Skipping Python bundling for tests');
+            return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`);
+        }
+
         console.log('📦 Using Python bundling for deployment');
         return lambda.Code.fromAsset(`../lambda/extractors/${extractor_directory}`, {
             bundling: {
-                local: {
-
-                    tryBundle(outputDir: string) {
-                        if (isAct) {
-                            try {
-                                execSync(`pip install -r ../lambda/extractors/${extractor_directory}/requirements.txt -t ${outputDir}`);
-                                execSync(`cp -au . ${outputDir}`);
-                                return true; // success
-                            } catch {
-                                return false; // fallback to Docker
-                            }
-                        } else { return false; }
-                    }
-                },
                 image: lambda.Runtime.PYTHON_3_13.bundlingImage,
                 command: [
                     'bash', '-c', [
                         'pip install -r requirements.txt -t /asset-output',
-                        'cp -au . /asset-output'
+                        'cp -au . /asset-output',
+                        // MiniStack extracts the zip into a dir named `code/`; a top-level
+                        // __init__.py turns it into a package that shadows stdlib `code`
+                        'rm -f /asset-output/__init__.py'
                     ].join(' && ')
-                ],
-            },
-        });
+                 ],
+             },
+         });
+     }
+
+    /**
+     * Extra env for local MiniStack deploys: points the AWS SDK at the emulator.
+     * Set with `-c awsEndpointUrl=http://ministack:4566`; absent in real AWS deploys.
+     * Needed by Rust lambdas (Docker RIE executor) — unlike MiniStack's `local`
+     * executor, RIE containers get no endpoint injected.
+     */
+    private getLocalEndpointEnv(): Record<string, string> {
+        const endpoint = this.node.tryGetContext('awsEndpointUrl') as string | undefined;
+        return endpoint ? { AWS_ENDPOINT_URL: endpoint } : {};
     }
+
+
 
     /**
      * Creates Lambda infrastructure including the API extractor function with proper IAM roles.
@@ -202,6 +221,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'social_services',
                 DATASET_IDENTIFIER: 'ivft-vegh',
@@ -241,6 +261,62 @@ export class LambdaConstruct extends Construct {
         return apiExtractorLambda;
     }
 
+    private createSocialServicesValidatorLambda(props: LambdaFunctionProps): lambda.Function {
+        const {
+            environmentName,
+            projectName,
+            config,
+            bucketName,
+            catalogBucketName,
+            lambdaPrefix,
+            account,
+            region
+        } = props;
+
+        let validatorRole: iam.IRole = props.executionRole;
+
+        const validatorLambda = new lambda.Function(this, 'SocialServicesValidatorLambda', {
+            functionName: `${lambdaPrefix}-social-services-validator`,
+            runtime: lambda.Runtime.PROVIDED_AL2023,
+            handler: 'bootstrap',
+            code: lambda.Code.fromAsset('../rust_lambda_deployment/social-services-validator'),
+            timeout: cdk.Duration.seconds(config.lambdaTimeout),
+            memorySize: config.lambdaMemory,
+            role: validatorRole,
+            environment: {
+                ...this.getLocalEndpointEnv(),
+                BUCKET_NAME: bucketName,
+                SEMANTIC_IDENTIFIER: 'social_services',
+                ENVIRONMENT: environmentName,
+                REGION: region
+            },
+            description: `Social Services JSON Schema Validator Lambda (Rust) for ${environmentName} environment - Orchestrated by Airflow`,
+        });
+
+        const commonTags = ConfigHelper.getCommonTags(environmentName);
+        Object.entries(commonTags).forEach(([key, value]) => {
+            cdk.Tags.of(validatorLambda).add(key, value);
+        });
+
+        cdk.Tags.of(validatorLambda).add('Purpose', 'DataValidation');
+        cdk.Tags.of(validatorLambda).add('Layer', 'Validation');
+        cdk.Tags.of(validatorLambda).add('DataFlow', 'LandingToStaging');
+
+        new cdk.CfnOutput(this, 'SocialServicesValidatorLambdaArn', {
+            value: validatorLambda.functionArn,
+            description: 'ARN of the Social Services Validator Lambda function',
+            exportName: `${projectName}-SocialServicesValidatorLambdaArn`,
+        });
+
+        new cdk.CfnOutput(this, 'SocialServicesValidatorLambdaName', {
+            value: validatorLambda.functionName,
+            description: 'Name of the Social Services Validator Lambda function',
+            exportName: `${projectName}-SocialServicesValidatorLambdaName`,
+        });
+
+        return validatorLambda;
+    }
+
     private createApiExtractorLambdaPopulationGreater65(props: LambdaFunctionProps): lambda.Function {
         const {
             environmentName,
@@ -264,6 +340,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'population_municipal_greater_65',
             },
@@ -330,6 +407,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: transformerRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
                 SEMANTIC_IDENTIFIER: 'social_services',
@@ -392,6 +470,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: transformerRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
                 SEMANTIC_IDENTIFIER: 'municipal_population',
@@ -449,6 +528,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: martRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 CATALOG_BUCKET_NAME: catalogBucketName,
                 SEMANTIC_IDENTIFIER: 'municipal_population',
@@ -507,6 +587,7 @@ export class LambdaConstruct extends Construct {
             memorySize: config.lambdaMemory,
             role: lambdaRole,
             environment: {
+                ...this.getLocalEndpointEnv(),
                 BUCKET_NAME: bucketName,
                 SEMANTIC_IDENTIFIER: 'comarques_boundaries',
             },

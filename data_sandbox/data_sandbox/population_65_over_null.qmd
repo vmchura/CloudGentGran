@@ -1,0 +1,86 @@
+
+```{python}
+import polars as pl
+```
+
+```{python}
+import boto3
+
+session = boto3.Session(profile_name="localstack")
+glue = session.client("glue")
+s3 = session.client("s3")
+```
+
+```{python}
+def load_table(table_name, partition_key_value=[]) -> pl.DataFrame:
+    table_glue = glue.get_table(
+        DatabaseName="catalunya_data_dev",
+        Name=table_name,
+    )["Table"]
+
+ 
+    location_s3 = table_glue["StorageDescriptor"]["Location"]
+    bucket, prefix = location_s3.removeprefix("s3://").split("/", 1)
+
+    response = s3.list_objects_v2(
+        Bucket=bucket,
+        Prefix=prefix,
+    )
+
+    for obj in response.get("Contents", []):
+        print(obj["Key"])
+
+    partition_location_s3 = (
+        location_s3
+        + "/".join(f"{p}={k}" for p, k in partition_key_value)
+        + ("/" if len(partition_key_value) > 0 else "")
+    )
+    print(partition_location_s3)
+
+    table_parquet_scan = pl.scan_parquet(
+        f"{partition_location_s3}*.parquet",
+        credential_provider=pl.CredentialProviderAWS(profile_name="localstack"),
+    )
+    return table_parquet_scan.collect()
+```
+
+
+```{python}
+
+tables = glue.get_tables(
+    DatabaseName="catalunya_data_dev"
+)
+[t['Name'] for t in tables['TableList']]
+```
+
+```{python}
+muncipal_population_df = load_table("municipal_population")
+social_services_df = load_table(
+    "social_services", partition_key_value=[("downloaded_date", "20260807")]
+).filter(
+    pl.col("service_type_id").is_in(
+        ["DAY-001", "RES-003", "RES-002", "TUT-001", "RES-001"]
+    )
+    & (pl.col("capacity") > 0)
+)
+```
+
+```{python}
+muncipal_population_df.filter(pl.col('municipal_id') == pl.lit('089058'))
+```
+
+```{python}
+muncipal_population_df.group_by('municipal_id').agg(pl.col('year').min()).filter(pl.col('year')>1975)
+```
+
+```{python}
+social_services_df
+```
+
+```{python}
+location = table["StorageDescriptor"]["Location"]
+
+print(location)
+# s3://my-bucket/my-prefix/
+```
+```

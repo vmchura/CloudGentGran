@@ -16,6 +16,8 @@ The initial focus is in elderly people (Gent Gran in Catalan) data.
 See [Architecture Documentation](docs/architecture.md) for detailed system design, data flow, and environment
 specifications.
 
+For local dbt development and debugging against MiniStack, see the [dbt Local Development Guide](docs/dbt-local-development.md).
+
 ## 🤝 Contributing
 
 ### For Analysis Contributors

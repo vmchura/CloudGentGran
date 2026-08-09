@@ -7,19 +7,128 @@ on:
       - 'infrastructure/**'
       - 'lambda/**'
       - '.github/workflows/**'
+      - '!lambda/transformers/**/*.md'
+      - '!lambda/mart/**/*.md'
+      - '!lambda/extractors/**/*.md'
+      - '!lambda/catalog/**/*.md'
+  pull_request:
+    branches: [ develop, main ]
+    paths:
+      - 'infrastructure/**'
+      - 'lambda/**'
+      - '.github/workflows/**'
+      - '!lambda/transformers/**/*.md'
+      - '!lambda/mart/**/*.md'
+      - '!lambda/extractors/**/*.md'
+      - '!lambda/catalog/**/*.md'
 
-# Required for OIDC authentication with AWS
 permissions:
   id-token: write
   contents: read
 
 jobs:
   # ==========================================
-  # BUILD RUST LAMBDA
+  # DETECT CHANGES
+  # ==========================================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      infrastructure: ${{ steps.filter.outputs.infrastructure }}
+      rust-lambda: ${{ steps.filter.outputs.rust-lambda }}
+      python-lambda: ${{ steps.filter.outputs.python-lambda }}
+      any-cdk: ${{ steps.filter.outputs.infrastructure || steps.filter.outputs.rust-lambda || steps.filter.outputs.python-lambda }}
+      should-build: ${{ steps.build-check.outputs.should-build }}
+      should-deploy-dev: ${{ steps.deploy-check.outputs.should-deploy-dev }}
+      should-deploy-prod: ${{ steps.deploy-check.outputs.should-deploy-prod }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.event.repository.default_branch || 'develop' }}
+          filters: |
+            infrastructure:
+              - 'infrastructure/**'
+            rust-lambda:
+              - 'lambda/transformers/**/*.rs'
+              - 'lambda/transformers/**/Cargo.toml'
+              - 'lambda/transformers/**/Cargo.lock'
+              - 'lambda/mart/**/*.rs'
+              - 'lambda/mart/**/Cargo.toml'
+              - 'lambda/mart/**/Cargo.lock'
+              - 'lambda/validators/**/*.rs'
+              - 'lambda/validators/**/Cargo.toml'
+              - 'lambda/validators/**/Cargo.lock'
+              - 'lambda/Cargo.toml'
+              - 'lambda/Cargo.lock'
+            python-lambda:
+              - 'lambda/extractors/**/*.py'
+              - 'lambda/extractors/**/requirements.txt'
+              - 'lambda/catalog/**/*.py'
+              - 'lambda/catalog/**/requirements.txt'
+              - 'lambda/common/**/*.py'
+
+      - name: Check deployment conditions
+        id: deploy-check
+        run: |
+          # Deploy to dev only on push to develop that is a PR merge
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            if [[ "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+              echo "should-deploy-dev=true" >> $GITHUB_OUTPUT
+              echo "✅ Will deploy to development (PR merge detected)"
+            else
+              echo "should-deploy-dev=false" >> $GITHUB_OUTPUT
+              echo "⏭️ Skipping dev deploy (not a PR merge)"
+            fi
+          else
+            echo "should-deploy-dev=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Deploy to prod only on push to main
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "should-deploy-prod=true" >> $GITHUB_OUTPUT
+            echo "✅ Will deploy to production"
+          else
+            echo "should-deploy-prod=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check build conditions
+        id: build-check
+        run: |
+          # Build only on PR merge pushes (not on direct commits or PR events)
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "✅ Will build (PR merge detected)"
+          else
+            echo "should-build=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping build (not a PR merge)"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Change Detection Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Changed |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Infrastructure | ${{ steps.filter.outputs.infrastructure || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust Lambda | ${{ steps.filter.outputs.rust-lambda || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Lambda | ${{ steps.filter.outputs.python-lambda || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ steps.build-check.outputs.should-build }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy to Dev | ${{ steps.deploy-check.outputs.should-deploy-dev }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy to Prod | ${{ steps.deploy-check.outputs.should-deploy-prod }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # BUILD RUST LAMBDA (if any CDK-related code changed)
   # ==========================================
   build-rust-lambda:
     name: Build Rust Lambdas
     runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should-build == 'true' && needs.detect-changes.outputs.any-cdk == 'true'
 
     steps:
       - name: Checkout code
@@ -66,9 +175,11 @@ jobs:
         run: |
           mkdir -p rust_lambda_deployment
           mkdir -p rust_lambda_deployment/social-services-transformer
+          mkdir -p rust_lambda_deployment/social-services-validator
           mkdir -p rust_lambda_deployment/population_municipal_greater_65
           mkdir -p rust_lambda_deployment/population_municipal_greater_65_mart
           cp target/lambda/social-services-transformer/bootstrap rust_lambda_deployment/social-services-transformer/bootstrap
+          cp target/lambda/social-services-validator/bootstrap rust_lambda_deployment/social-services-validator/bootstrap
           cp target/lambda/population_municipal_greater_65/bootstrap rust_lambda_deployment/population_municipal_greater_65/bootstrap
           cp target/lambda/population_municipal_greater_65_mart/bootstrap rust_lambda_deployment/population_municipal_greater_65_mart/bootstrap
           zip -r rust_lambda_deployment.zip rust_lambda_deployment
@@ -86,13 +197,13 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-    needs: build-rust-lambda
+    needs: [ detect-changes, build-rust-lambda ]
+    if: always() && needs.detect-changes.outputs.should-build == 'true' && needs.detect-changes.outputs.any-cdk == 'true' && needs.build-rust-lambda.result == 'success'
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Download and extract the Rust artifact for testing
       - name: Download Rust Lambda artifact
         uses: actions/download-artifact@v4
         with:
@@ -126,7 +237,6 @@ jobs:
         env:
           CDK_LOCAL_BUILD_AND_TEST: true
 
-      # CDK Commands: Use cdklocal for act, regular cdk for GitHub Actions
       - name: Install CDK CLI (LocalStack for act)
         if: ${{ env.ACT }}
         working-directory: ./infrastructure
@@ -157,6 +267,8 @@ jobs:
         run: |
           echo "🧪 Synthesizing templates for LocalStack..."
           npx cdk synth --all --require-approval never
+        env:
+          CDK_LOCAL_BUILD_AND_TEST: true
 
       - name: CDK Diff (Syntax Check) - AWS
         if: ${{ !env.ACT }}
@@ -170,16 +282,16 @@ jobs:
           WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
   # ==========================================
-  # DEPLOY TO DEVELOPMENT
+  # DEPLOY TO DEVELOPMENT (only on PR merge)
   # ==========================================
   deploy-development:
     name: Deploy to Development
     runs-on: ubuntu-latest
-    needs: [ build-and-test, build-rust-lambda ]
+    needs: [ detect-changes, build-and-test, build-rust-lambda ]
     if: |
-      github.ref == 'refs/heads/develop' &&
-      github.event_name == 'push' &&
-      contains(github.event.head_commit.message, 'Merge pull request')
+      needs.detect-changes.outputs.should-deploy-dev == 'true' &&
+      needs.detect-changes.outputs.any-cdk == 'true' &&
+      needs.build-and-test.result == 'success'
     environment: development
     
     steps:
@@ -192,12 +304,11 @@ jobs:
           name: rust-lambdas-${{ github.sha }}
           path: .
 
-      # Extract the ZIP so CDK can find the bootstrap file
       - name: Extract Rust Lambda
         run: |
           unzip -o rust_lambda_deployment.zip
           ls -la rust_lambda_deployment
-          echo "✅ Extracted Rust lambda artifact - no compilation needed!"
+          echo "✅ Extracted Rust lambda artifact!"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -210,7 +321,6 @@ jobs:
         working-directory: ./infrastructure
         run: npm ci
 
-      # Conditional AWS Authentication - skip for act
       - name: Configure AWS credentials for Development
         if: ${{ !env.ACT }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -218,7 +328,7 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-dev
           role-session-name: GitHubActions-Development-${{ github.run_id }}
           aws-region: eu-west-1
-          role-duration-seconds: 3600  # 1 hour max session
+          role-duration-seconds: 3600
           mask-aws-account-id: true
 
       - name: Verify AWS identity (AWS only)
@@ -228,7 +338,6 @@ jobs:
           aws sts get-caller-identity
           echo "🌍 Current region: $(aws configure get region)"
 
-      # Conditional CDK Installation
       - name: Install CDK CLI (LocalStack for act)
         if: ${{ env.ACT }}
         run: |
@@ -241,13 +350,14 @@ jobs:
           echo "☁️ Installing aws-cdk for AWS..."
           npm install -g aws-cdk
 
-      # Conditional CDK Bootstrap
       - name: CDK Bootstrap (LocalStack)
         if: ${{ env.ACT }}
         working-directory: ./infrastructure
         run: |
           echo "🐳 Bootstrapping LocalStack..."
           cdklocal bootstrap --require-approval never || echo "LocalStack bootstrap completed"
+        env:
+          CDK_LOCAL_BUILD_AND_TEST: true
 
       - name: CDK Bootstrap (AWS)
         if: ${{ !env.ACT }}
@@ -260,27 +370,28 @@ jobs:
           CDK_DEFAULT_REGION: eu-west-1
           WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
-      # Conditional CDK Deploy
       - name: CDK Deploy Development (LocalStack)
         if: ${{ env.ACT }}
         working-directory: ./infrastructure
         run: |
-          echo "🐳 Deploying to LocalStack with pre-built Rust lambda..."
+          echo "🐳 Deploying to LocalStack..."
           cdklocal deploy CatalunyaDataStack-dev \
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-dev.json || echo "LocalStack deployment completed (may show warnings)"
+        env:
+          CDK_LOCAL_BUILD_AND_TEST: true
 
       - name: CDK Deploy Development (AWS)
         if: ${{ !env.ACT }}
         working-directory: ./infrastructure
         run: |
-          echo "☁️ Deploying to AWS with pre-built Rust lambda..."
+          echo "☁️ Deploying to AWS..."
           npx cdk deploy CatalunyaDataStack-dev \
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-dev.json
-          echo "✅ AWS deployment complete - used cached Rust binary!"
+          echo "✅ AWS deployment complete!"
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
@@ -308,10 +419,11 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [ build-and-test, build-rust-lambda ]
+    needs: [ detect-changes, build-and-test, build-rust-lambda ]
     if: |
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
+      needs.detect-changes.outputs.should-deploy-prod == 'true' &&
+      needs.detect-changes.outputs.any-cdk == 'true' &&
+      needs.build-and-test.result == 'success'
     environment: production
     
     steps:
@@ -324,12 +436,11 @@ jobs:
           name: rust-lambdas-${{ github.sha }}
           path: .
 
-      # Extract the ZIP so CDK can find the bootstrap file
       - name: Extract Rust Lambda
         run: |
           unzip -o rust_lambda_deployment.zip
           ls -la rust_lambda_deployment
-          echo "✅ Extracted Rust lambda artifact - no compilation needed!"
+          echo "✅ Extracted Rust lambda artifact!"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -349,7 +460,7 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/catalunya-deployment-role-prod
           role-session-name: GitHubActions-Production-${{ github.run_id }}
           aws-region: eu-west-1
-          role-duration-seconds: 3600  # 1 hour max session
+          role-duration-seconds: 3600
           mask-aws-account-id: true
 
       - name: Verify AWS identity
@@ -365,7 +476,6 @@ jobs:
       - name: CDK Bootstrap (if needed)
         working-directory: ./infrastructure
         run: |
-          # Check if already bootstrapped, bootstrap if not
           npx cdk bootstrap --require-approval never || echo "Already bootstrapped or bootstrap not needed"
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -375,16 +485,15 @@ jobs:
       - name: CDK Deploy Production
         working-directory: ./infrastructure
         run: |
-          echo "🚀 Deploying with pre-built Rust lambda (no compilation)..."
+          echo "🚀 Deploying to production..."
           npx cdk deploy CatalunyaDataStack-prod \
             --require-approval never \
             --verbose \
             --outputs-file cdk-outputs-prod.json
-          echo "✅ Deployment complete - used cached Rust binary!"
+          echo "✅ Deployment complete!"
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: eu-west-1
-          # Add deployment metadata
           CDK_DEPLOY_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEPLOY_REGION: eu-west-1
           WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
@@ -404,13 +513,13 @@ jobs:
           unset AWS_SESSION_TOKEN
 
   # ==========================================
-  # SECURITY AND COMPLIANCE
+  # SECURITY AND COMPLIANCE (PR only)
   # ==========================================
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event_name == 'pull_request'
+    needs: [ detect-changes, build-and-test ]
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.any-cdk == 'true'
     
     steps:
       - name: Checkout code
@@ -451,22 +560,10 @@ jobs:
           CDK_DEFAULT_REGION: eu-west-1
           WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
 
-      - name: CDK Security Check
-        working-directory: ./infrastructure
-        run: |
-          npm install -g aws-cdk
-          npx cdk synth --all --require-approval never
-          echo "CloudFormation templates generated successfully - manual security review recommended"
-        env:
-          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
-          CDK_DEFAULT_REGION: eu-west-1
-          WEB_CERTIFICATE_ID: ${{ secrets.WEB_CERTIFICATE_ID }}
-
       - name: Check for sensitive data in code
         run: |
           echo "🔍 Scanning for potential secrets..."
-          # Check for AWS keys, passwords, etc.
-          if grep -r -i -E "(aws_access_key|aws_secret|password|secret)" --exclude-dir=node_modules --exclude-dir=.git .; then
+          if grep -r -i -E "(aws_access_key|aws_secret|password|secret)" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=target .; then
             echo "⚠️ Potential sensitive data found in code"
             exit 1
           else

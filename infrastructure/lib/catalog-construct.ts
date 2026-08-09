@@ -4,7 +4,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { EnvironmentConfig, ConfigHelper } from './config';
-import { execSync } from 'child_process';
 
 export interface CatalogConstructProps {
   environmentName: string;
@@ -126,7 +125,7 @@ export class CatalogConstruct extends Construct {
       removalPolicy: environmentName === 'prod'
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environmentName !== 'prod',
+      autoDeleteObjects: ConfigHelper.shouldAutoDeleteObjects(this, environmentName),
     });
 
     // Apply common tags
@@ -159,37 +158,37 @@ export class CatalogConstruct extends Construct {
    * Gets the appropriate Python Lambda code, skipping bundling for tests
    */
   private getPythonLambdaCode(extractor_directory: string): lambda.Code {
-    const isAct = (process.env.CDK_LOCAL_ACT ?? 'false') === 'true';
-    // Use bundling for real deployments
+    const isTest = (process.env.CDK_LOCAL_BUILD_AND_TEST ?? 'false') === 'true';
+
+    if (isTest) {
+      console.log('🧪 Skipping Python bundling for tests');
+      return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`);
+    }
+
     console.log('📦 Using Python bundling for deployment');
-    return lambda.Code.fromAsset(`../lambda/catalog/${extractor_directory}`, {
+    return lambda.Code.fromAsset(`../lambda`, {
       bundling: {
-        local: {
-
-          tryBundle(outputDir: string) {
-            if (isAct) {
-              try {
-                execSync(`pip install pandas fastparquet -t ${outputDir}`);
-                execSync(`cp -au . ${outputDir}`);
-                return true;
-              } catch {
-                return false;
-              }
-            } else {
-              return false;
-            }
-          }
-
-        },
         image: lambda.Runtime.PYTHON_3_13.bundlingImage,
         command: [
           'bash', '-c', [
             'pip install pandas fastparquet -t /asset-output',
-            'cp -au . /asset-output'
+            'cp -au catalog/' + extractor_directory + '/* /asset-output/',
+            'cp -au catalog/' + extractor_directory + '/.* /asset-output/ || true',
+            'cp -au common /asset-output/'
           ].join(' && ')
         ],
       },
     });
+  }
+  /**
+   * Extra env for local MiniStack deploys: points the AWS SDK at the emulator.
+   * Set with `-c awsEndpointUrl=http://172.30.0.10:4566`; absent in real AWS deploys.
+   * MiniStack injects AWS_ENDPOINT_URL=http://host.docker.internal:4566 into RIE
+   * containers without wiring the hosts entry, so an explicit IP-literal value wins.
+   */
+  private getLocalEndpointEnv(): Record<string, string> {
+    const endpoint = this.node.tryGetContext('awsEndpointUrl') as string | undefined;
+    return endpoint ? { AWS_ENDPOINT_URL: endpoint } : {};
   }
   /**
    * Creates a simplified Lambda function for creating raw parquet files
@@ -225,6 +224,7 @@ export class CatalogConstruct extends Construct {
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
+        ...this.getLocalEndpointEnv(),
         CATALOG_BUCKET_NAME: this.catalogBucketName,
         ENVIRONMENT: environmentName,
         REGION: region
@@ -289,6 +289,7 @@ export class CatalogConstruct extends Construct {
       memorySize: 256, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
+        ...this.getLocalEndpointEnv(),
         CATALOG_BUCKET_NAME: this.catalogBucketName,
         ENVIRONMENT: environmentName,
         REGION: region
@@ -355,6 +356,7 @@ export class CatalogConstruct extends Construct {
       memorySize: 512, // Reduced memory for simple parquet creation
       role: catalogRole,
       environment: {
+        ...this.getLocalEndpointEnv(),
         CATALOG_BUCKET_NAME: this.catalogBucketName,
         SEMANTIC_IDENTIFIER: 'municipals',
         DATASET_IDENTIFIER: '9aju-tpwc',
